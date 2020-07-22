@@ -1,11 +1,19 @@
 {% extends 'layout.html.twig' %}
 {% set bodyClass = 'classroom-list-page bg-blank' %}
-{% block keywords %}{% if categoryArray %}{{categoryArray.name}}{% if categoryParent %}{{ ","}}{{ categoryParent.name|default('') }}{% endif %}{% else %}{{'category.all_category'|trans}}{% endif %}{% endblock %}
-{% block description %}{{ categoryArrayDescription|default('')|plain_text(100) }}{% endblock %}
+
+{% block keywords %}
+  {{ categoryArray.name|default('category.all_category'|trans) }}
+  {% if categoryParent %}{{ ","}}{{ categoryParent.name|default('') }}{% endif %}
+{% endblock %}
+
+{% block description %}
+  {{ categoryArray.description|default('')|striptags|trim|plain_text(100) }}
+{% endblock %}
+
 {% block title %}{{ categoryArray.name|default('category.all_category'|trans)  }} - {{setting('site.name')}}{% if setting('site.slogan') %}{{' - '}}{{ setting('site.slogan')}}{% endif %}{% if not setting('copyright.owned') %} - Powered By EduSoho{% endif %}
 {% endblock %}
 
-{% do script(['libs/echo-js.js', 'app/js/classroom/explore/index.js']) %}
+{% do script(['app/js/classroom/explore/index.js']) %}
 
 {% block top_content %}
 
@@ -29,13 +37,18 @@
 {% endblock %}
 {% block content %}
   {% set price = filter.price|default('all')%}
-  {% set orderBy = orderBy|default('createdTime')%}
+  {% set orderBy = app.request.query.get('orderBy')|default('createdTime')%}
   {% set currentLevelId = filter.currentLevelId|default('all')%}
+  {% set subCategory = app.request.query.get('subCategory', '') %}
+  {% set thirdLevelCategory = app.request.query.get('selectedthirdLevelCategory', '') %}
 
-  {{ render(controller('AppBundle:Category:treeNav',{category:category, tags:tags, path:path, filter:{price: price,currentLevelId: currentLevelId},orderBy:orderBy,group:'classroom'})) }}
+  {{ render(controller('AppBundle:Category:treeNav',{request:app.request, category:category, tags:tags, group:'classroom'})) }}
+
   <div class="es-filter">
     <ul class="nav nav-sort">
-      <li><a href="{{ path('classroom_explore', {category:category['category'], subCategory:category['subCategory'], selectedthirdLevelCategory:category['thirdLevelCategory'], tag:{tags:tags}, filter: {price: price,currentLevelId: currentLevelId},orderBy: 'createdTime'}) }}" class="{% if (orderBy == 'createdTime') %} active {% endif %}">{{'site.datagrid.filter.latest'|trans}}</a></li><li><a href="{{ path('classroom_explore', {category:category['category'], subCategory:category['subCategory'], selectedthirdLevelCategory:category['thirdLevelCategory'], tag:{tags:tags}, filter: {price: price,currentLevelId: currentLevelId},orderBy: 'studentNum'}) }}" class="{% if (orderBy == 'studentNum') %} active {% endif %}">{{'site.datagrid.filter.hotest'|trans}}</a></li><li><a href="{{ path('classroom_explore', {category:category['category'], subCategory:category['subCategory'], selectedthirdLevelCategory:category['thirdLevelCategory'], tag:{tags:tags}, filter: {price: price,currentLevelId: currentLevelId},orderBy: 'recommendedSeq'}) }}" class="{% if (orderBy == 'recommendedSeq') %} active {% endif %}">{{'site.datagrid.filter.recommended'|trans}}</a></li>
+      <li><a href="{{ path('classroom_explore', {category:category, subCategory:subCategory, selectedthirdLevelCategory:thirdLevelCategory, tag:{tags:tags}, filter: {price: price,currentLevelId: currentLevelId},orderBy: 'createdTime'}) }}" class="{% if (orderBy == 'createdTime') %} active {% endif %}">{{'site.datagrid.filter.latest'|trans}}</a></li>
+      <li><a href="{{ path('classroom_explore', {category:category, subCategory:subCategory, selectedthirdLevelCategory:thirdLevelCategory, tag:{tags:tags}, filter: {price: price,currentLevelId: currentLevelId},orderBy: 'hotSeq'}) }}" class="{% if (orderBy == 'hotSeq') %} active {% endif %}">{{'site.datagrid.filter.hotest'|trans}}</a></li>
+      <li><a href="{{ path('classroom_explore', {category:category, subCategory:subCategory, selectedthirdLevelCategory:thirdLevelCategory, tag:{tags:tags}, filter: {price: price,currentLevelId: currentLevelId},orderBy: 'recommendedSeq'}) }}" class="{% if (orderBy == 'recommendedSeq') %} active {% endif %}">{{'site.datagrid.filter.recommended'|trans}}</a></li>
     </ul>
     <div class="filter hidden-xs">
       {% if is_plugin_installed('vip')%}
@@ -45,9 +58,9 @@
             {% for level in levels%}{% if (level.id == currentLevelId) %}{{level.name}}{% endif %}{% endfor %}
           </button>
           <ul class="dropdown-menu" role="menu">
-          <li role="presentation"class="{% if (currentLevelId == 'all') %}active {% endif %}"><a href="{{ path('classroom_explore', {category:category['category'], subCategory:category['subCategory'], selectedthirdLevelCategory:category['thirdLevelCategory'], tag:{tags:tags}, filter: {price: price,currentLevelId: 'all'},orderBy: orderBy}) }}">{{'category.all_category'|trans}}</a></li>
+          <li role="presentation"class="{% if (currentLevelId == 'all') %}active {% endif %}"><a href="{{ path('classroom_explore', {category:category, subCategory:subCategory, selectedthirdLevelCategory:thirdLevelCategory, tag:{tags:tags}, filter: {price: price,currentLevelId: 'all'},orderBy: orderBy}) }}">{{'category.all_category'|trans}}</a></li>
           {% for level in levels %}
-            <li role="presentation"class="{% if (level.id == currentLevelId) %}active {% endif %}"><a href="{{ path('classroom_explore', {category:category['category'], subCategory:category['subCategory'], selectedthirdLevelCategory:category['thirdLevelCategory'], tag:{tags:tags}, filter: {price: price,currentLevelId: level.id},orderBy: orderBy}) }}">{{level.name}}</a></li>
+            <li role="presentation"class="{% if (level.id == currentLevelId) %}active {% endif %}"><a href="{{ path('classroom_explore', {category:category, subCategory:subCategory, selectedthirdLevelCategory:thirdLevelCategory, tag:{tags:tags}, filter: {price: price,currentLevelId: level.id},orderBy: orderBy}) }}">{{level.name}}</a></li>
           {% endfor %}
           </ul>
         </div>
@@ -55,9 +68,9 @@
       <label class="checkbox-inline hidden-xs">
         <input type="checkbox" {% if price == 'free'%}checked="true" {% endif %} id="free" value="
         {% if price == 'all'%}
-          {{ path('classroom_explore', {category:category['category'], subCategory:category['subCategory'], selectedthirdLevelCategory:category['thirdLevelCategory'], tag:{tags:tags}, filter: {price: 'free',currentLevelId: currentLevelId},orderBy: orderBy}) }}
+          {{ path('classroom_explore', {category:category, subCategory:subCategory, selectedthirdLevelCategory:thirdLevelCategory, tag:{tags:tags}, filter: {price: 'free',currentLevelId: currentLevelId},orderBy: orderBy}) }}
         {% else %}
-          {{ path('classroom_explore', {category:category['category'], subCategory:category['subCategory'], selectedthirdLevelCategory:category['thirdLevelCategory'], tag:{tags:tags}, filter: {price: 'all',currentLevelId: currentLevelId},orderBy: orderBy}) }}
+          {{ path('classroom_explore', {category:category, subCategory:subCategory, selectedthirdLevelCategory:thirdLevelCategory, tag:{tags:tags}, filter: {price: 'all',currentLevelId: currentLevelId},orderBy: orderBy}) }}
         {% endif %}
         "> {{'explore.classroom.free_name'|trans({'%name%':setting('classroom.name')|default('site.default.classroom'|trans)})}}
       </label>
@@ -67,8 +80,11 @@
     {% if classrooms %}
       {% for classroom in classrooms %}
         <div class="col-md-4 col-sm-6">
-          <div class="class-item">
+          <div class="class-item class-item--tag">
             <div class="class-img">
+              {% if is_plugin_installed('Vip') and setting('vip.enabled') and classroom.vipLevelId|default(0) > 0 %}
+                <span class="tag-vip-free"></span>
+              {% endif %}
               <a href="{{ path('classroom_show', {id:classroom.id}) }}" target="_blank">
                 {{ lazy_img(filepath(classroom.middlePicture, 'classroom.png'), 'img-responsive', classroom.title, 'lazyload_class.png') }}
                 <h3>{{ classroom.title }}</h3>
@@ -76,12 +92,27 @@
               </a>
             </div>
             <div class="class-serve">
-              {% include 'classroom/service-block.html.twig' with {'services':classroom.service} %}
+              {% include 'classroom/service-block.html.twig' with {'services':classroom.service, 'priceShow':true} %}
             </div>
+            {% set classroom = classroom|wrap('classroom.price') %}
+            <span class="class-price">
+              <span class="
+                {% if classroom.price == 0 %}
+                      color-success
+                {% else %}
+                      color-danger
+                {% endif %}">
+                {{ classroom.priceWrapper.priceText }}
+              </span>
+            </span>
             <ul class="class-data clearfix">
               <li><i class="es-icon es-icon-book"></i>{{classroom.courseNum}}</li>
-              <li><i class="es-icon es-icon-people"></i>{{classroom.studentNum + classroom.auditorNum }}</li>
+              {% if setting('classroom.show_student_num_enabled', '1') == 1 %}
+                <li><i class="es-icon es-icon-people"></i>{{classroom.studentNum + classroom.auditorNum }}</li>
+              {% endif %}
+              {% if setting('classroom.show_review', '1') == 1 %}
               <li><i class="es-icon es-icon-textsms"></i>{{classroom.threadNum}}</li>
+              {% endif %}
             </ul>
           </div>
         </div>

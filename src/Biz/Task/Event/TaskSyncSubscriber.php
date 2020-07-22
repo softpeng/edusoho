@@ -10,7 +10,6 @@ use Biz\Activity\Dao\ActivityDao;
 use Biz\Task\Service\TaskService;
 use Codeages\Biz\Framework\Event\Event;
 use Biz\Course\Event\CourseSyncSubscriber;
-use Biz\Course\Copy\Chain\ActivityTestpaperCopy;
 use Codeages\Biz\Framework\Scheduler\Service\SchedulerService;
 
 class TaskSyncSubscriber extends CourseSyncSubscriber
@@ -20,6 +19,7 @@ class TaskSyncSubscriber extends CourseSyncSubscriber
         return array(
             'course.task.create' => 'onCourseTaskCreate',
             'course.task.update' => 'onCourseTaskUpdate',
+            'course.task.updateOptional' => 'onCourseTaskUpdate',
             'course.task.delete' => 'onCourseTaskDelete',
             'course.task.publish' => 'onCourseTaskPublish',
             'course.task.unpublish' => 'onCourseTaskUnpublish',
@@ -37,6 +37,7 @@ class TaskSyncSubscriber extends CourseSyncSubscriber
             return;
         }
 
+        //task 创建同步任务，永久有效
         $this->getSchedulerService()->register(array(
             'name' => 'course_task_create_sync_job_'.$task['id'],
             'source' => SystemCrontabInitializer::SOURCE_SYSTEM,
@@ -59,6 +60,7 @@ class TaskSyncSubscriber extends CourseSyncSubscriber
             return;
         }
 
+        //task 更新同步任务，永久有效
         $this->getSchedulerService()->register(array(
             'name' => 'course_task_update_sync_job_'.$task['id'],
             'source' => SystemCrontabInitializer::SOURCE_SYSTEM,
@@ -73,6 +75,8 @@ class TaskSyncSubscriber extends CourseSyncSubscriber
     {
         $task = $event->getSubject();
         $this->syncTaskStatus($task, true);
+
+        $this->dispatchEvent('course.task.publish.sync', new Event($task));
     }
 
     public function onCourseTaskUnpublish(Event $event)
@@ -96,7 +100,7 @@ class TaskSyncSubscriber extends CourseSyncSubscriber
 
         $status = $published ? 'published' : 'unpublished';
 
-        if ($course['courseType'] === CourseService::DEFAULT_COURSE_TYPE) {
+        if (CourseService::DEFAULT_COURSE_TYPE === $course['courseType']) {
             $sameCategoryTasks = $this->getTaskDao()->findByChapterId($task['categoryId']);
             $this->getTaskDao()->update(array('courseIds' => array_column($copiedCourses, 'id'), 'copyIds' => array_column($sameCategoryTasks, 'id')), array('status' => $status));
         } else {
@@ -123,21 +127,6 @@ class TaskSyncSubscriber extends CourseSyncSubscriber
             'misfire_policy' => 'executing',
             'class' => 'Biz\Task\Job\CourseTaskDeleteSyncJob',
             'args' => array('taskId' => $task['id'], 'courseId' => $task['courseId']),
-        ));
-    }
-
-    protected function syncTestpaper($activity, $copiedCourse)
-    {
-        if ($activity['mediaType'] != 'testpaper') {
-            return array();
-        }
-
-        $testpaperCopy = new ActivityTestpaperCopy($this->getBiz());
-
-        return $testpaperCopy->copy($activity, array(
-            'newCourseSetId' => $copiedCourse['courseSetId'],
-            'newCourseId' => $copiedCourse['id'],
-            'isCopy' => 1,
         ));
     }
 
@@ -183,5 +172,18 @@ class TaskSyncSubscriber extends CourseSyncSubscriber
     private function getSchedulerService()
     {
         return $this->getBiz()->service('Scheduler:SchedulerService');
+    }
+
+    protected function dispatchEvent($eventName, $subject, $arguments = array())
+    {
+        if ($subject instanceof Event) {
+            $event = $subject;
+        } else {
+            $event = new Event($subject, $arguments);
+        }
+
+        $biz = $this->getBiz();
+
+        return $biz['dispatcher']->dispatch($eventName, $event);
     }
 }

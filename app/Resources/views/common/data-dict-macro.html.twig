@@ -22,35 +22,35 @@
     {% endif %}
 {% endmacro %}
 
-{% macro  orderStatus(status) %}
+{% macro refundStatus(status) %}
     {% if status == 'created' %}
-        <span class="label label-danger">{{ 'common.orderStatus.created'|trans }}</span>
+        <span class="cd-status cd-status-info">{{ 'common.orderStatus.created'|trans }}</span>
     {% elseif status == 'paid' %}
-        <span class="label label-success">{{ 'common.orderStatus.paid'|trans }}</span>
+        <span class="cd-status cd-status-success">{{ 'common.orderStatus.paid'|trans }}</span>
     {% elseif status == 'refunding' %}
-        <span class="text-warning">{{ 'common.orderStatus.refunding'|trans }}</span>
+        <span class="cd-status cd-status-warning">{{ 'common.orderStatus.refunding'|trans }}</span>
     {% elseif status == 'refunded' %}
-        <span class="color-danger">{{ 'common.orderStatus.refunded'|trans }}</span>
+        <span class="cd-status cd-status-danger">{{ 'common.orderStatus.refunded'|trans }}</span>
     {% elseif status == 'cancelled' %}
-        <span class="color-gray">{{ 'common.orderStatus.cancelled'|trans }}</span>
+        <span class="cd-status cd-status-disabled">{{ 'common.orderStatus.cancelled'|trans }}</span>
     {% endif %}
 {% endmacro %}
 
-{% macro refundStatus(status) %}
-    {% if status == 'created' %}
+{% macro adminRefundStatus(status) %}
+    {% if status == 'auditing' %}
         <span class="text-warning">{{ 'common.refundStatus.created'|trans }}</span>
-    {% elseif status == 'success' %}
+    {% elseif status == 'refunded' %}
         <span class="color-success">{{ 'common.refundStatus.success'|trans }}</span>
-    {% elseif status == 'failed' %}
+    {% elseif status == 'refused' %}
         <span class="color-danger">{{ 'common.refundStatus.failed'|trans }}</span>
-    {% elseif status == 'cancelled' %}
+    {% elseif status == 'cancel' %}
         <span class="color-gray">{{ 'common.refundStatus.cancelled'|trans }}</span>
     {% endif %}
 {% endmacro %}
 
 {% macro logLevel(level) %}
     {% if level == 'info' %}
-        <span>{{ 'common.logLevel.info'|trans }}</span>
+        <span class="color-success">{{ 'common.logLevel.info'|trans }}</span>
     {% elseif level == 'warning' %}
         <span class="text-warning">{{ 'common.logLevel.warning'|trans }}</span>
     {% elseif level == 'error' %}
@@ -95,5 +95,17 @@
       {{'common.video_quality.normal'|trans}} <span class="color-gray">({{'common.video_quality.normal.tips'|trans}})</span>
     {% elseif option == 'high' %}
       {{'common.video_quality.high'|trans}} <span class="color-gray">({{'common.video_quality.high.tips'|trans}})</span>
+    {% elseif option == 'super' %}
+      {{'common.video_quality.super'|trans}} <span class="color-gray">({{'common.video_quality.super.tips'|trans}})</span>
     {% endif %}
+{% endmacro %}
+
+{% macro classroomStatus(status) %}
+  {% if status == 'draft' %}
+    <span class="color-gray">{{ 'common.classroomStatus.draft'|trans }}</span>
+  {% elseif status == 'published' %}
+    <span class="color-success">{{ 'common.classroomStatus.published'|trans }}</span>
+  {% elseif status == 'closed' %}
+    <span class="color-danger">{{ 'common.classroomStatus.closed'|trans }}</span>
+  {% endif %}
 {% endmacro %}

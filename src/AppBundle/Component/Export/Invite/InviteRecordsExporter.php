@@ -24,7 +24,7 @@ class InviteRecordsExporter extends Exporter
     {
         $user = $this->getUser();
 
-        if ($user->hasPermission('admin_operation_invite_record')) {
+        if ($user->hasPermission('admin_operation_invite_record') || $user->hasPermission('admin_v2_operation_invite_record')) {
             return true;
         }
 
@@ -58,7 +58,7 @@ class InviteRecordsExporter extends Exporter
             $limit
         );
 
-        if ($start == 0) {
+        if (0 == $start) {
             if (!empty($this->conditions['inviteUserId'])) {
                 $invitedRecord = $this->getInviteRecordService()->getRecordByInvitedUserId($this->conditions['inviteUserId']);
                 if (!empty($invitedRecord)) {
@@ -79,13 +79,12 @@ class InviteRecordsExporter extends Exporter
 
     protected function exportDataByRecord($record, $users)
     {
-        list($coinAmountTotalPrice, $amountTotalPrice, $totalPrice) = $this->getInviteRecordService()->getUserOrderDataByUserIdAndTime($record['invitedUserId'], $record['inviteTime']);
         $content = array();
         $content[] = $users[$record['inviteUserId']]['nickname'];
         $content[] = $users[$record['invitedUserId']]['nickname'];
-        $content[] = $totalPrice;
-        $content[] = $coinAmountTotalPrice;
-        $content[] = $amountTotalPrice;
+        $content[] = $record['amount'];
+        $content[] = $record['coinAmount'];
+        $content[] = $record['cashAmount'];
         $content[] = $users[$record['inviteUserId']]['inviteCode'];
         $content[] = date('Y-m-d H:i:s', $record['inviteTime']);
 

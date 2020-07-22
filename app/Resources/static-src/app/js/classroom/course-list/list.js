@@ -1,40 +1,57 @@
-import {chapterAnimate} from 'app/common/widget/chapter-animate';
+import { chapterAnimate } from 'app/common/widget/chapter-animate';
+import PagedCourseTask from 'app/js/courseset/show/paged-course-task-list';
 
 export default class CourseList {
   constructor($element) {
     this.$element = $element;
-    chapterAnimate();
     this.initEvent();
-    echo.init();
   }
 
   initEvent() {
-    this.$element.on('click','.es-icon-keyboardarrowdown',(event)=>this.onExpandCourse(event));
-    this.$element.on('click','.es-icon-keyboardarrowup',(event)=>this.onCollapseCourse(event));
+    this.$element.on('click', '.es-icon-keyboardarrowdown', (event) => this.onExpandCourse(event));
+    this.$element.on('click', '.es-icon-keyboardarrowup', (event) => this.onCollapseCourse(event));
   }
 
   onExpandCourse(e) {
-    var $target = $(e.currentTarget);
-    var $parent = $target.parents(".course-item");
-    var $lessonList = $target.parents(".media").siblings(".course-detail-content");
+    const $target = $(e.currentTarget);
+    const $parent = $target.parents('.course-item');
+    const $lessonList = $target.parents('.media').siblings('.js-tasks-list');
     if ($lessonList.length > 0) {
-      this._lessonListSHow($lessonList)
+      this._lessonListShow($lessonList);
     } else {
-      var self = this;
-      $.get($target.data('lessonUrl'), { 'visibility': 0 }, function (html) {
+      $.get($target.data('lessonUrl'), { 'visibility': 0 }, function(html) {
         $parent.append(html);
-        self._lessonListSHow($parent.siblings(".course-detail-content"));
+        new PagedCourseTask({wrapTarget: $parent, target: $parent});
       });
     }
+    const $hideDom = $parent.siblings().find('.es-icon-keyboardarrowup');
+    this._lessonListShow($hideDom.parents('.media').siblings('.js-tasks-list'));
+    const $findAllLink = $parent.find('.js-all-courses-link');
+    const $otherAllLink = $parent.siblings().find('.js-all-courses-link');
+    if ($findAllLink.length) {
+      $findAllLink.removeClass('hidden');
+    }
 
+    this.hideLink($otherAllLink);
+    $hideDom.removeClass('es-icon-keyboardarrowup').addClass('es-icon-keyboardarrowdown');
     $target.addClass('es-icon-keyboardarrowup').removeClass('es-icon-keyboardarrowdown');
   }
+
   onCollapseCourse(e) {
-    var $target = $(e.currentTarget);
-    this._lessonListSHow($target.parents(".media").siblings(".course-detail-content"));
+    const $target = $(e.currentTarget);
+    const $findAllLink = $target.parents('.course-item').find('.js-all-courses-link');
+    this.hideLink($findAllLink);
+    this._lessonListShow($target.parents('.media').siblings('.js-tasks-list'));
     $target.addClass('es-icon-keyboardarrowdown').removeClass('es-icon-keyboardarrowup');
   }
-  _lessonListSHow($list) {
+
+  hideLink($dom) {
+    if ($dom.length) {
+      $dom.addClass('hidden');
+    }
+  }
+
+  _lessonListShow($list) {
     if ($list.length > 0) {
       $list.animate({
         visibility: 'toggle',

@@ -1,4 +1,7 @@
-<div class="class-item">
+<div class="class-item class-item--tag">
+  {% if is_plugin_installed('Vip') and setting('vip.enabled') and classroom.vipLevelId|default(0) > 0 %}
+    <span class="tag-vip-free"></span>
+  {% endif %}
   <div class="class-img-wrap">
     <a class="class-img" href="{{ path('classroom_show', {id:classroom.id}) }}">
       {{ lazy_img(filepath(classroom.middlePicture, 'classroom.png'), 'img-responsive', classroom.title, 'lazyload_class.png') }}
@@ -13,6 +16,9 @@
       {% endif %}
     </div>
   </div>
-  <h3><a class="link-dark" href="{{ path('classroom_show', {id:classroom.id}) }}">{{ classroom.title }}</a></h3>
-  <div class="metas">{{ 'classroom.courses_count'|trans({'%courseNum%': '<span>%d</span>'|format(classroom.courseNum) })|raw }}</div>
+  <h3 class="text-left class-item-title"><a class="link-darker" href="{{ path('classroom_show', {id:classroom.id}) }}">{{ classroom.title }}</a></h3>
+  <div class="class-item-metas text-overflow">
+    {{ 'classroom.courses_count'|trans({'%courseNum%': '<span>%d</span>'|format(classroom.courseNum) })|raw }}
+    {% include 'classroom/classroom-price.html.twig' %}
+  </div>
 </div>

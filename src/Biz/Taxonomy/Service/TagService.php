@@ -2,6 +2,8 @@
 
 namespace Biz\Taxonomy\Service;
 
+use Biz\System\Annotation\Log;
+
 interface TagService
 {
     //tag_owner
@@ -23,7 +25,7 @@ interface TagService
 
     public function getTagByName($name);
 
-    public function getTagByLikeName($name);
+    public function findTagsByLikeName($name);
 
     public function findAllTags($start, $limit);
 
@@ -49,17 +51,59 @@ interface TagService
 
     public function isTagGroupNameAvailable($name, $exclude = null);
 
+    /**
+     * @param $tag
+     *
+     * @return mixed
+     * @Log(module="tag",action="create")
+     */
     public function addTag(array $tag);
 
+    /**
+     * @param $fields
+     *
+     * @return mixed
+     * @Log(module="tagGroup",action="create")
+     */
     public function addTagGroup($fields);
 
+    /**
+     * @param $id
+     * @param array $fields
+     *
+     * @return mixed
+     * @Log(module="tag",action="update",param="id")
+     */
     public function updateTag($id, array $fields);
 
+    /**
+     * @param $id
+     * @param $fields
+     *
+     * @return mixed
+     * @Log(module="tagGroup",action="update",param="id")
+     */
     public function updateTagGroup($id, $fields);
 
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="tag",action="delete")
+     */
     public function deleteTag($id);
 
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="tagGroup",action="delete")
+     */
     public function deleteTagGroup($id);
 
     public function findTagIdsByOwnerTypeAndOwnerIds($ownerType, array $ids);
+
+    public function findOwnerIdsByTagIdsAndOwnerType($tagIds, $ownerType);
+
+    public function findGroupTagIdsByOwnerTypeAndOwnerIds($ownerType, array $ids);
 }

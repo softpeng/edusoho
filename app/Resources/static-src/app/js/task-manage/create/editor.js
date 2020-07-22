@@ -1,8 +1,8 @@
-import loadAnimation from 'common/load-animation'
+import loadAnimation from 'common/load-animation';
 import 'jquery-sortable';
 import notify from 'common/notify';
 import Intro from 'app/js/courseset-manage/intro';
-import { sortablelist } from "app/js/course-manage/help";
+import { sortablelist } from 'app/js/course-manage/help';
 
 
 class Editor {
@@ -82,56 +82,15 @@ class Editor {
     $(event.currentTarget).attr('disabled', 'disabled').button('loading');
     let postData = $('#step1-form').serializeArray()
       .concat(this.$iframe_body.find('#step2-form').serializeArray())
-      .concat(this.$iframe_body.find("#step3-form").serializeArray());
+      .concat(this.$iframe_body.find('#step3-form').serializeArray());
 
     $.post(this.$task_manage_type.data('saveUrl'), postData)
       .done((response) => {
-        const needAppend = response.append;
-        const html = response.html;
         this.$element.modal('hide');
-        if(!$('.js-task-empty').hasClass('hidden') ){
-            $('.js-task-empty').addClass('hidden');
+        if (response) {
+          $('#sortable-list').trigger('addItem', response);
         }
-        if (needAppend === false) {
-          // @TODO这里也需要返回html,进行替换   
-          document.location.reload();
-        }
-
-        let chapterId = postData.find(function (input) {
-          return input.name == 'chapterId';
-        });
-
-        let add = 0;
-        let $parent = $('#' + chapterId.value);
-        let $item = null;
-
-        if ($parent.length) {
-          $parent.nextAll().each(function () {
-            if ($(this).hasClass('task-manage-chapter')) {
-              $(this).before(html);
-              add = 1;
-              sortablelist('#sortable-list');
-              return false;
-            }
-            if ($parent.hasClass('task-manage-unit') && $(this).hasClass('task-manage-unit')) {
-              $(this).before(html);
-              add = 1;
-              sortablelist('#sortable-list');
-              return false;
-            }
-          });
-          if (add != 1) {
-            $item = $(html);
-            $("#sortable-list").append($item);
-            add = 1;
-          }
-        } else {
-          $item = $(html);
-          $("#sortable-list").append($item);
-        }
-        this.showDefaultSetting($item);
-        this.initIntro();
-        sortablelist('#sortable-list');
+        // this.initIntro();
       })
       .fail((response) => {
         let msg = '';
@@ -140,7 +99,7 @@ class Editor {
           msg = errorResponse.error.message;
         }
         notify('warning', Translator.trans('task_manage.edit_error_hint') + ':' + msg);
-        $("#course-tasks-submit").attr('disabled', null);
+        $('#course-tasks-submit').attr('disabled', null);
       });
   }
 
@@ -151,13 +110,6 @@ class Editor {
         intro.initTaskDetailIntro('.js-settings-list');
       }
     }, 500);
-  }
-
-  showDefaultSetting($item = null) {
-    if ($item && $item.hasClass('js-task-manage-item')) {
-      $('.js-task-manage-item').removeClass('active').find('.js-settings-list').slideUp();;
-      $item.addClass('active').find('.js-settings-list').slideDown();
-    }
   }
 
   _onDelete(event) {
@@ -179,7 +131,7 @@ class Editor {
       })
       .fail(error => {
         notify('warning', Translator.trans('task_manage.delete_failed_hint'));
-      })
+      });
   }
 
   _switchPage() {
@@ -203,15 +155,15 @@ class Editor {
       this.iframe_jQuery = this.$frame[0].contentWindow.$;
       this.$iframe_body = this.$frame.contents().find('body').addClass('task-iframe-body');
       this._rendButton(2);
-      this.$iframe_body.find("#step2-form").data('validator', validator);
-      this.$iframe_body.find("#step3-form").data('validator', validator);
+      this.$iframe_body.find('#step2-form').data('validator', validator);
+      this.$iframe_body.find('#step3-form').data('validator', validator);
       console.log({'loaded':new Date().toLocaleTimeString()});
     };
     this.$frame.load(loadAnimation(loadiframe, this.$task_manage_content));
   }
 
   _inItStep1form() {
-    let $step1_form = $("#step1-form");
+    let $step1_form = $('#step1-form');
     let validator = $step1_form.validate({
       rules: {
         mediaType: {
@@ -229,9 +181,9 @@ class Editor {
     let validator = null;
 
     if (step === 1) {
-      validator = $("#step1-form").data('validator');
+      validator = $('#step1-form').data('validator');
     } else if (this.loaded) {
-      var $from = this.$iframe_body.find("#step" + step + "-form");
+      var $from = this.$iframe_body.find('#step' + step + '-form');
       validator = this.iframe_jQuery.data($from[0], 'validator');
     }
 
@@ -268,8 +220,8 @@ class Editor {
     if (!this.loaded || !this.$iframe_body) {
       return;
     }
-    (step === 2) ? this.$iframe_body.find(".js-step2-view").addClass('active') : this.$iframe_body.find(".js-step2-view").removeClass('active');
-    (step === 3) ? this.$iframe_body.find(".js-step3-view").addClass('active') : this.$iframe_body.find(".js-step3-view").removeClass('active');
+    (step === 2) ? this.$iframe_body.find('.js-step2-view').addClass('active') : this.$iframe_body.find('.js-step2-view').removeClass('active');
+    (step === 3) ? this.$iframe_body.find('.js-step3-view').addClass('active') : this.$iframe_body.find('.js-step3-view').removeClass('active');
   }
 
   _renderStep(step) {
@@ -283,15 +235,15 @@ class Editor {
   }
 
   _renderNext(show) {
-    show ? $("#course-tasks-next").removeClass('hidden').removeAttr("disabled") : $("#course-tasks-next").addClass('hidden');
+    show ? $('#course-tasks-next').removeClass('hidden').removeAttr('disabled') : $('#course-tasks-next').addClass('hidden');
   }
 
   _renderPrev(show) {
-    show ? $("#course-tasks-prev").removeClass('hidden') : $("#course-tasks-prev").addClass('hidden');
+    show ? $('#course-tasks-prev').removeClass('hidden') : $('#course-tasks-prev').addClass('hidden');
   }
 
   _rendSubmit(show) {
-    show ? $("#course-tasks-submit").removeClass('hidden') : $("#course-tasks-submit").addClass('hidden');
+    show ? $('#course-tasks-submit').removeClass('hidden') : $('#course-tasks-submit').addClass('hidden');
   }
 
 }

@@ -185,9 +185,13 @@ class GeneralDaoImplTest extends IntegrationTestCase
         $dao = $this->biz->dao($dao);
 
         $dao->create(array('name' => 'pre_test1'));
+        sleep(1);
         $dao->create(array('name' => 'pre_test2'));
+        sleep(1);
         $dao->create(array('name' => 'test3_suf'));
+        sleep(1);
         $dao->create(array('name' => 'test4_suf'));
+        sleep(1);
         $dao->create(array('name' => 'test5'));
 
         $preNames = $dao->search(array('pre_like' => 'pre_'), array('created_time' => 'desc'), 0, 100);
@@ -199,9 +203,9 @@ class GeneralDaoImplTest extends IntegrationTestCase
         $this->assertCount(2, $preNames);
         $this->assertCount(2, $sufNames);
         $this->assertCount(5, $likeNames);
-        $this->assertEquals('pre_test1', $preNames[0]['name']);
-        $this->assertEquals('test4_suf', $sufNames[1]['name']);
-        $this->assertEquals('test5', $likeNames[4]['name']);
+        $this->assertEquals('pre_test2', $preNames[0]['name']);
+        $this->assertEquals('test3_suf', $sufNames[1]['name']);
+        $this->assertEquals('pre_test1', $likeNames[4]['name']);
     }
 
     public function testInSearch()
@@ -220,15 +224,6 @@ class GeneralDaoImplTest extends IntegrationTestCase
         $results = $dao->search(array('ids' => array()), array('created_time' => 'desc'), 0, 100);
 
         $this->assertCount(4, $results);
-    }
-
-    /**
-     * @expectedException \Codeages\Biz\Framework\Dao\DaoException
-     */
-    public function testInSearchWithException()
-    {
-        $dao = $this->biz->dao('Example:ExampleDao');
-        $dao->search(array('ids' => 1), array(), 0, 100);
     }
 
     public function testCount()
@@ -405,5 +400,33 @@ class GeneralDaoImplTest extends IntegrationTestCase
         }
 
         $this->assertEquals($row['delimiter_serialize_value'], array('i_am_delimiter_serialized_value'));
+    }
+
+    public function testSearchWithColumns()
+    {
+        /** @var \Tests\Example\Dao\ExampleDao $dao */
+        $dao = $this->biz->dao('Example:ExampleDao');
+
+        $dao->create(array('name' => 'test1', 'ids1' => array('1111'), 'ids2' => array('1111')));
+        $dao->create(array('name' => 'test1', 'ids1' => array('2222'), 'ids2' => array('2222')));
+        $dao->create(array('name' => 'test2', 'ids1' => array('3333'), 'ids2' => array('3333')));
+
+        $results = $dao->search(array('name' => 'test2'), array(), 0, 10, array('name', 'ids1'));
+        $this->assertCount(1, $results);
+        $this->assertEquals(
+            array('name' => 'test2', 'ids1' => array('3333')),
+            $results[0]
+        );
+    }
+
+    /**
+     * @expectedException \Codeages\Biz\Framework\Dao\DaoException
+     */
+    public function testSearchWithErrorColumns()
+    {
+        /** @var \Tests\Example\Dao\ExampleDao $dao */
+        $dao = $this->biz->dao('Example:ExampleDao');
+
+        $dao->search(array('name' => 'test2'), array(), 0, 10, array('* from example;#'));
     }
 }

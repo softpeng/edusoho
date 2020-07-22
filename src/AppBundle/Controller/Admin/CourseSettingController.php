@@ -2,7 +2,6 @@
 
 namespace AppBundle\Controller\Admin;
 
-use AppBundle\Common\ArrayToolkit;
 use Biz\Util\EdusohoLiveClient;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -32,19 +31,25 @@ class CourseSettingController extends BaseController
             'copy_enabled' => '0',
             'testpaperCopy_enabled' => '0',
             'custom_chapter_enabled' => '0',
+            'show_cover_num_mode' => 'studentNum',
+            'show_review' => '1',
+            'show_question' => '1',
+            'show_discussion' => '1',
+            'show_note' => '1',
         );
 
         $this->getSettingService()->set('course', $courseSetting);
         $this->getSettingService()->set('live-course', $liveCourseSetting);
         $courseSetting = array_merge($default, $courseSetting);
 
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $defaultSetting = $request->request->all();
 
             $courseDefaultSetting = array(
                 'custom_chapter_enabled' => 0,
                 'chapter_name' => '章',
                 'part_name' => '节',
+                'task_name' => '任务',
             );
 
             $courseDefaultSetting = array_merge($courseDefaultSetting, $defaultSetting);
@@ -60,8 +65,9 @@ class CourseSettingController extends BaseController
 
             $this->getSettingService()->set('live-course', $liveCourseSetting);
             $this->getSettingService()->set('course', $courseSetting);
-            $this->getLogService()->info('admin/system/', 'update_settings', '更新课程设置', $courseSetting);
             $this->setFlashMessage('success', 'site.save.success');
+
+            return $this->createJsonResponse(true);
         }
 
         return $this->render('admin/system/course-setting.html.twig', array(
@@ -75,20 +81,14 @@ class CourseSettingController extends BaseController
     {
         $defaultSetting = $this->getSettingService()->get('default', array());
 
-        if ($request->getMethod() == 'POST') {
-            $defaultSetting = $request->request->all();
-
-            $courseDefaultSetting = ArrayToolkit::parts($defaultSetting, array(
-                'defaultCoursePicture',
-            ));
-
-            $default = $this->getSettingService()->get('default', array());
-            $defaultSetting = array_merge($default, $courseDefaultSetting);
+        if ('POST' == $request->getMethod()) {
+            $courseDefaultSetting = $request->request->get('defaultCoursePicture', 0);
+            $defaultSetting = array_merge($defaultSetting, array('defaultCoursePicture' => $courseDefaultSetting));
 
             $this->getSettingService()->set('default', $defaultSetting);
-
-            $this->getLogService()->info('admin/system/', 'update_settings', '更新课程默认图片设置', $defaultSetting);
             $this->setFlashMessage('success', 'site.save.success');
+
+            return $this->redirect($this->generateUrl('admin_setting_course_avatar'));
         }
 
         return $this->render('admin/system/course-avatar.html.twig', array(
@@ -112,7 +112,7 @@ class CourseSettingController extends BaseController
         $this->getSettingService()->set('live-course', $liveCourseSetting);
         $setting = array_merge($default, $liveCourseSetting);
 
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $liveCourseSetting = $request->request->all();
             $liveCourseSetting['live_student_capacity'] = empty($capacity['capacity']) ? 0 : $capacity['capacity'];
             $setting = array_merge($courseSetting, $liveCourseSetting);
@@ -154,10 +154,9 @@ class CourseSettingController extends BaseController
             $questionsSetting = $default;
         }
 
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $questionsSetting = $request->request->all();
             $this->getSettingService()->set('questions', $questionsSetting);
-            $this->getLogService()->info('admin/system/', 'questions_settings', '更新题库设置', $questionsSetting);
             $this->setFlashMessage('success', 'site.save.success');
         }
 

@@ -1,18 +1,18 @@
 import EsWebUploader from 'common/es-webuploader.js';
-import notify from 'common/notify';
 
 let editor = CKEDITOR.replace('profile_about', {
   toolbar: 'Simple',
+  fileSingleSizeLimit: app.fileSingleSizeLimit,
   filebrowserImageUploadUrl: $('#profile_about').data('imageUploadUrl')
 });
 
 let uploader = new EsWebUploader({
   element: '#upload-picture-btn',
   onUploadSuccess: function(file, response) {
-    let url = $("#upload-picture-btn").data("gotoUrl");
+    let url = $('#upload-picture-btn').data('gotoUrl');
     $.get(url, function(html) {
-      $("#modal").modal('show').html(html);
-    })
+      $('#modal').modal('show').html(html);
+    });
   }
 });
 
@@ -27,13 +27,13 @@ let validator = $('#user-profile-form').validate({
   },
   ajax: true,
   submitSuccess(data) {
-    notify('success', Translator.trans('settings.user_profile.save_success_hint'));
+    cd.message({type: 'success', message: Translator.trans('settings.user_profile.save_success_hint')});
     
     setTimeout(function() {
       window.location.reload();
     }, 1000);
   }
-})
+});
 
 $('#profile-save-btn').on('click', (event) => {
   const $this = $(event.currentTarget);
@@ -42,5 +42,5 @@ $('#profile-save-btn').on('click', (event) => {
     $this.button('loading');
     $('#user-profile-form').submit();
   }
-})
+});
 

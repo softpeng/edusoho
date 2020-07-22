@@ -2,6 +2,7 @@
 
 namespace Biz;
 
+use Biz\Org\OrgException;
 use Monolog\Logger;
 use Biz\User\CurrentUser;
 use Codeages\Biz\Framework\Event\Event;
@@ -11,6 +12,7 @@ use Codeages\Biz\Framework\Service\Exception\NotFoundException;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Codeages\Biz\Framework\Service\Exception\AccessDeniedException;
 use Codeages\Biz\Framework\Service\Exception\InvalidArgumentException;
+use AppBundle\Common\Exception\AbstractException;
 
 class BaseService extends \Codeages\Biz\Framework\Service\BaseService
 {
@@ -112,6 +114,15 @@ class BaseService extends \Codeages\Biz\Framework\Service\BaseService
         return new NotFoundException($message);
     }
 
+    protected function createNewException($e)
+    {
+        if ($e instanceof AbstractException) {
+            throw $e;
+        }
+
+        throw new \Exception();
+    }
+
     /**
      * @param string $message
      *
@@ -127,9 +138,9 @@ class BaseService extends \Codeages\Biz\Framework\Service\BaseService
         $magic = $this->biz->service('System:SettingService')->get('magic');
         if (isset($magic['enable_org']) && $magic['enable_org']) {
             if (!empty($fields['orgCode'])) {
-                $org = ServiceKernel::instance()->createService('Org:OrgService')->getOrgByOrgCode($fields['orgCode']);
+                $org = $this->createService('Org:OrgService')->getOrgByOrgCode($fields['orgCode']);
                 if (empty($org)) {
-                    throw $this->createNotFoundException('组织机构不存在,更新失败');
+                    $this->createNewException(OrgException::NOTFOUND_ORG());
                 }
                 $fields['orgId'] = $org['id'];
                 $fields['orgCode'] = $org['orgCode'];
@@ -162,5 +173,19 @@ class BaseService extends \Codeages\Biz\Framework\Service\BaseService
     protected function trans($message, $arguments = array(), $domain = null, $locale = null)
     {
         return ServiceKernel::instance()->trans($message, $arguments, $domain, $locale);
+    }
+
+    /**
+     * @param $code
+     *
+     * @return array
+     *               根据给定的权限，获取匹配的新|老后台的权限
+     */
+    protected function getMarriedPermissions($code)
+    {
+        $rolePermissionsYml = $this->biz['role.get_permissions_yml'];
+        $allPermissions = array_merge($rolePermissionsYml['adminV2'], $rolePermissionsYml['admin']);
+
+        return !empty($allPermissions[$code]) ? $allPermissions[$code] : array();
     }
 }

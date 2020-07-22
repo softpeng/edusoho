@@ -7,12 +7,16 @@
   <div class="media-body">
     <div class="metas title">
       {% include 'thread/post-manage-menu.html.twig' %}
-      <a href="{{ path('user_show', {id:author.id}) }}" class="nickname">{{ author.nickname }}</a>
+        {% if not author.destroyed|default(0) %}
+          <a href="{{ path('user_show', {id:author.id}) }}" class="nickname">{{ author.nickname }}</a>
+        {% else %}
+          <a class="color-gray">{{ 'user.user_had_destroyed'|trans }}</a>
+        {% endif %}
       <span class="bullet">•</span>
       <span class="color-gray">{{post.createdTime|smart_time}} </span>
       {% if author.badgeTitle|default(null) %}<span class="mll color-danger">({{ dict_text('classroomRoles', author.badgeTitle) }}) </span>{% endif %}
     </div>
-    <div class="editor-text">{{ post.content|at(post.ats)|raw }}</div>
+    <div class="editor-text">{{ post.content|at(post.ats)|cdn|raw }}</div>
     {% include 'attachment/widget/list.html.twig' with {targetType:'classroom.thread.post', targetId:post.id} %}
     <div class="comment-sns">
       {% include 'thread/post-interaction.html.twig' %}

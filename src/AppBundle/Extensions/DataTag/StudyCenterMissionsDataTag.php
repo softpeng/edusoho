@@ -2,6 +2,7 @@
 
 namespace AppBundle\Extensions\DataTag;
 
+use Biz\Common\CommonException;
 use Biz\Task\Service\TaskService;
 use AppBundle\Common\ArrayToolkit;
 use Biz\Task\Service\TaskResultService;
@@ -22,7 +23,7 @@ class StudyCenterMissionsDataTag extends BaseDataTag implements DataTag
     public function getData(array $arguments)
     {
         if (!ArrayToolkit::requireds($arguments, array('userId', 'count', 'missionCount'))) {
-            throw new \InvalidArgumentException('参数缺失');
+            throw CommonException::ERROR_PARAMETER_MISSING();
         }
 
         return $this->getStudyMissions($arguments);
@@ -48,7 +49,7 @@ class StudyCenterMissionsDataTag extends BaseDataTag implements DataTag
 
         $courses = $this->getCourseService()->findCoursesByIds($courseIds);
         usort($courses, function ($c1, $c2) use ($courseIds) {
-            if (($c1['parentId'] > 0 && $c2['parentId'] > 0) || ($c1['parentId'] == 0 && $c2['parentId'] == 0)) {
+            if (($c1['parentId'] > 0 && $c2['parentId'] > 0) || (0 == $c1['parentId'] && 0 == $c2['parentId'])) {
                 return array_search($c1['id'], $courseIds) > array_search($c2['id'], $courseIds);
             }
 
@@ -71,14 +72,13 @@ class StudyCenterMissionsDataTag extends BaseDataTag implements DataTag
 
                 $classroomRef = $classroomRefs[$course['id']];
                 $classroomId = $classroomRef['classroomId'];
-
                 $classroom = empty($courseClassrooms[$classroomId]) ? array() : $courseClassrooms[$classroomId];
                 if (empty($classrooms['class-'.$classroomId])) {
                     $classroom['tasks'] = array();
                     $classroom['allTaskNum'] = 0;
                     $classroom['learnedTaskNum'] = 0;
                     $classrooms['class-'.$classroomId] = $classroom;
-                    $classroomIndex += 1;
+                    ++$classroomIndex;
                 }
                 $classrooms['class-'.$classroomId]['allTaskNum'] += $course['taskNum'];
                 $taskData = $this->getTaskDataInClassroomCourse($course['id'], $userId);
@@ -146,7 +146,6 @@ class StudyCenterMissionsDataTag extends BaseDataTag implements DataTag
             'courseId' => $course['id'],
             'status' => 'finish',
         ));
-
         if ($finishTaskCount == $course['taskNum']) {
             return null;
         }
@@ -175,17 +174,17 @@ class StudyCenterMissionsDataTag extends BaseDataTag implements DataTag
 
     protected function getClassroomService()
     {
-        return $this->getServiceKernel()->createService('Classroom:ClassroomService');
+        return $this->getServiceKernel()->getBiz()->service('Classroom:ClassroomService');
     }
 
     protected function getCourseService()
     {
-        return $this->getServiceKernel()->createService('Course:CourseService');
+        return $this->getServiceKernel()->getBiz()->service('Course:CourseService');
     }
 
     protected function getCourseMemberService()
     {
-        return $this->getServiceKernel()->createService('Course:MemberService');
+        return $this->getServiceKernel()->getBiz()->service('Course:MemberService');
     }
 
     /**
@@ -193,7 +192,7 @@ class StudyCenterMissionsDataTag extends BaseDataTag implements DataTag
      */
     protected function getTaskResultService()
     {
-        return $this->getServiceKernel()->createService('Task:TaskResultService');
+        return $this->getServiceKernel()->getBiz()->service('Task:TaskResultService');
     }
 
     /**
@@ -201,6 +200,6 @@ class StudyCenterMissionsDataTag extends BaseDataTag implements DataTag
      */
     protected function getTaskService()
     {
-        return $this->getServiceKernel()->createService('Task:TaskService');
+        return $this->getServiceKernel()->getBiz()->service('Task:TaskService');
     }
 }

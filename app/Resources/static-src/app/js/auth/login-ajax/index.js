@@ -1,3 +1,5 @@
+import Face from '../login/face';
+
 let $form = $('#login-ajax-form');
 let $btn = $('.js-submit-login-ajax');
 let validator = $form.validate({
@@ -9,7 +11,7 @@ let validator = $form.validate({
       required: true,
     }
   }
-})
+});
 
 
 $btn.click((event) => {
@@ -19,7 +21,16 @@ $btn.click((event) => {
       window.location.reload();
     }, 'json').error(function (jqxhr, textStatus, errorThrown) {
       var json = jQuery.parseJSON(jqxhr.responseText);
-      $form.find('.alert-danger').html(json.message).show();
+      $form.find('.alert-danger').html(Translator.trans(json.message)).show();
     });
   }
-})
+});
+
+
+if ($('.js-sts-login-link').length) {
+  new Face({
+    element: $('.js-login-modal'),
+    target: '.js-login-form, .modal-footer',
+  });
+}
+

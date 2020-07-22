@@ -7,16 +7,16 @@ use Codeages\Biz\Framework\Scheduler\Dao\JobDao;
 
 class JobDaoImpl extends GeneralDaoImpl implements JobDao
 {
-    protected $table = 'job';
+    protected $table = 'biz_scheduler_job';
 
     public function findWaitingJobsByLessThanFireTime($fireTime)
     {
         $sql = "SELECT * FROM 
                 (
                   SELECT * FROM {$this->table} 
-                  WHERE enabled = 1 AND next_fire_time <= ? AND deleted = 0
+                  WHERE enabled = 1 AND next_fire_time <= ?
                 ) as {$this->table} 
-                ORDER BY next_fire_time ASC , priority DESC";
+                ORDER BY priority DESC , next_fire_time ASC";
 
         return $this->db()->fetchAll($sql, array($fireTime));
     }
@@ -39,7 +39,6 @@ class JobDaoImpl extends GeneralDaoImpl implements JobDao
                 'name like :name',
                 'class like :class',
                 'source like :source',
-                'deleted = :deleted',
             ),
         );
     }

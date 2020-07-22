@@ -4,6 +4,7 @@ namespace AppBundle\Controller\Course;
 
 use AppBundle\Util\AvatarAlert;
 use Biz\Course\Service\CourseSetService;
+use Biz\User\UserException;
 use Symfony\Component\HttpFoundation\Request;
 use AppBundle\Controller\BaseController;
 
@@ -15,7 +16,7 @@ class CourseOrderController extends BaseController
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException();
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         $member = $this->getCourseMemberService()->getCourseMember($course['id'], $user['id']);
@@ -33,9 +34,10 @@ class CourseOrderController extends BaseController
             $vipJoinEnabled = 'ok' === $this->getVipService()->checkUserInMemberLevel($user['id'], $course['vipLevelId']);
         }
 
-        if ($course['price'] > 0 && !$this->getEnabledPayments() && !$vipJoinEnabled) {
+        $paymentSetting = $this->setting('payment');
+        if ($course['price'] > 0 && !$paymentSetting['enabled'] && !$vipJoinEnabled) {
             return $this->render(
-                'course/order/payments-disabled.html.twig',
+                'buy-flow/payments-disabled-modal.html.twig',
                 array(
                     'course' => $course,
                 )
@@ -79,6 +81,7 @@ class CourseOrderController extends BaseController
             'course/order/buy-modal.html.twig',
             array(
                 'course' => $course,
+                'courseId' => $course['id'],
                 'courseSet' => $courseSet,
                 'user' => $userInfo,
                 'userFields' => $userFields,
@@ -102,29 +105,6 @@ class CourseOrderController extends BaseController
                 'id' => $id,
             )
         );
-    }
-
-    protected function getEnabledPayments()
-    {
-        $enableds = array();
-
-        $setting = $this->setting('payment', array());
-
-        if (empty($setting['enabled'])) {
-            return $enableds;
-        }
-
-        $payment = $this->container->get('codeages_plugin.dict_twig_extension')->getDict('payment');
-        $payNames = array_keys($payment);
-        foreach ($payNames as $payName) {
-            if (!empty($setting[$payName.'_enabled'])) {
-                $enableds[$payName] = array(
-                    'type' => empty($setting[$payName.'_type']) ? '' : $setting[$payName.'_type'],
-                );
-            }
-        }
-
-        return $enableds;
     }
 
     protected function getRemainStudentNum($course)

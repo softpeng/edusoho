@@ -4,11 +4,14 @@ namespace Biz\Course\Service\Impl;
 
 use Biz\BaseService;
 use AppBundle\Common\ArrayToolkit;
+use Biz\Common\CommonException;
 use Biz\Content\Service\FileService;
 use Biz\Course\Dao\CourseMaterialDao;
+use Biz\Course\MaterialException;
 use Biz\Course\Service\CourseService;
 use Biz\Course\Service\MaterialService;
 use Biz\File\Service\UploadFileService;
+use Biz\File\UploadFileException;
 use Codeages\Biz\Framework\Event\Event;
 
 class MaterialServiceImpl extends BaseService implements MaterialService
@@ -17,7 +20,7 @@ class MaterialServiceImpl extends BaseService implements MaterialService
     {
         $argument = $material;
         if (!ArrayToolkit::requireds($material, array('courseSetId', 'courseId', 'fileId'))) {
-            throw $this->createServiceException('参数缺失，上传失败！');
+            $this->createNewException(CommonException::ERROR_PARAMETER_MISSING());
         }
 
         $fields = $this->_getMaterialFields($material);
@@ -54,7 +57,7 @@ class MaterialServiceImpl extends BaseService implements MaterialService
     {
         $material = $this->getMaterialDao()->create($fields);
 
-        $logType = $material['type'] == 'openCourse' ? 'open_course' : 'course';
+        $logType = 'openCourse' == $material['type'] ? 'open_course' : 'course';
         //$this->getLogService()->info($logType, 'add_material', "新增资料(#{$material['id']})", $material);
         $this->dispatchEvent('course.material.create', new Event($material, array('argument' => $argument)));
 
@@ -75,12 +78,12 @@ class MaterialServiceImpl extends BaseService implements MaterialService
     {
         $material = $this->getMaterialDao()->get($materialId);
         if (empty($material)) {
-            throw $this->createNotFoundException('课程资料不存在，删除失败。');
+            $this->createNewException(MaterialException::NOTFOUND_MATERIAL());
         }
 
         $this->getMaterialDao()->delete($materialId);
 
-        $logType = $material['type'] == 'openCourse' ? 'open_course' : 'course';
+        $logType = 'openCourse' == $material['type'] ? 'open_course' : 'course';
         $this->getLogService()->info($logType, 'delete_material', "移除资料(#{$material['id']})", $material);
         $this->dispatchEvent('course.material.delete', new Event($material));
     }
@@ -125,7 +128,7 @@ class MaterialServiceImpl extends BaseService implements MaterialService
             'fileIds' => $fileIds,
             'type' => $courseType,
         );
-        if ($courseType == 'openCourse') {
+        if ('openCourse' == $courseType) {
             $conditions['courseId'] = $courseSetId;
             $conditions['courseSetId'] = 0;
         } else {
@@ -140,14 +143,14 @@ class MaterialServiceImpl extends BaseService implements MaterialService
         );
 
         if (!$materials) {
-            return false;
+            return array();
         }
 
         foreach ($materials as $key => $material) {
             $this->deleteMaterial($courseSetId, $material['id']);
         }
 
-        return true;
+        return $materials;
     }
 
     public function deleteMaterialsByFileId($fileId)
@@ -178,6 +181,11 @@ class MaterialServiceImpl extends BaseService implements MaterialService
     public function searchMaterials($conditions, $orderBy, $start, $limit)
     {
         return $this->getMaterialDao()->search($conditions, $orderBy, $start, $limit);
+    }
+
+    public function findMaterialsByIds($ids)
+    {
+        return $this->getMaterialDao()->findMaterialsByIds($ids);
     }
 
     public function countMaterials($conditions)
@@ -301,7 +309,7 @@ class MaterialServiceImpl extends BaseService implements MaterialService
 
         if (empty($material['fileId'])) {
             if (empty($material['link'])) {
-                throw $this->createServiceException('资料链接地址不能为空，添加资料失败！');
+                $this->createNewException(MaterialException::LINK_REQUIRED());
             }
             $fields['fileId'] = 0;
             $fields['link'] = $material['link'];
@@ -310,7 +318,7 @@ class MaterialServiceImpl extends BaseService implements MaterialService
             $fields['fileId'] = (int) $material['fileId'];
             $file = $this->getUploadFileService()->getFile($material['fileId']);
             if (empty($file)) {
-                throw $this->createServiceException('文件不存在，上传资料失败！');
+                $this->createNewException(UploadFileException::NOTFOUND_FILE());
             }
             $fields['link'] = '';
             $fields['title'] = $file['filename'];

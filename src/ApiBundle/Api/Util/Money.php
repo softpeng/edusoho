@@ -22,19 +22,19 @@ class Money
             'coin_name' => '虚拟币',
         );
 
-        $setting = array_merge($setting, $default);
+        $setting = array_merge($default, $setting);
 
         $money = array(
             'currency' => 'RMB',
             'amount' => $price,
         );
 
-        if ($setting['cash_model'] == 'currency') {
+        if ('currency' == $setting['cash_model']) {
             $money['currency'] = 'coin';
         }
 
-        if ($setting['cash_model'] != 'none') {
-            $money['coinAmount'] = strval(floatval($price) * floatval($setting['cash_rate']));
+        if ('none' != $setting['cash_model']) {
+            $money['coinAmount'] = sprintf('%.2f', floatval($price) * floatval($setting['cash_rate']));
             $money['coinName'] = $setting['coin_name'];
         }
 

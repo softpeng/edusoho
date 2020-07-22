@@ -1,7 +1,7 @@
 {# user_avater 已废弃，请勿使用 #}
 {%- macro user_avatar(user, class, imgClass, card = true) -%}
   {% if user %}
-    <a class="{{ class }} {% if card %}js-user-card{% endif %}" href="{{ path('user_show', {id:user.id}) }}" data-card-url="{{ path('user_card_show', {userId:user.id}) }}" data-user-id="{{ user.id }}">
+    <a class="{{ class }} {% if card and not user.destroyed|default(0) %}js-user-card{% endif %}" href="{{ path('user_show', {id:user.id}) }}" data-card-url="{{ path('user_card_show', {userId:user.id}) }}" data-user-id="{{ user.id }}">
       {% if imgClass == 'avatar-md' %}
         {% set avatarType = 'medium' %}
       {% elseif imgClass == 'avatar-lg' %}
@@ -22,7 +22,7 @@
 {# options 可以传card(显示卡片), _blank(新开窗口), null_link(空链接) #}
 {%- macro user_avatar_link(user, size, options = []) -%}
   {% set size = size|default('small') %}
-  {% if user %}
+  {% if user and not user.destroyed|default(0) %}
     <a
       class="avatar-link-{{ size }} {% if 'card' in options %}js-user-card{% endif %}"
       {% if '_blank' in options %}
@@ -57,17 +57,27 @@
 
 {%- macro user_link(user, class, card = true) -%}
   {% if user %}
-    <a class="link-dark {{ class }}" href="{{ path('user_show', {id:user.id}) }}">{{ user.nickname }}</a>
+    {% if not user.destroyed|default(0) %}
+      <a class="link-dark {{ class }}" href="{{ path('user_show', {id:user.id}) }}" target="_blank">{{ user.nickname }}</a>
+    {% else %}
+      {{ 'user.user_had_destroyed'|trans }}
+    {% endif %}
   {% else %}
     <a class="link-dark {{ class }}" href="javascript:;"><del>{{'user.not_exist'|trans}}</del></a>
   {% endif %}
 {%- endmacro -%}
 
-{% macro flash_messages() %}
+{% macro flash_messages(isUseNew = false) %}
   {% for type, flashMessages in app.session.flashbag.all() %}
-    {% for flashMessage in flashMessages %}
-      <div class="alert alert-{{ type }}">{{ flashMessage|trans|raw }}</div>
-    {% endfor %}
+    {% if 'currentThrowedException' != type %}
+      {% for flashMessage in flashMessages %}
+        {% if isUseNew %}
+          <div class="alert cd-alert cd-alert-{{ type }}">{{ flashMessage|trans|raw }}</div>
+        {% else %}
+          <div class="alert alert-{{ type }}">{{ flashMessage|trans|raw }}</div>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
   {% endfor %}
 {% endmacro %}
 
@@ -97,18 +107,18 @@
 {% macro paginator(paginator, class) %}
   {% if paginator|default() and paginator.lastPage > 1 %}
     <nav class=" {{ class|default('text-center') }}">
-      <ul class="pagination">
+      <ul class="pagination cd-pagination">
         {% if paginator.currentPage != paginator.firstPage %}
-          <li><a  href="{{ paginator.getPageUrl(paginator.firstPage) }}">{{'paginator.firstPage'|trans}}</a></li>
-          <li><a  href="{{ paginator.getPageUrl(paginator.previousPage) }}"><i class="es-icon es-icon-chevronleft"></i></a></li>
+          <li><a  href="{{ paginator.getPageUrl(paginator.firstPage) }}"><i class="cd-icon cd-icon-first-page"></i></a></li>
+          <li><a  href="{{ paginator.getPageUrl(paginator.previousPage) }}"><i class="cd-icon cd-icon-arrow-left"></i></a></li>
         {% endif %}
         {% for page in paginator.pages %}
           <li {% if page == paginator.currentPage %}class="active"{% endif %}><a href="{{ paginator.getPageUrl(page) }}">{{ page }}</a></li>
         {% endfor %}
 
         {% if paginator.currentPage != paginator.lastPage %}
-          <li><a  href="{{ paginator.getPageUrl(paginator.nextPage) }}"><i class="es-icon es-icon-chevronright"></i></a></li>
-          <li><a  href="{{ paginator.getPageUrl(paginator.getLastPage()) }}">{{'paginator.endPage'|trans}}</a></li>
+          <li><a  href="{{ paginator.getPageUrl(paginator.nextPage) }}"><i class="cd-icon cd-icon-arrow-right"></i></a></li>
+          <li><a  href="{{ paginator.getPageUrl(paginator.getLastPage()) }}"><i class="cd-icon cd-icon-last-page"></i></a></li>
         {% endif %}
       </ul>
     </nav>
@@ -137,23 +147,23 @@
   {% endif %}
 {% endmacro %}
 
-{% macro ajax_paginator(paginator)  %}
+{% macro ajax_paginator(paginator, class)  %}
   <input class="js-page" type="hidden" name="page" value="{{ paginator.currentPage|default(1) }}">
 
   {% if paginator.lastPage > 1 %}
-    <nav class=" {{ class|default('text-center') }}">
-      <ul class="pagination">
+    <nav class="{{ class|default('text-center') }}">
+      <ul class="pagination cd-pagination">
         {% if paginator.currentPage != paginator.firstPage %}
-          <li data-url="{{ paginator.getPageUrl(paginator.firstPage) }}"><a href="javascript:;">{{'paginator.firstPage'|trans}}</a></li>
-          <li data-url="{{ paginator.getPageUrl(paginator.previousPage) }}"><a  href="javascript:;"><i class="es-icon es-icon-chevronleft"></i></a></li>
+          <li data-url="{{ paginator.getPageUrl(paginator.firstPage) }}" data-page="{{paginator.firstPage}}"><a href="javascript:;"><i class="cd-icon cd-icon-first-page"></i></a></li>
+          <li data-url="{{ paginator.getPageUrl(paginator.previousPage) }}" data-page="{{paginator.previousPage}}"><a  href="javascript:;"><i class="cd-icon cd-icon-arrow-left"></i></a></li>
         {% endif %}
         {% for page in paginator.pages %}
-          <li {% if page == paginator.currentPage %}class="active"{% endif %} data-url="{{ paginator.getPageUrl(page) }}"><a href="javascript:;">{{ page }}</a></li>
+          <li {% if page == paginator.currentPage %}class="active"{% endif %} data-url="{{ paginator.getPageUrl(page) }}" data-page="{{page}}"><a href="javascript:;">{{ page }}</a></li>
         {% endfor %}
 
         {% if paginator.currentPage != paginator.lastPage %}
-          <li data-url="{{ paginator.getPageUrl(paginator.nextPage) }}"><a  href="javascript:;"><i class="es-icon es-icon-chevronright"></i></a></li>
-          <li data-url="{{ paginator.getPageUrl(paginator.getLastPage) }}"><a  href="javascript:;">{{'paginator.endPage'|trans}}</a></li>
+          <li data-url="{{ paginator.getPageUrl(paginator.nextPage) }}" data-page="{{paginator.nextPage}}"><a  href="javascript:;"><i class="cd-icon cd-icon-arrow-right"></i></a></li>
+          <li data-url="{{ paginator.getPageUrl(paginator.getLastPage) }}" data-page="{{paginator.getLastPage}}"><a  href="javascript:;"><i class="cd-icon cd-icon-last-page"></i></a></li>
         {% endif %}
       </ul>
     </nav>
@@ -162,4 +172,33 @@
 
 {% macro link(name, url, title = '', target = '_blnak') %}
   <a href="{{ url }}" title= "{{ title }}" target="{{ target }}"><strong>{{ name }}</strong></a>
+{% endmacro %}
+
+{% macro table_filter(header, choices, key, dataTarget, selectedChoice, default = '') %}
+  <div class="cd-dropdown cd-dropdown-filter" data-toggle="cd-dropdown">
+    {{ header }}
+    <a href="javascript:;" class="{% if selectedChoice == '' %}cd-link-assist{% else %}cd-link-primary{% endif %}">
+      <i class="cd-icon cd-icon-filter cd-text-sm"></i>
+    </a>
+    <ul class="dropdown-menu">
+      {% if default %}
+        <li class="{% if selectedChoice == '' %}active{% endif %}"><a href="javascript:;" data-toggle="cd-table-filter" data-target="{{ dataTarget }}" data-filter-key="{{ key }}" data-filter-value="">{{ default }}</a></li>
+      {% endif %}
+      {% for choiceKey,choice in choices %}
+        <li class="{% if selectedChoice == choiceKey %}active{% endif %}"><a href="javascript:;" data-toggle="cd-table-filter" data-target="{{ dataTarget }}" data-filter-key="{{ key }}"  data-filter-value="{{ choiceKey }}">{{ choice }}</a></li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endmacro %}
+
+{% macro cd_select(options, checkedOption, name, className = '', id = '') %}
+  <div class="cd-select {{ className }}" id="{{ id }}">
+    <input type="hidden" value="{{ checkedOption }}" name="{{name}}" />
+    <div class="select-value">{{ options[checkedOption]|default('') }}</div>
+    <ul class="select-options">
+      {% for optionKey, option in options %}
+        <li class="{% if optionKey == checkedOption %}checked{% endif %}" data-value="{{optionKey}}">{{ option }}</li>
+      {% endfor %}
+    </ul>
+  </div>
 {% endmacro %}

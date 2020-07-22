@@ -23,7 +23,7 @@ class QuestionMarkerStats {
     let legendData = [], data = [];
 
     $.each(stats, function(index, stat) {
-      let key = String.fromCharCode(index+65);
+      let key = index;
       legendData.push(key);
 
       data.push({
@@ -35,7 +35,7 @@ class QuestionMarkerStats {
     return {
       tooltip: {
         trigger: 'item',
-        formatter: "{a} <br/>{b} : {c} ({d}%)"
+        formatter: '{a} <br/>{b} : {c} ({d}%)'
       },
       color: ['#4653BE', '#72CC59', '#4DA8E6', '#F8AB60'],
       legend: {
@@ -72,17 +72,19 @@ class QuestionMarkerStats {
     let stats = this.getStats();
 
     let xData = [],
-        seriesData = [],
-        seriesName = '选择率';
+      seriesData = [],
+      seriesName = Translator.trans('course.question_marker.selection_rate');
 
     $.each(stats, function(index, stat) {
 
       if (questionType === 'fill') {
-        xData.push('填空'+(index+1));
-        seriesName = '正确率';
-      } else {
+        xData.push(Translator.trans('course.question_marker.gap_filling')+(index+1));
+        seriesName = Translator.trans('course.question_marker.correct_rate');
+      } else if (questionType === 'determine') {
         let key = String.fromCharCode(index+65);
         xData.push(key);
+      } else {
+        xData.push(index);
       }
 
       seriesData.push(stat['pct']);

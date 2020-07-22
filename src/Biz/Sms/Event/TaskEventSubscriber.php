@@ -2,12 +2,16 @@
 
 namespace Biz\Sms\Event;
 
+use AppBundle\Common\ArrayToolkit;
 use Biz\CloudPlatform\CloudAPIFactory;
+use Biz\Course\Service\CourseService;
 use Biz\Sms\Service\SmsService;
+use Biz\Sms\SmsException;
 use Biz\Sms\SmsProcessor\SmsProcessorFactory;
+use Biz\Task\Dao\TaskDao;
+use Biz\Task\Service\TaskService;
 use Codeages\Biz\Framework\Event\Event;
 use Codeages\Biz\Framework\Scheduler\Service\SchedulerService;
-use Codeages\Biz\Framework\Service\Exception\ServiceException;
 use Codeages\PluginBundle\Event\EventSubscriber;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
@@ -18,12 +22,15 @@ class TaskEventSubscriber extends EventSubscriber implements EventSubscriberInte
      */
     public static function getSubscribedEvents()
     {
-        return array(
+        return [
             'course.task.unpublish' => 'onTaskUnpublish',
             'course.task.publish' => 'onTaskPublish',
             'course.task.update' => 'onTaskUpdate',
             'course.task.delete' => 'onTaskDelete',
-        );
+            'course.task.create.sync' => 'onTaskCreateSync',
+            'course.task.update.sync' => 'onTaskUpdateSync',
+            'course.task.publish.sync' => 'onTaskPublishSync',
+        ];
     }
 
     public function onTaskUnpublish(Event $event)
@@ -41,10 +48,10 @@ class TaskEventSubscriber extends EventSubscriber implements EventSubscriberInte
     public function onTaskUpdate(Event $event)
     {
         $task = $event->getSubject();
-        if ($task['type'] == 'live') {
+        if ('live' == $task['type']) {
             $this->deleteJob($task);
 
-            if ($task['status'] == 'published') {
+            if ('published' == $task['status']) {
                 $this->registerJob($task);
             }
         }
@@ -54,23 +61,70 @@ class TaskEventSubscriber extends EventSubscriber implements EventSubscriberInte
     {
         $task = $event->getSubject();
 
-        if ($task['type'] == 'live') {
-            $this->registerJob($task);
-            $smsType = 'sms_live_lesson_publish';
-        } else {
-            $smsType = 'sms_normal_lesson_publish';
-        }
+        $this->sendTasksPublishSms([$task]);
+    }
 
-        if ($this->getSmsService()->isOpen($smsType)) {
-            $processor = SmsProcessorFactory::create('task');
-            $return = $processor->getUrls($task['id'], $smsType);
-            $callbackUrls = $return['urls'];
-            $count = ceil($return['count'] / 1000);
-            try {
-                $api = CloudAPIFactory::create('root');
-                $result = $api->post('/sms/sendBatch', array('total' => $count, 'callbackUrls' => $callbackUrls));
-            } catch (\Exception $e) {
-                throw new ServiceException('发送失败！');
+    public function onTaskPublishSync(Event $event)
+    {
+        $task = $event->getSubject();
+
+        if ('published' == $task['status'] && $this->isTaskCreateSyncFinished($task)) {
+            $tasks = $this->getCopiedTasks($task);
+
+            $this->sendTasksPublishSms($tasks);
+        }
+    }
+
+    public function onTaskUpdateSync(Event $event)
+    {
+        $task = $event->getSubject();
+
+        if ('live' == $task['type']) {
+            $copiedTasks = $this->getCopiedTasks($task);
+            foreach ($copiedTasks as $copiedTask) {
+                $this->deleteJob($copiedTask);
+                if ('published' == $copiedTask['status']) {
+                    $this->registerJob($copiedTask);
+                }
+            }
+        }
+    }
+
+    public function onTaskCreateSync(Event $event)
+    {
+        $task = $event->getSubject();
+
+        if ('published' == $task['status']) {
+            $tasks = $this->getCopiedTasks($task);
+
+            $this->sendTasksPublishSms($tasks);
+        }
+    }
+
+    protected function sendTasksPublishSms($tasks)
+    {
+        foreach ($tasks as $task) {
+            if ('live' == $task['type']) {
+                $this->registerJob($task);
+                $smsType = 'sms_live_lesson_publish';
+            } else {
+                $smsType = 'sms_normal_lesson_publish';
+            }
+
+            if ($this->getSmsService()->isOpen($smsType)) {
+                $processor = SmsProcessorFactory::create('task');
+                $return = $processor->getUrls($task['id'], $smsType);
+                $callbackUrls = $return['urls'];
+                $count = ceil($return['count'] / 1000);
+                if ($count = 0) {
+                    $return;
+                }
+                try {
+                    $api = CloudAPIFactory::create('root');
+                    $result = $api->post('/sms/sendBatch', ['total' => $count, 'callbackUrls' => $callbackUrls]);
+                } catch (\Exception $e) {
+                    throw SmsException::FAILED_SEND();
+                }
             }
         }
     }
@@ -81,30 +135,58 @@ class TaskEventSubscriber extends EventSubscriber implements EventSubscriberInte
         $hourIsOpen = $this->getSmsService()->isOpen('sms_live_play_one_hour');
 
         if ($dayIsOpen && $task['startTime'] >= (time() + 24 * 60 * 60)) {
-            $startJob = array(
+            //24小时期限，在预定时间前1小时内有效
+            $startJob = [
                 'name' => 'SmsSendOneDayJob_task_'.$task['id'],
-                'expression' => $task['startTime'] - 24 * 60 * 60,
+                'expression' => intval($task['startTime'] - 24 * 60 * 60),
                 'class' => 'Biz\Sms\Job\SmsSendOneDayJob',
-                'args' => array(
+                'misfire_threshold' => 60 * 60,
+                'args' => [
                     'targetType' => 'task',
                     'targetId' => $task['id'],
-                ),
-            );
-            $this->getSchedulerService()->register($startJob);
+                ],
+            ];
+            $this->createJob($startJob);
         }
 
         if ($hourIsOpen && $task['startTime'] >= (time() + 60 * 60)) {
-            $startJob = array(
+            //1小时期限，在预定时间前10分钟内有效
+            $startJob = [
                 'name' => 'SmsSendOneHourJob_task_'.$task['id'],
-                'expression' => $task['startTime'] - 60 * 60,
+                'expression' => intval($task['startTime'] - 60 * 60),
                 'class' => 'Biz\Sms\Job\SmsSendOneHourJob',
-                'args' => array(
+                'misfire_threshold' => 60 * 10,
+                'args' => [
                     'targetType' => 'task',
                     'targetId' => $task['id'],
-                ),
-            );
-            $this->getSchedulerService()->register($startJob);
+                ],
+            ];
+            $this->createJob($startJob);
         }
+    }
+
+    private function getCopiedTasks($task)
+    {
+        if (empty($task)) {
+            return [];
+        }
+
+        $courses = $this->getCourseService()->findCoursesByParentIdAndLocked($task['courseId'], 1);
+        $tasks = $this->getTaskDao()->findByCopyIdAndLockedCourseIds($task['id'], ArrayToolkit::column($courses, 'id'));
+
+        return $tasks;
+    }
+
+    private function isTaskCreateSyncFinished($task)
+    {
+        $courses = $this->getCourseService()->findCoursesByParentIdAndLocked($task['courseId'], 1);
+        $tasks = $this->getTaskDao()->findByCopyIdAndLockedCourseIds($task['id'], ArrayToolkit::column($courses, 'id'));
+
+        if (count($tasks) == count($courses)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -119,11 +201,17 @@ class TaskEventSubscriber extends EventSubscriber implements EventSubscriberInte
     {
         $this->deleteByJobName('SmsSendOneDayJob_task_'.$task['id']);
         $this->deleteByJobName('SmsSendOneHourJob_task_'.$task['id']);
+
+        $copiedTasks = $this->getCopiedTasks($task);
+        foreach ($copiedTasks as $copiedTask) {
+            $this->deleteByJobName('SmsSendOneDayJob_task_'.$copiedTask['id']);
+            $this->deleteByJobName('SmsSendOneHourJob_task_'.$copiedTask['id']);
+        }
     }
 
     private function deleteByJobName($jobName)
     {
-        $jobs = $this->getSchedulerService()->searchJobs(array('name' => $jobName), array(), 0, PHP_INT_MAX);
+        $jobs = $this->getSchedulerService()->searchJobs(['name' => $jobName], [], 0, PHP_INT_MAX);
 
         foreach ($jobs as $job) {
             $this->getSchedulerService()->deleteJob($job['id']);
@@ -136,5 +224,37 @@ class TaskEventSubscriber extends EventSubscriber implements EventSubscriberInte
     protected function getSmsService()
     {
         return $this->getBiz()->service('Sms:SmsService');
+    }
+
+    /**
+     * @return CourseService
+     */
+    protected function getCourseService()
+    {
+        return $this->getBiz()->service('Course:CourseService');
+    }
+
+    /**
+     * @return TaskService
+     */
+    protected function getTaskService()
+    {
+        return $this->getBiz()->service('Task:TaskService');
+    }
+
+    /**
+     * @return TaskDao
+     */
+    protected function getTaskDao()
+    {
+        return $this->getBiz()->dao('Task:TaskDao');
+    }
+
+    private function createJob($startJob)
+    {
+        $job = $this->getSchedulerService()->getJobByName($startJob['name']);
+        if (!isset($job)) {
+            $this->getSchedulerService()->register($startJob);
+        }
     }
 }

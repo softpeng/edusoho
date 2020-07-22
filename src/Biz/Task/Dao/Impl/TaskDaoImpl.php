@@ -11,14 +11,31 @@ class TaskDaoImpl extends AdvancedDaoImpl implements TaskDao
 
     public function deleteByCategoryId($categoryId)
     {
-        return $this->db()->delete($this->table(), array('categoryId' => $categoryId));
+        return $this->db()->delete($this->table(), ['categoryId' => $categoryId]);
+    }
+
+    public function deleteByCourseId($courseId)
+    {
+        return $this->db()->delete($this->table(), ['courseId' => $courseId]);
+    }
+
+    public function getUserCurrentPublishedLiveTaskByTimeRange($userId, $startTime, $endBeforeTimeRange)
+    {
+        $currentTime = time();
+        $sql = "SELECT * FROM {$this->table} WHERE type='live' and status='published' and courseId IN (SELECT courseId FROM `course_member` WHERE role = 'student' AND userId = ?) 
+                and (startTime > {$currentTime} and startTime < ? 
+                or  
+                startTime < {$currentTime} and endTime - ? > {$currentTime}) 
+                ORDER BY startTime ASC LIMIT 1";
+
+        return $this->db()->fetchAssoc($sql, [$userId, $startTime, $endBeforeTimeRange]) ?: [];
     }
 
     public function findByCourseId($courseId)
     {
         $sql = "SELECT * FROM {$this->table()} WHERE courseId = ? ORDER  BY seq";
 
-        return $this->db()->fetchAll($sql, array($courseId)) ?: array();
+        return $this->db()->fetchAll($sql, [$courseId]) ?: [];
     }
 
     public function findByCourseIds($courseIds)
@@ -33,9 +50,14 @@ class TaskDaoImpl extends AdvancedDaoImpl implements TaskDao
 
     public function findByCourseSetId($courseSetId)
     {
-        return $this->findByFields(array(
+        return $this->findByFields([
             'fromCourseSetId' => $courseSetId,
-        ));
+        ]);
+    }
+
+    public function findByCourseSetIds($courseSetIds)
+    {
+        return $this->findInField('fromCourseSetId', $courseSetIds);
     }
 
     public function findByIds($ids)
@@ -45,80 +67,78 @@ class TaskDaoImpl extends AdvancedDaoImpl implements TaskDao
 
     public function findByCourseIdAndCategoryId($courseId, $categoryId)
     {
-        return $this->findByFields(array('courseId' => $courseId, 'categoryId' => $categoryId));
+        return $this->findByFields(['courseId' => $courseId, 'categoryId' => $categoryId]);
     }
 
     public function getMaxSeqByCourseId($courseId)
     {
         $sql = "SELECT MAX(seq) FROM {$this->table()} WHERE courseId = ? ";
 
-        return $this->db()->fetchColumn($sql, array($courseId)) ?: 0;
+        return $this->db()->fetchColumn($sql, [$courseId]) ?: 0;
     }
 
     public function getNumberSeqByCourseId($courseId)
     {
         $sql = "SELECT MAX(number) FROM {$this->table()} WHERE courseId = ? ";
 
-        return $this->db()->fetchColumn($sql, array($courseId)) ?: 0;
+        return $this->db()->fetchColumn($sql, [$courseId]) ?: 0;
     }
 
     public function getMinSeqByCourseId($courseId)
     {
         $sql = "SELECT MIN(seq) FROM {$this->table()} WHERE courseId = ? ";
 
-        return $this->db()->fetchColumn($sql, array($courseId)) ?: 0;
+        return $this->db()->fetchColumn($sql, [$courseId]) ?: 0;
     }
 
     public function getNextTaskByCourseIdAndSeq($courseId, $seq)
     {
         $sql = "SELECT * FROM {$this->table()} WHERE seq > ? and courseId = ?  ORDER BY seq ASC LIMIT 1 ";
 
-        return $this->db()->fetchAssoc($sql, array($seq, $courseId));
+        return $this->db()->fetchAssoc($sql, [$seq, $courseId]);
     }
 
     public function getPreTaskByCourseIdAndSeq($courseId, $seq)
     {
         $sql = "SELECT * FROM {$this->table()} WHERE seq < ? and courseId = ?  ORDER BY seq DESC LIMIT 1 ";
 
-        return $this->db()->fetchAssoc($sql, array($seq, $courseId));
+        return $this->db()->fetchAssoc($sql, [$seq, $courseId]);
+    }
+
+    public function getByCopyId($copyId)
+    {
+        return $this->getByFields(['copyId' => $copyId]);
+    }
+
+    public function getByCourseIdAndCopyId($courseId, $copyId)
+    {
+        return $this->getByFields(['courseId' => $courseId, 'copyId' => $copyId]);
     }
 
     public function findByChapterId($chapterId)
     {
         $sql = "SELECT * FROM {$this->table()} WHERE categoryId = ? ORDER BY seq ASC ";
 
-        return $this->db()->fetchAll($sql, array($chapterId)) ?: array();
+        return $this->db()->fetchAll($sql, [$chapterId]) ?: [];
+    }
+
+    public function countByChpaterId($chapterId)
+    {
+        $sql = "SELECT count(*) FROM {$this->table()} WHERE categoryId = ?";
+
+        return $this->db()->fetchColumn($sql, [$chapterId]);
     }
 
     public function getByChapterIdAndMode($chapterId, $mode)
     {
         $sql = "SELECT * FROM {$this->table()}  WHERE `categoryId`= ? AND `mode` = ? LIMIT 1";
 
-        return $this->db()->fetchAssoc($sql, array($chapterId, $mode));
+        return $this->db()->fetchAssoc($sql, [$chapterId, $mode]);
     }
 
     public function getByCourseIdAndSeq($courseId, $sql)
     {
-        return $this->getByFields(array('courseId' => $courseId, 'seq' => $sql));
-    }
-
-    /**
-     * 统计当前时间以后每天的直播次数.
-     *
-     * @param  $limit
-     *
-     * @return array <string, int|string>
-     */
-    public function findFutureLiveDates($limit)
-    {
-        $time = time();
-        $sql = "SELECT count(ct.id) as count, ct.fromCourseSetId as courseSetId, from_unixtime(ct.startTime,'%Y-%m-%d') 
-                as date FROM `{$this->table()}` as ct LEFT JOIN `course_set_v8` as c 
-                on ct.fromCourseSetId = c.id 
-                WHERE ct.`type`= 'live' AND ct.status='published' and c.status='published' 
-                AND ct.startTime >= {$time} group by date order by date ASC limit 0, {$limit}";
-
-        return $this->db()->fetchAll($sql);
+        return $this->getByFields(['courseId' => $courseId, 'seq' => $sql]);
     }
 
     /**
@@ -130,7 +150,7 @@ class TaskDaoImpl extends AdvancedDaoImpl implements TaskDao
     {
         $time = time();
         $sql
-        = "SELECT fromCourseSetId, max(startTime) as startTime
+            = "SELECT fromCourseSetId, max(startTime) as startTime
                  FROM {$this->table()}
                  WHERE endTime < {$time} AND status='published' AND type = 'live'
                  GROUP BY fromCourseSetId
@@ -142,33 +162,33 @@ class TaskDaoImpl extends AdvancedDaoImpl implements TaskDao
 
     public function getTaskByCourseIdAndActivityId($courseId, $activityId)
     {
-        return $this->getByFields(array('courseId' => $courseId, 'activityId' => $activityId));
+        return $this->getByFields(['courseId' => $courseId, 'activityId' => $activityId]);
     }
 
     public function findByCourseIdAndIsFree($courseId, $isFree)
     {
-        return $this->findByFields(array('courseId' => $courseId, 'isFree' => $isFree));
+        return $this->findByFields(['courseId' => $courseId, 'isFree' => $isFree]);
     }
 
     public function findByCopyIdAndLockedCourseIds($copyId, $courseIds)
     {
         if (empty($courseIds)) {
-            return array();
+            return [];
         }
 
         $marks = str_repeat('?,', count($courseIds) - 1).'?';
 
-        $parmaters = array_merge(array($copyId), $courseIds);
+        $parmaters = array_merge([$copyId], $courseIds);
 
         $sql = "SELECT * FROM {$this->table()} WHERE copyId= ? AND courseId IN ({$marks})";
 
-        return $this->db()->fetchAll($sql, $parmaters) ?: array();
+        return $this->db()->fetchAll($sql, $parmaters) ?: [];
     }
 
     public function findByCopyIdSAndLockedCourseIds($copyIds, $courseIds)
     {
         if (empty($courseIds) || empty($copyIds)) {
-            return array();
+            return [];
         }
 
         $copyIdMarks = str_repeat('?,', count($copyIds) - 1).'?';
@@ -178,22 +198,22 @@ class TaskDaoImpl extends AdvancedDaoImpl implements TaskDao
 
         $sql = "SELECT * FROM {$this->table()} WHERE copyId IN ({$copyIdMarks}) AND courseId IN ({$courseIdMarks})";
 
-        return $this->db()->fetchAll($sql, $parmaters) ?: array();
+        return $this->db()->fetchAll($sql, $parmaters) ?: [];
     }
 
-    public function sumCourseSetLearnedTimeByCourseSetId($courseSetId)
+    public function countLessonsWithMultipleTasks($courseId)
     {
-        $sql = "select sum(`time`) from `course_task_result` where `courseTaskId` in (SELECT id FROM {$this->table()}  WHERE `fromCourseSetId`= ?)";
+        $sql = "SELECT count(*) AS num FROM {$this->table()} WHERE courseId = ? GROUP BY categoryId HAVING num > 1;";
 
-        return $this->db()->fetchColumn($sql, array($courseSetId));
+        return $this->db()->fetchAll($sql, [$courseId]) ?: [];
     }
 
     public function analysisTaskDataByTime($startTime, $endTime)
     {
-        $conditions = array(
+        $conditions = [
             'createdTime_GE' => $startTime,
             'createdTime_LT' => $endTime,
-        );
+        ];
 
         $builder = $this->createQueryBuilder($conditions)
             ->select("count(id) AS count, from_unixtime(createdTime, '%Y-%m-%d') AS date")
@@ -206,20 +226,20 @@ class TaskDaoImpl extends AdvancedDaoImpl implements TaskDao
 
     public function declares()
     {
-        return array(
-            'timestamps' => array(
+        return [
+            'timestamps' => [
                 'createdTime',
                 'updatedTime',
-            ),
-            'orderbys' => array(
+            ],
+            'orderbys' => [
                 'seq',
                 'startTime',
                 'createdTime',
                 'updatedTime',
                 'id',
                 'number',
-            ),
-            'conditions' => array(
+            ],
+            'conditions' => [
                 'id = :id',
                 'id IN ( :ids )',
                 'id NOT IN (:excludeIds)',
@@ -237,6 +257,8 @@ class TaskDaoImpl extends AdvancedDaoImpl implements TaskDao
                 'seq >= :seq_GE',
                 'seq > :seq_GT',
                 'seq < :seq_LT',
+                'seq >= :seq_GTE',
+                'seq <= :seq_LTE',
                 'startTime >= :startTime_GE',
                 'createdTime >= :createdTime_GE',
                 'createdTime <= :createdTime_LE',
@@ -248,12 +270,19 @@ class TaskDaoImpl extends AdvancedDaoImpl implements TaskDao
                 'endTime < :endTime_LT',
                 'endTime <= :endTime_GE',
                 'categoryId = :categoryId',
+                'categoryId IN (:categoryIds)',
                 'activityId = :activityId',
                 'mode = :mode',
+                'mode IN ( :modes )',
                 'isOptional = :isOptional',
                 'copyId = :copyId',
                 'copyId IN (:copyIds)',
-            ),
-        );
+                /*S2B2C 同步ID*/
+                'syncId = :syncId',
+                'syncId in (:syncIds)',
+                'syncId > :syncIdGT',
+                /*END*/
+            ],
+        ];
     }
 }

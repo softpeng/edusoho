@@ -1,12 +1,11 @@
 parameters:
     session.service_id: session.handler.pdo
+    cookie_domain: ~
     role_hierarchy:
         ROLE_TEACHER:     ROLE_USER
         ROLE_BACKEND:     ROLE_USER
         ROLE_ADMIN:       [ROLE_TEACHER, ROLE_BACKEND]
         ROLE_SUPER_ADMIN: [ROLE_ADMIN, ROLE_ALLOWED_TO_SWITCH]
-
-    keyword.filter: Biz\Common\EsKeywordFilter
 
     security_disabled_uri_prefixs:
         - anon
@@ -17,6 +16,7 @@ parameters:
         - '/crontab'
         - '/passport/notify'
         - '/oauth/v2/token'
+        - '/oauth/token'
         - '/login/oauth/access_token'
         - '/uploader/upload_callback'
         - '/uploader/process_callback'
@@ -40,3 +40,8 @@ parameters:
         - '/bddServer/callback'
         - '/pay/center/pay/llpay/return'
         - '/pay/center/pay/llpay/notify'
+        - '/cashier/wechat/notify'
+
+    qrcode_protocol_whitelist_default:
+        - 'weixin'
+        - 'alipays'

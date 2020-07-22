@@ -2,6 +2,7 @@
 
 namespace AppBundle\Controller\Admin;
 
+use Biz\Article\CategoryException;
 use Biz\Article\Service\CategoryService;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -18,7 +19,7 @@ class ArticleCategoryController extends BaseController
 
     public function createAction(Request $request)
     {
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $category = $this->getCategoryService()->createCategory($request->request->all());
 
             return $this->renderTbody();
@@ -59,10 +60,10 @@ class ArticleCategoryController extends BaseController
     {
         $category = $this->getCategoryService()->getCategory($id);
         if (empty($category)) {
-            throw $this->createNotFoundException();
+            $this->createNewException(CategoryException::NOTFOUND_CATEGORY());
         }
 
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $this->getCategoryService()->updateCategory($id, $request->request->all());
 
             return $this->renderTbody();
@@ -79,7 +80,7 @@ class ArticleCategoryController extends BaseController
     {
         $category = $this->getCategoryService()->getCategory($id);
         if (empty($category)) {
-            throw $this->createNotFoundException();
+            $this->createNewException(CategoryException::NOTFOUND_CATEGORY());
         }
 
         if ($this->canDeleteCategory($id)) {
@@ -102,9 +103,9 @@ class ArticleCategoryController extends BaseController
 
         $exclude = $request->query->get('exclude');
 
-        $avaliable = $this->getCategoryService()->isCategoryCodeAvaliable($code, $exclude);
+        $available = $this->getCategoryService()->isCategoryCodeAvailable($code, $exclude);
 
-        if ($avaliable) {
+        if ($available) {
             $response = array('success' => true, 'message' => '');
         } else {
             $response = array('success' => false, 'message' => '编码已被占用，请换一个。');
@@ -119,7 +120,7 @@ class ArticleCategoryController extends BaseController
 
         $currentId = $request->query->get('currentId');
 
-        if ($currentId == $selectedParentId && $selectedParentId != 0) {
+        if ($currentId == $selectedParentId && 0 != $selectedParentId) {
             $response = array('success' => false, 'message' => '不能选择自己作为父栏目');
         } else {
             $response = array('success' => true, 'message' => '');

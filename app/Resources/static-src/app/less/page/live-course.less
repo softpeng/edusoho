@@ -63,6 +63,13 @@
           &:last-child {
             border-right: none;
           }
+          &:first-child {
+            a {
+              @media (min-width: @screen-md-max){
+                padding: 14px 15px;
+              }
+            }
+          }
           a {
             color: @gray-darker;
             padding: 14px 17px;
@@ -157,6 +164,10 @@
     .price{
       color: #e83d2c;
       font-size: 12px;
+    }
+    // 搜索班级兼容老版尺寸
+    .es-live-recommend__img {
+      height: 62px;
     }
   }
   .es-live-back {

@@ -44,7 +44,7 @@
     <select class="form-control width-150" name="ranges[courseId]" data-url="{{ path('course_set_manage_show_tasks',{courseSetId:courseSet.id})}}" data-check-num-url="{{ path('course_set_manage_question_check_num',{courseSetId:courseSet.id}) }}">
       <option value="0" {% if not range.courseId|default(0) %}selected{% endif %}>{{'course.testpaper_manage.create.range.course'|trans}}</option>
       {% for course in courses if course %}
-        <option value="{{ course.id }}" {% if range.courseId|default(0) == course.id %}selected{% endif %}>{{ course.title }}</option>
+        <option value="{{ course.id }}" {% if range.courseId|default(0) == course.id %}selected{% endif %}>{{ get_course_title(course) }}</option>
       {% endfor %}
     </select>
     <select class="form-control width-150" {% if not showTasks|default(null) %}style="display:none;"{% endif %} name="ranges[lessonId]" data-check-num-url="{{ path('course_set_manage_question_check_num',{courseSetId:courseSet.id}) }}">
@@ -66,8 +66,8 @@
         <span style="min-width:85px;display:inline-block;_display:inline;">{{ config.name|trans }}</span>
         <span class="mlm">{{'course.testpaper_manage.create.questions_setup.number'|trans}}:</span>
         <input type="text" class="form-control width-input width-input-mini item-number" name="counts[{{ type }}]" data-role="count"  value="0" {% if questionNums[type].questionNum|default(0) == 0  %} disabled {% endif %} />/
-        <span class="text-info question-num" role="questionNum" type="{{ type }}" >{{ questionNums[type].questionNum|default(0) }}</span>
-
+        <span class="text-info question-num" role="questionNum" type="{{ type }}" style="display:inline-block;min-width: 45px;">{{ questionNums[type].questionNum|default(0) }}</span>
+        <input type="hidden" name="questionTypeSeq[]" value="{{ config.seqNum }}">
         <span class="mlm">{{'course.testpaper_manage.create.questions_setup.score'|trans}}:</span>
         <input type="text" class="form-control width-input width-input-mini item-score" name="scores[{{ type }}]"  value="2" data-role="score" />
 

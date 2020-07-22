@@ -3,6 +3,7 @@
 namespace Biz\Content\Service\Impl;
 
 use Biz\BaseService;
+use Biz\Common\CommonException;
 use Biz\Content\Dao\NavigationDao;
 use Biz\Content\Service\NavigationService;
 use Biz\System\Service\LogService;
@@ -184,7 +185,7 @@ class NavigationServiceImpl extends BaseService implements NavigationService
         $keysOfFields = array_keys($fields);
         foreach ($keysOfFields as $key => $keyOfFields) {
             if (!in_array($keyOfFields, $keysArray)) {
-                throw $this->createInvalidArgumentException('添加的字段有问题！');
+                $this->createNewException(CommonException::ERROR_PARAMETER());
             }
         }
 
@@ -194,6 +195,8 @@ class NavigationServiceImpl extends BaseService implements NavigationService
         $result = $this->getNavigationDao()->create($fields);
 
         $this->getLogService()->info('info', 'navigation_create', "创建导航{$fields['name']}");
+
+        $this->dispatchEvent('navigation.operate', $this->getNavigation($result['id']));
 
         return $result;
     }
@@ -248,7 +251,9 @@ class NavigationServiceImpl extends BaseService implements NavigationService
 
     public function deleteNavigation($id)
     {
-        return ($this->getNavigationDao()->delete($id)) + ($this->getNavigationDao()->delete($id));
+        $this->dispatchEvent('navigation.operate', $this->getNavigation($id));
+
+        return ($this->getNavigationDao()->delete($id)) + ($this->getNavigationDao()->deleteByParentId($id));
     }
 
     /**

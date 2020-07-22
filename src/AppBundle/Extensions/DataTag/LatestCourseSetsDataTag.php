@@ -19,10 +19,11 @@ class LatestCourseSetsDataTag extends CourseBaseDataTag implements DataTag
     public function getData(array $arguments)
     {
         $this->checkCount($arguments);
-
-        $conditions = array();
-        $conditions['status'] = 'published';
-        $conditions['parentId'] = 0;
+        $conditions = array(
+            'status' => 'published',
+            'parentId' => 0,
+        );
+        $conditions = $this->getCourseService()->appendReservationConditions($conditions);
 
         if (!empty($arguments['categoryId'])) {
             $conditions['categoryId'] = $arguments['categoryId'];
@@ -31,9 +32,9 @@ class LatestCourseSetsDataTag extends CourseBaseDataTag implements DataTag
             $conditions['categoryId'] = empty($category) ? -1 : $category['id'];
         }
 
-        // @todo 规则应该调整为 price > 0 && coinPrice > 0 .
+        // @todo 'notFree'这个参数即将删除, 课程没有是否免费一说
         if (!empty($arguments['notFree'])) {
-            $conditions['originPrice_GT'] = '0.00';
+            $conditions['maxCoursePrice_GT'] = '0.00';
         }
 
         $orderBy = 'createdTime';

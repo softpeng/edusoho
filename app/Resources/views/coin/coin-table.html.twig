@@ -6,7 +6,7 @@
   <thead>
     <tr>
       <th>{{'order.name'|trans}}</th>
-      <th>{{'order.createdTime'|trans}}</th>
+      <th>{{'order.created_time'|trans}}</th>
       <th>{{'status'|trans}}</th>
       <th>{{'price'|trans}}<small class="color-gray">({{'site.currency.CNY'|trans}})</small></th>
       <th>{{'order.buyers'|trans}}</th>
@@ -32,8 +32,12 @@
         <span class="color-warning">{{order.amount}}</span>
       </td>
       <td>
+        {% if not users[order.userId].destroyed|default(0) %}
         <a target="_blank" href="{{ path('user_show', {id:order.userId}) }}">
         {{users[order.userId].nickname}}</a>
+        {% else %}
+          {{ 'user.user_had_destroyed'|trans }}
+        {% endif %}
       </td>
       <td>
         {{dict_text('payment',order.payment)}}

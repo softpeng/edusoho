@@ -2,8 +2,10 @@
 
 namespace AppBundle\Controller\Admin;
 
+use AppBundle\Common\Exception\FileToolkitException;
 use Symfony\Component\HttpFoundation\Request;
 use AppBundle\Common\FileToolkit;
+use Biz\Common\HTMLHelper;
 
 class SiteSettingController extends BaseController
 {
@@ -22,7 +24,6 @@ class SiteSettingController extends BaseController
             $security['safe_iframe_domains'] = array_filter(explode(' ', $security['safe_iframe_domains']));
 
             $this->getSettingService()->set('security', $security);
-            $this->getLogService()->info('system', 'update_settings', '更新安全设置', $security);
             $this->setFlashMessage('success', 'site.save.success');
         }
 
@@ -34,7 +35,6 @@ class SiteSettingController extends BaseController
     public function siteAction(Request $request)
     {
         $site = $this->getSettingService()->get('site', array());
-
         $default = array(
             'name' => '',
             'slogan' => '',
@@ -44,24 +44,32 @@ class SiteSettingController extends BaseController
             'seo_description' => '',
             'master_email' => '',
             'icp' => '',
+            'icpUrl' => 'http://www.beian.miit.gov.cn',
             'analytics' => '',
             'status' => 'open',
             'closed_note' => '',
             'favicon' => '',
             'copyright' => '',
         );
-
         $site = array_merge($default, $site);
-
-        if ($request->getMethod() == 'POST') {
-            $site = $request->request->all();
-            $this->getSettingService()->set('site', $site);
-            $this->getLogService()->info('system', 'update_settings', '更新站点设置', $site);
-            $this->setFlashMessage('success', 'site.save.success');
-        }
 
         return $this->render('admin/system/site.html.twig', array(
             'site' => $site,
+        ));
+    }
+
+    public function saveSiteAction(Request $request)
+    {
+        $site = $request->request->all();
+
+        if (!empty($site['analytics'])) {
+            $helper = new HTMLHelper($this->getBiz());
+            $site['analytics'] = $helper->closeTags($site['analytics']);
+        }
+        $this->getSettingService()->set('site', $site);
+
+        return $this->createJsonResponse(array(
+            'message' => $this->trans('site.save.success'),
         ));
     }
 
@@ -87,7 +95,7 @@ class SiteSettingController extends BaseController
         );
 
         $consult = array_merge($default, $consult);
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $consult = $request->request->all();
 
             foreach ($consult['qq'] as &$qq) {
@@ -102,10 +110,10 @@ class SiteSettingController extends BaseController
             ksort($consult['qqgroup']);
             ksort($consult['phone']);
             if (!empty($consult['webchatURI'])) {
-                $consult['webchatURI'] = $consult['webchatURI'].'?time='.time();
+                $fields = explode('?', $consult['webchatURI']);
+                $consult['webchatURI'] = $fields[0].'?time='.time();
             }
             $this->getSettingService()->set('consult', $consult);
-            $this->getLogService()->info('system', 'update_settings', '更新QQ客服设置', $consult);
             $this->setFlashMessage('success', 'site.save.success');
         }
 
@@ -124,10 +132,9 @@ class SiteSettingController extends BaseController
 
         $esBar = array_merge($default, $esBar);
 
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $esBar = $request->request->all();
             $this->getSettingService()->set('esBar', $esBar);
-            $this->getLogService()->info('system', 'update_settings', '更新侧边栏设置', $esBar);
             $this->setFlashMessage('success', 'site.save.success');
         }
 
@@ -152,7 +159,7 @@ class SiteSettingController extends BaseController
         $fileId = $request->request->get('id');
         $objectFile = $this->getFileService()->getFileObject($fileId);
         if (!FileToolkit::isImageFile($objectFile)) {
-            throw $this->createAccessDeniedException('图片格式不正确！');
+            $this->createNewException(FileToolkitException::NOT_IMAGE());
         }
 
         $file = $this->getFileService()->getFile($fileId);
@@ -165,11 +172,9 @@ class SiteSettingController extends BaseController
 
         $this->getSettingService()->set('consult', $consult);
 
-        $this->getLogService()->info('system', 'update_settings', '更新微信二维码', array('webchatURI' => $consult['webchatURI']));
-
         $response = array(
             'path' => $consult['webchatURI'],
-            'url' => $this->container->get('templating.helper.assets')->getUrl($consult['webchatURI']),
+            'url' => $this->container->get('assets.packages')->getUrl($consult['webchatURI']),
         );
 
         return $this->createJsonResponse($response);
@@ -182,13 +187,12 @@ class SiteSettingController extends BaseController
 
         $defaultSetting = array_merge($default, $defaultSetting);
 
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $defaultSetting = $request->request->all();
             $default = $this->getSettingService()->get('default', array());
             $defaultSetting = array_merge($default, $defaultSetting);
 
             $this->getSettingService()->set('default', $defaultSetting);
-            $this->getLogService()->info('system', 'update_settings', '更新分享设置', $defaultSetting);
             $this->setFlashMessage('success', 'site.save.success');
         }
 

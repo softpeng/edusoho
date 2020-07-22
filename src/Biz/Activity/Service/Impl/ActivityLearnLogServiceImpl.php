@@ -2,17 +2,19 @@
 
 namespace Biz\Activity\Service\Impl;
 
+use AppBundle\Common\ArrayToolkit;
 use Biz\BaseService;
 use Biz\Activity\Service\ActivityLearnLogService;
 use Biz\Activity\Dao\Impl\ActivityLearnLogDaoImpl;
 use Biz\Task\Service\TaskResultService;
+use AppBundle\Common\TimeMachine;
 
 class ActivityLearnLogServiceImpl extends BaseService implements ActivityLearnLogService
 {
     public function createLog($activity, $eventName, $data)
     {
         if (!empty($data['lastTime'])) {
-            $data['learnedTime'] = time() - $data['lastTime'];
+            $data['learnedTime'] = TimeMachine::time() - $data['lastTime'];
         }
 
         $fields = array(
@@ -68,8 +70,9 @@ class ActivityLearnLogServiceImpl extends BaseService implements ActivityLearnLo
      */
     public function calcLearnProcessByCourseIdAndUserId($courseId, $userId)
     {
-        $daysCount = $this->getActivityLearnLogDao()->countLearnedDaysByCourseIdAndUserId($courseId, $userId);
-//        $learnedTime = $this->getActivityLearnLogDao()->sumLearnedTimeByCourseIdAndUserId($courseId, $userId);
+        $activities = $this->getActivityDao()->findByCourseId($courseId);
+        $activityIds = ArrayToolkit::column($activities, 'id');
+        $daysCount = $this->getActivityLearnLogDao()->countLearnedDaysByActivityIdsAndUserId($activityIds, $userId);
         $learnedTime = 0;
         $learnedTimePerDay = $daysCount > 0 ? $learnedTime / $daysCount : 0;
 
@@ -86,11 +89,29 @@ class ActivityLearnLogServiceImpl extends BaseService implements ActivityLearnLo
         return $this->getActivityLearnLogDao()->getLastestByActivityIdAndUserId($activityId, $userId);
     }
 
+    public function sumLearnTimeGroupByUserId($conditions)
+    {
+        $results = $this->getActivityLearnLogDao()->sumLearnTimeGroupByUserId($conditions);
+        $results = ArrayToolkit::index($results, 'userId');
+
+        return $results;
+    }
+
+    public function search($conditions, $orderBy, $start, $limit)
+    {
+        return $this->getActivityLearnLogDao()->search($conditions, $orderBy, $start, $limit);
+    }
+
     /**
      * @return ActivityLearnLogDaoImpl
      */
     protected function getActivityLearnLogDao()
     {
         return $this->createDao('Activity:ActivityLearnLogDao');
+    }
+
+    protected function getActivityDao()
+    {
+        return $this->createDao('Activity:ActivityDao');
     }
 }

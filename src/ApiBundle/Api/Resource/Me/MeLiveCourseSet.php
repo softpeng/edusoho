@@ -16,7 +16,7 @@ class MeLiveCourseSet extends AbstractResource
     public function search(ApiRequest $request)
     {
         $allLiveCourseSets = $this->getCourseSetService()->searchCourseSets(
-            array('status' => 'published', 'type' => 'live'),
+            array('status' => 'published', 'type' => 'live', 'parentId' => 0),
             array('createdTime' => 'DESC'),
             0,
             PHP_INT_MAX
@@ -28,13 +28,14 @@ class MeLiveCourseSet extends AbstractResource
 
         $members = $this->getCourseMemberService()->searchMembers(
             array('courseSetIds' => array_column($allLiveCourseSets, 'id'), 'userId' => $this->getCurrentUser()->getId()),
-            array('lastViewTime' => 'DESC'),
+            array('lastLearnTime' => 'DESC'),
             0,
             PHP_INT_MAX
         );
 
         $uniqueMemberIds = $this->getUniqueCourseSetIds($members);
         $courseSets = $this->getCourseSetService()->findCourseSetsByIds($uniqueMemberIds);
+
         return array_values($this->orderByLastViewTime($courseSets, $uniqueMemberIds));
     }
 

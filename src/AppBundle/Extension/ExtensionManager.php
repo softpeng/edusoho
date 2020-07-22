@@ -16,6 +16,12 @@ class ExtensionManager
 
     protected $taskToolbars = array();
 
+    protected $courseTypes = array();
+
+    protected $wechatTemplates = array();
+
+    protected $newcomerTasks = array();
+
     public function addExtension(ExtensionInterface $extension)
     {
         $this->extensions[] = $extension;
@@ -25,6 +31,9 @@ class ExtensionManager
         $this->activities = array_merge($this->activities, $extension->getActivities());
         $this->taskToolbars = array_merge($this->taskToolbars, $extension->getTaskToolbars());
         $this->callbacks = array_merge($this->callbacks, $extension->getCallbacks());
+        $this->courseTypes = array_merge($this->courseTypes, $extension->getCourseTypes());
+        $this->wechatTemplates = array_merge($this->wechatTemplates, $extension->getWeChatTemplates());
+        $this->newcomerTasks = array_merge($this->newcomerTasks, $extension->getNewcomerTasks());
     }
 
     public function getQuestionTypes()
@@ -50,5 +59,20 @@ class ExtensionManager
     public function getTaskToolbars()
     {
         return $this->taskToolbars;
+    }
+
+    public function getCourseTypes()
+    {
+        return $this->courseTypes;
+    }
+
+    public function getWeChatTemplates()
+    {
+        return $this->wechatTemplates;
+    }
+
+    public function getNewcomerTasks()
+    {
+        return $this->newcomerTasks;
     }
 }

@@ -17,17 +17,20 @@ class Viewer
 
     public function view($result, $status = Response::HTTP_OK)
     {
-        $request = $this->container->get('request');
+        $request = $this->container->get('request_stack')->getMasterRequest();
         $isEnvelop = $request->query->get('envelope', false);
 
         if ($isEnvelop) {
             $result = array(
                 'status' => $status,
                 'headers' => array(),
-                'response' => $result
+                'response' => $result,
             );
         }
 
-        return new JsonResponse($result, $status);
+        $response = new JsonResponse($result, $status);
+        $response->headers->set('Access-Control-Allow-Origin', '*');
+
+        return $response;
     }
 }

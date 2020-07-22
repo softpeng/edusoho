@@ -2,9 +2,9 @@
 
 namespace Biz\Classroom\Dao;
 
-use Codeages\Biz\Framework\Dao\GeneralDaoInterface;
+use Codeages\Biz\Framework\Dao\AdvancedDaoInterface;
 
-interface ClassroomMemberDao extends GeneralDaoInterface
+interface ClassroomMemberDao extends AdvancedDaoInterface
 {
     public function countStudents($classroomId);
 
@@ -24,8 +24,6 @@ interface ClassroomMemberDao extends GeneralDaoInterface
 
     public function findByClassroomIdAndUserIds($classroomId, $userIds);
 
-    public function findMemberIdsByClassroomId($classroomId);
-
     public function findByUserId($userId);
 
     public function countMobileFilledMembersByClassroomId($classroomId, $userLocked = 0);
@@ -35,4 +33,6 @@ interface ClassroomMemberDao extends GeneralDaoInterface
     public function findMembersByUserIdAndClassroomIds($userId, array $classroomIds);
 
     public function findMembersByUserId($userId);
+
+    public function searchMemberCountGroupByFields($conditions, $groupBy, $start, $limit);
 }

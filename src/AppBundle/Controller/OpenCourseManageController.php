@@ -4,7 +4,6 @@ namespace AppBundle\Controller;
 
 use AppBundle\Common\Paginator;
 use Biz\Course\Service\CourseSetService;
-use Biz\Util\EdusohoLiveClient;
 use AppBundle\Common\ExportHelp;
 use AppBundle\Common\ArrayToolkit;
 use Biz\Content\Service\FileService;
@@ -14,9 +13,10 @@ use Biz\System\Service\SettingService;
 use Biz\User\Service\UserFieldService;
 use Biz\File\Service\UploadFileService;
 use Biz\OpenCourse\Service\OpenCourseService;
+use Biz\User\UserException;
 use Symfony\Component\HttpFoundation\Request;
-use Biz\OpenCourse\Processor\CourseProcessorFactory;
 use Biz\OpenCourse\Service\OpenCourseRecommendedService;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class OpenCourseManageController extends BaseController
 {
@@ -29,25 +29,68 @@ class OpenCourseManageController extends BaseController
     {
         $course = $this->getOpenCourseService()->tryManageOpenCourse($id);
 
-        if ($request->getMethod() == 'POST') {
+        $canUpdateStartTime = true;
+
+        $liveLesson = array();
+
+        if ('liveOpen' == $course['type']) {
+            $openLiveLesson = $this->getOpenCourseService()->searchLessons(
+                array('courseId' => $course['id']),
+                array('startTime' => 'DESC'),
+                0,
+                1
+            );
+
+            $liveLesson = $openLiveLesson ? $openLiveLesson[0] : array();
+            if (!empty($liveLesson['startTime']) && time() > $liveLesson['startTime']) {
+                $canUpdateStartTime = false;
+            }
+        }
+
+        if ('POST' == $request->getMethod()) {
             $data = $request->request->all();
 
-            $this->getOpenCourseService()->updateCourse($id, $data);
-            $this->setFlashMessage('success', 'site.save.success');
+            if ('liveOpen' == $course['type'] && isset($data['startTime']) && !empty($data['startTime'])) {
+                $data['length'] = $data['timeLength'];
+                unset($data['timeLength']);
+                $data['startTime'] = strtotime($data['startTime']);
 
-            return $this->redirect($this->generateUrl('open_course_manage_base', array('id' => $id)));
+                if ($data['startTime'] < time()) {
+                    return $this->createMessageResponse('error', '开始时间应晚于当前时间');
+                }
+
+                $data['authUrl'] = $this->generateUrl('live_auth', array(), UrlGeneratorInterface::ABSOLUTE_URL);
+                $data['jumpUrl'] = $this->generateUrl('live_jump', array('id' => $course['id']), UrlGeneratorInterface::ABSOLUTE_URL);
+            }
+            $this->getOpenCourseService()->updateCourse($id, $data);
+
+            return $this->createJsonResponse(true);
         }
 
         $tags = $this->getTagService()->findTagsByOwner(array('ownerType' => 'openCourse', 'ownerId' => $id));
-
-        $default = $this->getSettingService()->get('default', array());
 
         return $this->render(
             'open-course-manage/base-info.html.twig',
             array(
                 'course' => $course,
+                'openLiveLesson' => $liveLesson,
                 'tags' => ArrayToolkit::column($tags, 'name'),
-                'default' => $default,
+                'default' => $this->getSettingService()->get('default', []),
+                'canUpdateStartTime' => $canUpdateStartTime,
+            )
+        );
+    }
+
+    public function saveCourseAction(Request $request)
+    {
+        $data = $request->request->all();
+
+        $openCourse = $this->getOpenCourseService()->createCourse($data);
+
+        return $this->redirectToRoute(
+            'open_course_manage',
+            array(
+                'id' => $openCourse['id'],
             )
         );
     }
@@ -76,41 +119,20 @@ class OpenCourseManageController extends BaseController
         return $this->getBiz()->service('System:SettingService');
     }
 
-    public function pictureAction(Request $request, $id)
-    {
-        $course = $this->getOpenCourseService()->tryManageOpenCourse($id);
-
-        return $this->render(
-            'open-course-manage/picture.html.twig',
-            array(
-                'course' => $course,
-            )
-        );
-    }
-
     public function pictureCropAction(Request $request, $id)
     {
         $course = $this->getOpenCourseService()->tryManageOpenCourse($id);
 
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $data = $request->request->all();
-            $this->getOpenCourseService()->changeCoursePicture($course['id'], $data['images']);
+            $course = $this->getOpenCourseService()->changeCoursePicture($course['id'], $data['images']);
+            $cover = $this->getWebExtension()->getFpath($course['largePicture']);
 
-            return $this->redirect($this->generateUrl('open_course_manage_picture', array('id' => $course['id'])));
+//            return $this->createJsonResponse(array('code' => true, 'cover' => $cover));
+            return $this->createJsonResponse(array('image' => $cover));
         }
 
-        $fileId = $request->getSession()->get('fileId');
-        list($pictureUrl, $naturalSize, $scaledSize) = $this->getFileService()->getImgFileMetaInfo($fileId, 480, 270);
-
-        return $this->render(
-            'open-course-manage/picture-crop.html.twig',
-            array(
-                'course' => $course,
-                'pictureUrl' => $pictureUrl,
-                'naturalSize' => $naturalSize,
-                'scaledSize' => $scaledSize,
-            )
-        );
+        return $this->render('open-course-manage/picture-crop-modal.html.twig');
     }
 
     /**
@@ -125,7 +147,7 @@ class OpenCourseManageController extends BaseController
     {
         $course = $this->getOpenCourseService()->tryManageOpenCourse($id);
 
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $data = $request->request->all();
             if (empty($data) || !isset($data['teachers'])) {
                 return $this->redirect($this->generateUrl('open_course_manage_teachers', array('id' => $id)));
@@ -171,16 +193,11 @@ class OpenCourseManageController extends BaseController
             );
         }
 
-        //获取直播供应商
-        $client = new EdusohoLiveClient();
-        $capacity = $client->getCapacity();
-
         return $this->render(
             'open-course-manage/teachers.html.twig',
             array(
                 'course' => $course,
                 'teacherIds' => $teacherIds,
-                'capacity' => $capacity,
             )
         );
     }
@@ -233,13 +250,13 @@ class OpenCourseManageController extends BaseController
 
         $condition = array('courseId' => $course['id'], 'role' => 'student');
 
-        if ($fields['userType'] == 'login') {
+        if ('login' == $fields['userType']) {
             $condition['userIdGT'] = 0;
-        } elseif ($fields['userType'] == 'unlogin') {
+        } elseif ('unlogin' == $fields['userType']) {
             $condition['userId'] = 0;
         }
 
-        if (isset($fields['isNotified']) && $fields['isNotified'] == 1) {
+        if (isset($fields['isNotified']) && 1 == $fields['isNotified']) {
             $condition['isNotified'] = 1;
         }
 
@@ -293,7 +310,13 @@ class OpenCourseManageController extends BaseController
         );
         $liveLesson = $openLiveLesson ? $openLiveLesson[0] : array();
 
-        if ($request->getMethod() == 'POST') {
+        $canUpdateStartTime = true;
+
+        if (!empty($liveLesson['startTime']) && time() > $liveLesson['startTime']) {
+            $canUpdateStartTime = false;
+        }
+
+        if ('POST' == $request->getMethod()) {
             $liveLessonFields = $request->request->all();
 
             if (!isset($liveLessonFields['startTime']) || empty($liveLessonFields['startTime'])) {
@@ -305,16 +328,23 @@ class OpenCourseManageController extends BaseController
             $liveLesson['startTime'] = strtotime($liveLessonFields['startTime']);
             $liveLesson['length'] = $liveLessonFields['timeLength'];
             $liveLesson['title'] = $liveCourse['title'];
+            if ($liveLesson['startTime'] < time()) {
+                return $this->createMessageResponse('error', '开始时间应晚于当前时间');
+            }
 
+            $routes = array(
+                'authUrl' => $this->generateUrl('live_auth', array(), UrlGeneratorInterface::ABSOLUTE_URL),
+                'jumpUrl' => $this->generateUrl('live_jump', array('id' => $liveCourse['id']), UrlGeneratorInterface::ABSOLUTE_URL),
+            );
             if ($openLiveLesson) {
-                $live = $this->getLiveCourseService()->editLiveRoom($liveCourse, $liveLesson, $this->container);
+                $live = $this->getLiveCourseService()->editLiveRoom($liveCourse, $liveLesson, $routes);
                 $liveLesson = $this->getOpenCourseService()->updateLesson(
                     $liveLesson['courseId'],
                     $liveLesson['id'],
                     $liveLesson
                 );
             } else {
-                $live = $this->getLiveCourseService()->createLiveRoom($liveCourse, $liveLesson, $this->container);
+                $live = $this->getLiveCourseService()->createLiveRoom($liveCourse, $liveLesson, $routes);
 
                 $liveLesson['mediaId'] = $live['id'];
                 $liveLesson['liveProvider'] = $live['provider'];
@@ -330,6 +360,7 @@ class OpenCourseManageController extends BaseController
             array(
                 'course' => $liveCourse,
                 'openLiveLesson' => $liveLesson,
+                'canUpdateStartTime' => $canUpdateStartTime,
             )
         );
     }
@@ -346,7 +377,7 @@ class OpenCourseManageController extends BaseController
     {
         $course = $this->getOpenCourseService()->tryManageOpenCourse($id);
 
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $recommendIds = $request->request->get('recommendIds');
 
             $this->getOpenCourseRecommendedService()->updateOpenCourseRecommendedCourses($id, $recommendIds);
@@ -376,12 +407,16 @@ class OpenCourseManageController extends BaseController
             }
         }
 
+        $courseIds = ArrayToolkit::column($recommendedCourses, 'defaultCourseId');
+        $courses = $this->getCourseService()->findCoursesByIds($courseIds);
+
         $users = $this->_getTeacherUsers($commendedCourseSets);
 
         return $this->render(
             'open-course-manage/open-course-marketing.html.twig',
             array(
                 'courseSets' => $recommendedCourses,
+                'courses' => $courses,
                 'users' => $users,
                 'course' => $course,
             )
@@ -423,6 +458,8 @@ class OpenCourseManageController extends BaseController
 
     protected function _getTeacherUsers(array $courses)
     {
+        $courseIds = ArrayToolkit::column($courses, 'defaultCourseId');
+        $courses = $this->getCourseService()->findCoursesByIds($courseIds);
         $teachers = ArrayToolkit::column($courses, 'teacherIds');
 
         if (empty($teachers)) {
@@ -430,9 +467,6 @@ class OpenCourseManageController extends BaseController
         }
 
         $userIds = call_user_func_array('array_merge', $teachers);
-
-        $creators = ArrayToolkit::column($courses, 'creator');
-        $userIds = array_merge($userIds, $creators);
 
         return $this->getUserService()->findUsersByIds($userIds);
     }
@@ -448,6 +482,9 @@ class OpenCourseManageController extends BaseController
         $courseSetIds = ArrayToolkit::column($courseSets, 'id');
         $coursesPrice = $this->_findCoursesPriceInterval($courseSetIds);
 
+        $courseIds = ArrayToolkit::column($courseSets, 'defaultCourseId');
+        $courses = $this->getCourseService()->findCoursesByIds($courseIds);
+
         $users = $this->_getTeacherUsers($courseSets);
 
         return $this->render(
@@ -455,6 +492,7 @@ class OpenCourseManageController extends BaseController
             array(
                 'users' => $users,
                 'courseSets' => $courseSets,
+                'courses' => $courses,
                 'coursesPrice' => $coursesPrice,
                 'paginator' => $paginator,
                 'courseId' => $id,
@@ -508,7 +546,7 @@ class OpenCourseManageController extends BaseController
             $conditions['excludeIds'] = $excludeCourseIds;
         }
 
-        if (isset($conditions['title']) && $conditions['title'] == '') {
+        if (isset($conditions['title']) && '' == $conditions['title']) {
             unset($conditions['title']);
         }
 
@@ -530,6 +568,9 @@ class OpenCourseManageController extends BaseController
         $conditions = array('title' => $key);
         list($paginator, $courseSets) = $this->_getPickCourseData($request, $id, $conditions);
 
+        $courseIds = ArrayToolkit::column($courseSets, 'defaultCourseId');
+        $courses = $this->getCourseService()->findCoursesByIds($courseIds);
+
         $users = $this->_getTeacherUsers($courseSets);
 
         return $this->render(
@@ -537,6 +578,7 @@ class OpenCourseManageController extends BaseController
             array(
                 'users' => $users,
                 'courseSets' => $courseSets,
+                'courses' => $courses,
                 'filter' => $filter,
                 'courseId' => $id,
                 'title' => $key,
@@ -548,7 +590,7 @@ class OpenCourseManageController extends BaseController
     public function recommendedCoursesSelectAction(Request $request, $id)
     {
         $course = $this->getOpenCourseService()->tryManageOpenCourse($id);
-
+        $this->removeDeletedCourseRelation($id);
         $recommendNum = $this->getOpenCourseRecommendedService()->countRecommends(array('openCourseId' => $id));
 
         $ids = $request->request->get('ids');
@@ -566,17 +608,34 @@ class OpenCourseManageController extends BaseController
         return $this->createJsonResponse(array('result' => true));
     }
 
+    private function removeDeletedCourseRelation($openCourseId)
+    {
+        //删除 已经被删除的课程的推荐关系
+        $recommends = $this->getOpenCourseRecommendedService()->searchRecommends(array('openCourseId' => $openCourseId), array(), 0, \PHP_INT_MAX);
+        $recommends = ArrayToolkit::index($recommends, 'recommendCourseId');
+        $courseSets = $this->getCourseSetService()->findCourseSetsByIds(array_keys($recommends));
+
+        $removeIds = array();
+        foreach ($recommends as $key => $value) {
+            if (empty($courseSets[$key])) {
+                $removeIds[] = $value['id'];
+            }
+        }
+
+        $this->getOpenCourseRecommendedService()->deleteBatchRecommendCourses($removeIds);
+    }
+
     public function publishAction(Request $request, $id)
     {
         $course = $this->getOpenCourseService()->tryManageOpenCourse($id);
 
         $result = $this->getOpenCourseService()->publishCourse($id);
 
-        if ($course['type'] == 'liveOpen' && !$result['result']) {
+        if ('liveOpen' == $course['type'] && !$result['result']) {
             $result['message'] = '请先设置直播时间';
         }
 
-        if ($course['type'] == 'open' && !$result['result']) {
+        if ('open' == $course['type'] && !$result['result']) {
             $result['message'] = '请先创建课时';
         }
 
@@ -596,7 +655,7 @@ class OpenCourseManageController extends BaseController
         );
 
         $file = '';
-        if ($start == 0) {
+        if (0 == $start) {
             $file = ExportHelp::addFileTitle($request, 'open-course-students', $title);
         }
 
@@ -619,13 +678,13 @@ class OpenCourseManageController extends BaseController
         $gender = array('female' => '女', 'male' => '男', 'secret' => '秘密');
         $conditions = array('courseId' => $course['id'], 'role' => 'student');
         $userType = $request->query->get('userType', '');
-        if ($userType == 'login') {
+        if ('login' == $userType) {
             $conditions['userIdGT'] = 0;
-        } elseif ($userType == 'unlogin') {
+        } elseif ('unlogin' == $userType) {
             $conditions['userId'] = 0;
         }
 
-        if ($request->query->get('isNotified', 0) == 1) {
+        if (1 == $request->query->get('isNotified', 0)) {
             $conditions['isNotified'] = 1;
         }
 
@@ -669,7 +728,7 @@ class OpenCourseManageController extends BaseController
         foreach ($courseMembers as $courseMember) {
             $member = '';
 
-            if ($userType == 'login') {
+            if ('login' == $userType) {
                 $member .= $users[$courseMember['userId']]['nickname'].',';
                 $member .= $users[$courseMember['userId']]['email'].',';
                 $member .= $users[$courseMember['userId']]['verifiedMobile'] ? $users[$courseMember['userId']]['verifiedMobile'].',' : '-,';
@@ -685,7 +744,7 @@ class OpenCourseManageController extends BaseController
                 $member .= $users[$courseMember['userId']]['title'] ? $users[$courseMember['userId']]['title'].',' : '-'.',';
 
                 foreach ($fields as $key => $value) {
-                    $member .= $profiles[$courseMember['userId']][$key] ? $profiles[$courseMember['userId']][$key].',' : '-'.',';
+                    $member .= $profiles[$courseMember['userId']][$key] ? '"'.str_replace(array(PHP_EOL, '"'), '', $profiles[$courseMember['userId']][$key]).'",' : '-'.',';
                 }
             } else {
                 $member .= '-,-,';
@@ -721,7 +780,7 @@ class OpenCourseManageController extends BaseController
     public function studentDetailAction(Request $request, $id, $userId)
     {
         if (!$this->getCurrentUser()->isAdmin()) {
-            throw $this->createAccessDeniedException('您无权查看学员详细信息！');
+            $this->createNewException(UserException::PERMISSION_DENIED());
         }
 
         $user = $this->getUserService()->getUser($userId);
@@ -777,7 +836,7 @@ class OpenCourseManageController extends BaseController
             $length
         );
 
-        if ($result == 'success') {
+        if ('success' == $result) {
             $response = array('success' => true, 'message' => '这个时间段的课时可以创建');
         } else {
             $response = array('success' => false, 'message' => $message);
@@ -790,23 +849,13 @@ class OpenCourseManageController extends BaseController
     {
         $type = 'open';
 
-        if ($filter == 'openCourse') {
+        if ('openCourse' == $filter) {
             $type = 'open';
-        } elseif ($filter == 'otherCourse' || $filter == 'normal') {
+        } elseif ('otherCourse' == $filter || 'normal' == $filter) {
             $type = 'normal';
         }
 
         return $type;
-    }
-
-    /**
-     * @param  $type
-     *
-     * @return mixed
-     */
-    protected function getTypeCourseService($type)
-    {
-        return CourseProcessorFactory::create($type);
     }
 
     /**

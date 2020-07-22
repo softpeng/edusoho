@@ -3,6 +3,7 @@
 namespace AppBundle\Extensions\DataTag;
 
 use AppBundle\Common\ArrayToolkit;
+use Biz\Common\CommonException;
 use Topxia\Service\Common\ServiceKernel;
 
 abstract class BaseDataTag
@@ -34,7 +35,7 @@ abstract class BaseDataTag
     protected function checkArguments(array $arguments, $requires)
     {
         if (!ArrayToolkit::requireds($arguments, $requires)) {
-            throw new \InvalidArgumentException('missing argument');
+            throw CommonException::ERROR_PARAMETER_MISSING();
         }
     }
 
@@ -46,5 +47,15 @@ abstract class BaseDataTag
     protected function setting($name, $default = array())
     {
         return ServiceKernel::instance()->createService('System:SettingService')->get($name, $default);
+    }
+
+    protected function createService($alias)
+    {
+        return $this->getServiceKernel()->getBiz()->service($alias);
+    }
+
+    protected function createDao($alias)
+    {
+        return $this->getServiceKernel()->getBiz()->dao($alias);
     }
 }

@@ -3,9 +3,9 @@
 namespace Biz\Activity\Dao\Impl;
 
 use Biz\Activity\Dao\ActivityDao;
-use Codeages\Biz\Framework\Dao\GeneralDaoImpl;
+use Codeages\Biz\Framework\Dao\AdvancedDaoImpl;
 
-class ActivityDaoImpl extends GeneralDaoImpl implements ActivityDao
+class ActivityDaoImpl extends AdvancedDaoImpl implements ActivityDao
 {
     protected $table = 'activity';
 
@@ -13,7 +13,7 @@ class ActivityDaoImpl extends GeneralDaoImpl implements ActivityDao
     {
         $sql = "SELECT * FROM {$this->table()} WHERE fromCourseId = ?";
 
-        return $this->db()->fetchAll($sql, array($courseId)) ?: array();
+        return $this->db()->fetchAll($sql, [$courseId]) ?: [];
     }
 
     public function findByIds($ids)
@@ -23,28 +23,49 @@ class ActivityDaoImpl extends GeneralDaoImpl implements ActivityDao
 
     public function getByCopyIdAndCourseSetId($copyId, $courseSetId)
     {
-        return $this->getByFields(array('copyId' => $copyId, 'fromCourseSetId' => $courseSetId));
+        return $this->getByFields(['copyId' => $copyId, 'fromCourseSetId' => $courseSetId]);
     }
 
     public function findSelfVideoActivityByCourseIds($courseIds)
     {
         if (empty($courseIds)) {
-            return array();
+            return [];
         }
         $sql = "select  a.*,  c.mediaId as fileId  from activity a left join activity_video c on a.mediaId = c.id where a.mediaType='video' and c.mediaSource='self' and a.fromCourseId in (".implode(',', $courseIds).')';
 
-        return $this->db()->fetchAll($sql, array());
+        return $this->db()->fetchAll($sql, []);
+    }
+
+    public function findActivitiesByMediaIdsAndMediaType($mediaIds, $mediaType)
+    {
+        $marks = str_repeat('?,', count($mediaIds) - 1).'?';
+        $sql = "SELECT * FROM {$this->table} WHERE mediaId IN({$marks}) AND mediaType = ?;";
+
+        return $this->db()->fetchAll($sql, array_merge($mediaIds, [$mediaType]));
+    }
+
+    public function findFinishedLivesWithinTwoHours()
+    {
+        $currentTime = time();
+        $expiredTime = 3600 * 2;
+        $sql = "SELECT * FROM {$this->table} WHERE mediaType = 'live' AND {$currentTime} > endTime AND ({$currentTime} - endTime) < {$expiredTime};";
+
+        return $this->db()->fetchAll($sql, []);
     }
 
     public function declares()
     {
-        $declares['conditions'] = array(
+        $declares['orderbys'] = ['endTime'];
+        $declares['conditions'] = [
             'fromCourseId = :fromCourseId',
             'mediaType = :mediaType',
             'fromCourseId IN (:courseIds)',
             'mediaType IN (:mediaTypes)',
             'mediaId = :mediaId',
-        );
+            'fromCourseSetId = :fromCourseSetId',
+            'startTime >= :startTime_GT',
+            'endTime <= :endTime_LT',
+        ];
 
         return $declares;
     }
@@ -58,6 +79,16 @@ class ActivityDaoImpl extends GeneralDaoImpl implements ActivityDao
             $sql .= " AND id <> {$excludeId}";
         }
 
-        return $this->db()->fetchAll($sql, array($courseId, $newStartTime, $newEndTime, $newStartTime, $newEndTime, $newStartTime, $newEndTime));
+        return $this->db()->fetchAll($sql, [$courseId, $newStartTime, $newEndTime, $newStartTime, $newEndTime, $newStartTime, $newEndTime]);
+    }
+
+    public function getByMediaIdAndMediaTypeAndCopyId($mediaId, $mediaType, $copyId)
+    {
+        return $this->getByFields(['mediaId' => $mediaId, 'mediaType' => $mediaType, 'copyId' => $copyId]);
+    }
+
+    public function getByMediaIdAndMediaType($mediaId, $mediaType)
+    {
+        return $this->getByFields(['mediaId' => $mediaId, 'mediaType' => $mediaType]);
     }
 }

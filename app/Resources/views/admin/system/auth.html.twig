@@ -24,6 +24,10 @@
         </div>
         <input type="hidden" value="{{ auth.register_mode|default('none') }}" name="register_mode" />
         <div class="help-block" >{{'admin.user_auth.User_sign_up_type.help_block'|trans}}</div>
+
+      </div>
+      <div class="controls col-md-8 col-md-offset-3">
+        <div class="well">&nbsp; &nbsp; &nbsp; &nbsp;{{'admin.user_auth.mobile_bind_tips'|trans|raw}}</div>
       </div>
     </div>
 
@@ -92,27 +96,34 @@
         </label>
       </div>
 
-      <div class="controls col-md-8 mtl low register-help  col-md-offset-3" {% if  auth.register_protective|default(null) == "low" %}{% else %}style="display:none;"{% endif %}>
+      <button type="button" class="hiddenJsAction" style="display: none"></button>
+
+      <div class="controls col-md-8 mtl col-md-offset-3 dync_visible not_closed_mode low_protective" {% if  auth.register_protective|default(null) == "low" %}{% else %}style="display:none;"{% endif %}>
         <div class="well">
-          {{'admin.user_auth.Protection.low.Explanation'|trans}}
-          <p class="mll mtm">1：{{'admin.user_auth.Protection.low.Verification_code'|trans}}</p>
+          {{'admin.user_auth.Protection.Explaination'|trans}}
+          <p class="mll mtm dync_visible low_protective_email low_protective_email_or_mobile">{{'admin.user_auth.Protection.low.Verification_code.email'|trans}}</p>
+          <p class="mll mtm dync_visible low_protective_mobile low_protective_email_or_mobile">{{'admin.user_auth.Protection.low.Verification_code.mobile.tip1'|trans}}</p>
+          <p class="mll mtm dync_visible low_protective_mobile low_protective_email_or_mobile">{{'admin.user_auth.Protection.low.Verification_code.mobile.tip2'|trans}}</p>
         </div>
       </div>
 
-      <div class="controls col-md-8 mtl middle register-help  col-md-offset-3" {% if  auth.register_protective|default(null) == "middle" %}{% else %}style="display:none;"{% endif %}>
+      <div class="controls col-md-8 mtl col-md-offset-3 dync_visible not_closed_mode middle_protective" {% if  auth.register_protective|default(null) == "middle" %}{% else %}style="display:none;"{% endif %}>
         <div class="well">
-          {{'admin.user_auth.Protection.low.Explanation'|trans}}
-          <p class="mll mtm">1：{{'admin.user_auth.Protection.low.Verification_code'|trans}}</p>
-          <p class="mll mtm">2：{{'admin.user_auth.Protection.low.30_times'|trans}}</p>
+          {{'admin.user_auth.Protection.Explaination'|trans}}
+          <p class="mll mtm dync_visible middle_protective_email middle_protective_email_or_mobile">{{'admin.user_auth.Protection.low.Verification_code.email'|trans}}</p>
+          <p class="mll mtm dync_visible middle_protective_mobile middle_protective_email_or_mobile">{{'admin.user_auth.Protection.low.Verification_code.mobile.tip1'|trans}}</p>
+          <p class="mll mtm dync_visible middle_protective_mobile middle_protective_email_or_mobile">{{'admin.user_auth.Protection.low.Verification_code.mobile.tip2'|trans}}</p>
+          <p class="mll mtm">{{'admin.user_auth.Protection.middle.30_times'|trans}}</p>
         </div>
       </div>
 
-      <div class="controls col-md-8 mtl high register-help  col-md-offset-3" {% if  auth.register_protective|default(null) == "high" %}{% else %}style="display:none;"{% endif %}>
+      <div class="controls col-md-8 mtl col-md-offset-3 dync_visible not_closed_mode high_protective" {% if  auth.register_protective|default(null) == "high" %}{% else %}style="display:none;"{% endif %}>
         <div class="well">
-          {{'admin.user_auth.Protection.low.Explanation'|trans}}
-          <p class="mll mtm">1：{{'admin.user_auth.Protection.low.Verification_code'|trans}}</p>
-          <p class="mll mtm">2：{{'admin.user_auth.Protection.low.10_times'|trans}}</p>
-          <p class="mll mtm">3：{{'admin.user_auth.Protection.low.sign_up_count'|trans}}</p>
+          {{'admin.user_auth.Protection.Explaination'|trans}}
+          <p class="mll mtm dync_visible high_protective_email high_protective_email_or_mobile">{{'admin.user_auth.Protection.low.Verification_code.email'|trans}}</p>
+          <p class="mll mtm dync_visible high_protective_mobile high_protective_email_or_mobile">{{'admin.user_auth.Protection.high.Verification_code.mobile'|trans}}</p>
+          <p class="mll mtm">{{'admin.user_auth.Protection.high.10_times'|trans}}</p>
+          <p class="mll mtm">{{'admin.user_auth.Protection.high.sign_up_count'|trans}}</p>
         </div>
       </div>
     </div>
@@ -181,7 +192,7 @@
   </fieldset>
 
   <fieldset>
-    <legend>{{'admin.user_auth.Term_service_settings'|trans}}</legend>
+    <legend>{{'admin.user_auth.protocol_settings'|trans}}</legend>
     <div class="form-group">
       <div class="col-md-3 control-label">
         <label for="user_terms">{{'admin.user_auth.Term_service_settings.Enable'|trans}}</label>
@@ -201,6 +212,24 @@
       </div>
     </div>
 
+    <div class="form-group">
+      <div class="col-md-3 control-label">
+        <label for="privacy_policy">{{'admin.user_auth.privacy_policy_settings.Enable'|trans}}</label>
+      </div>
+      <div class="controls col-md-8 radios">
+        {{ radios('privacy_policy', {'opened':'admin.user_auth.privacy_policy_settings.open'|trans, 'closed':'admin.user_auth.privacy_policy_settings.closed'|trans}, auth.privacy_policy) }}
+        <div class="help-block">{{'admin.user_auth.privacy_policy_settings.Enable.help_block'|trans}}</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <div class="col-md-3 control-label">
+        <label for="privacy_policy_body">{{'admin.user_auth.privacy_policy_settings.details'|trans}}</label>
+      </div>
+      <div class="controls col-md-8">
+        <textarea class="form-control" id="privacy_policy_body" rows="16" name="privacy_policy_body" data-image-upload-url="{{ path('editor_upload', {token:upload_token('default')}) }}">{{ auth.privacy_policy_body }}</textarea>
+      </div>
+    </div>
   </fieldset>
 
 

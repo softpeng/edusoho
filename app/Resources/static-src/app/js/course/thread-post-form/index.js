@@ -6,17 +6,18 @@ let validator = $form.validate({
       required: true
     }
   }
-})
+});
 
 $('.js-btn-thread-save').click((event) => {
   if (validator.form()) {
     $(event.currentTarget).button('loading');
     $form.submit();
   }
-})
+});
 
 let editor = CKEDITOR.replace('post_content', {
   toolbar: 'Thread',
+  fileSingleSizeLimit: app.fileSingleSizeLimit,
   filebrowserImageUploadUrl: $('#post_content').data('imageUploadUrl'),
   height: 300
 });

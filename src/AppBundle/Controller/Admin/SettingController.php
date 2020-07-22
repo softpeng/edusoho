@@ -2,6 +2,7 @@
 
 namespace AppBundle\Controller\Admin;
 
+use AppBundle\Common\Exception\FileToolkitException;
 use AppBundle\Common\FileToolkit;
 use AppBundle\Common\JsonToolkit;
 use Biz\CloudPlatform\Service\AppService;
@@ -14,15 +15,15 @@ use Biz\Util\EdusohoLiveClient;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Biz\CloudPlatform\CloudAPIFactory;
+use Biz\System\Service\H5SettingService;
 
 class SettingController extends BaseController
 {
     public function postNumRulesAction(Request $request)
     {
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $setting = $request->request->get('setting', array());
             $this->getSettingService()->set('post_num_rules', $setting);
-            $this->getLogService()->info('system', 'update_settings', '更新PostNumSetting设置', $setting);
             $this->setFlashMessage('success', 'site.save.success');
         }
 
@@ -45,6 +46,7 @@ class SettingController extends BaseController
             'ver' => 1, //是否是新版
             'about' => '', // 网校简介
             'logo' => '', // 网校Logo
+            'appId' => '',
             'appname' => '',
             'appabout' => '',
             'applogo' => '',
@@ -55,24 +57,46 @@ class SettingController extends BaseController
             'splash3' => '', // 启动图3
             'splash4' => '', // 启动图4
             'splash5' => '', // 启动图5
+            'studyCenter' => array(
+                'liveScheduleEnabled' => 0,
+                'historyLearningEnabled' => 1,
+                'myCacheEnabled' => 1,
+                'myQAEnabled' => 1,
+            ),
         );
 
         $mobile = array_merge($default, $settingMobile);
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $settingMobile = $request->request->all();
 
             $mobile = array_merge($settingMobile, $operationMobile, $courseGrids);
 
             $this->getSettingService()->set('operation_mobile', $operationMobile);
             $this->getSettingService()->set('operation_course_grids', $courseGrids);
+            if (!empty($mobile['bundleId'])) {
+                $mobile['bundleId'] = trim($mobile['bundleId']);
+            }
+
+            if (isset($mobile['liveScheduleEnabled'])) {
+                $mobile['studyCenter'] = array(
+                    'liveScheduleEnabled' => $mobile['liveScheduleEnabled'],
+                    'historyLearningEnabled' => 1,
+                    'myCacheEnabled' => 1,
+                    'myQAEnabled' => 1,
+                );
+                unset($mobile['liveScheduleEnabled']);
+            }
+
             $this->getSettingService()->set('mobile', $mobile);
 
-            $this->getLogService()->info('system', 'update_settings', '更新移动客户端设置', $mobile);
             $this->setFlashMessage('success', 'site.save.success');
         }
-
-        $result = CloudAPIFactory::create('leaf')->get('/me');
+        try {
+            $result = CloudAPIFactory::create('leaf')->get('/me');
+        } catch (\Exception $e) {
+            return $this->render('admin/system/mobile.setting.error.html.twig');
+        }
 
         $mobileCode = ((array_key_exists('mobileCode', $result) && !empty($result['mobileCode'])) ? $result['mobileCode'] : 'edusohov3');
 
@@ -83,13 +107,25 @@ class SettingController extends BaseController
             'mobile' => $mobile,
             'mobileCode' => $mobileCode,
             'hasMobile' => $hasMobile,
+            'appDiscoveryVersion' => $this->getH5SettingService()->getAppDiscoveryVersion(),
         ));
+    }
+
+    public function mobileDiscoveriesAction(Request $request)
+    {
+        $appDiscoveryVersion = $this->getH5SettingService()->getAppDiscoveryVersion();
+
+        if (0 == $appDiscoveryVersion) {
+            return $this->redirect($this->generateUrl('admin_setting_mobile'));
+        }
+
+        return $this->render('admin/system/mobile.setting.discoveries.html.twig', array());
     }
 
     public function mobileIapProductAction(Request $request)
     {
         $products = $this->getSettingService()->get('mobile_iap_product', array());
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $fileds = $request->request->all();
 
             //新增校验
@@ -137,7 +173,7 @@ class SettingController extends BaseController
         $file = $this->getFileService()->getFileObject($fileId);
 
         if (!FileToolkit::isImageFile($file)) {
-            throw $this->createAccessDeniedException('图片格式不正确！');
+            $this->createNewException(FileToolkitException::NOT_IMAGE());
         }
 
         $filename = 'mobile_picture'.time().'.'.$file->getExtension();
@@ -150,11 +186,9 @@ class SettingController extends BaseController
 
         $this->getSettingService()->set('mobile', $mobile);
 
-        $this->getLogService()->info('system', 'update_settings', '更新网校$type图片', array($type => $mobile[$type]));
-
         $response = array(
             'path' => $mobile[$type],
-            'url' => $this->container->get('templating.helper.assets')->getUrl($mobile[$type]),
+            'url' => $this->container->get('assets.packages')->getUrl($mobile[$type]),
         );
 
         return new Response(json_encode($response));
@@ -167,8 +201,6 @@ class SettingController extends BaseController
 
         $this->getSettingService()->set('mobile', $setting);
 
-        $this->getLogService()->info('system', 'update_settings', "移除网校{$type}图片");
-
         return $this->createJsonResponse(true);
     }
 
@@ -178,7 +210,7 @@ class SettingController extends BaseController
         $objectFile = $this->getFileService()->getFileObject($fileId);
 
         if (!FileToolkit::isImageFile($objectFile)) {
-            throw $this->createAccessDeniedException('图片格式不正确！');
+            $this->createNewException(FileToolkitException::NOT_IMAGE());
         }
 
         $file = $this->getFileService()->getFile($fileId);
@@ -197,11 +229,9 @@ class SettingController extends BaseController
             $this->getFileService()->deleteFile($oldFileId);
         }
 
-        $this->getLogService()->info('system', 'update_settings', '更新站点LOGO', array('logo' => $site['logo']));
-
         $response = array(
             'path' => $site['logo'],
-            'url' => $this->container->get('templating.helper.assets')->getUrl($site['logo']),
+            'url' => $this->container->get('assets.packages')->getUrl($site['logo']),
         );
 
         return $this->createJsonResponse($response);
@@ -221,8 +251,6 @@ class SettingController extends BaseController
             $this->getFileService()->deleteFile($fileId);
         }
 
-        $this->getLogService()->info('system', 'update_settings', '移除站点LOGO');
-
         return $this->createJsonResponse(true);
     }
 
@@ -232,52 +260,33 @@ class SettingController extends BaseController
         $objectFile = $this->getFileService()->getFileObject($fileId);
 
         if (!FileToolkit::isImageFile($objectFile)) {
-            throw $this->createAccessDeniedException('图片格式不正确！');
+            $this->createNewException(FileToolkitException::NOT_IMAGE());
         }
 
         $file = $this->getFileService()->getFile($fileId);
         $parsed = $this->getFileService()->parseFileUri($file['uri']);
 
-        $site = $this->getSettingService()->get('course', array());
+        $site = $this->getSettingService()->get('live-course', array());
 
-        $oldFileId = empty($site['live_logo_file_id']) ? null : $site['live_logo_file_id'];
-        $site['live_logo_file_id'] = $fileId;
-        $site['live_logo'] = "{$this->container->getParameter('topxia.upload.public_url_path')}/".$parsed['path'];
-        $site['live_logo'] = ltrim($site['live_logo'], '/');
+        $oldFileId = empty($site['logo_file_id']) ? null : $site['logo_file_id'];
+        $site['logo_file_id'] = $fileId;
+        $site['logo_path'] = "{$this->container->getParameter('topxia.upload.public_url_path')}/".$parsed['path'];
+        $site['logo_path'] = ltrim($site['live_logo'], '/');
 
-        $this->getSettingService()->set('course', $site);
+        $this->getSettingService()->set('live-course', $site);
 
         if ($oldFileId) {
             $this->getFileService()->deleteFile($oldFileId);
         }
 
-        $this->getLogService()->info('system', 'update_settings', '更新直播LOGO', array('live_logo' => $site['live_logo']));
+        $this->getLogService()->info('system', 'update_settings', '更新直播LOGO', array('live_logo' => $site['logo_path']));
 
         $response = array(
-            'path' => $site['live_logo'],
-            'url' => $this->container->get('templating.helper.assets')->getUrl($site['live_logo']),
+            'path' => $site['logo_path'],
+            'url' => $this->container->get('assets.packages')->getUrl($site['logo_path']),
         );
 
         return $this->createJsonResponse($response);
-    }
-
-    public function liveLogoRemoveAction(Request $request)
-    {
-        $setting = $this->getSettingService()->get('course');
-        $setting['live_logo'] = '';
-
-        $fileId = empty($setting['live_logo_file_id']) ? null : $setting['live_logo_file_id'];
-        $setting['live_logo_file_id'] = '';
-
-        $this->getSettingService()->set('course', $setting);
-
-        if ($fileId) {
-            $this->getFileService()->deleteFile($fileId);
-        }
-
-        $this->getLogService()->info('system', 'update_settings', '移除直播LOGO');
-
-        return $this->createJsonResponse(true);
     }
 
     public function faviconUploadAction(Request $request)
@@ -286,7 +295,7 @@ class SettingController extends BaseController
         $objectFile = $this->getFileService()->getFileObject($fileId);
 
         if (!FileToolkit::isImageFile($objectFile)) {
-            throw $this->createAccessDeniedException('图片格式不正确！');
+            $this->createNewException(FileToolkitException::NOT_IMAGE());
         }
 
         $file = $this->getFileService()->getFile($fileId);
@@ -312,7 +321,7 @@ class SettingController extends BaseController
 
         $response = array(
             'path' => $site['favicon'],
-            'url' => $this->container->get('templating.helper.assets')->getUrl($site['favicon']),
+            'url' => $this->container->get('assets.packages')->getUrl($site['favicon']),
         );
 
         return $this->createJsonResponse($response);
@@ -331,8 +340,6 @@ class SettingController extends BaseController
         if ($fileId) {
             $this->getFileService()->deleteFile($fileId);
         }
-
-        $this->getLogService()->info('system', 'update_settings', '移除站点浏览器图标');
 
         return $this->createJsonResponse(true);
     }
@@ -366,7 +373,6 @@ class SettingController extends BaseController
             $this->getSettingService()->set('mailer', $mailer);
             $mailerWithoutPassword = $mailer;
             $mailerWithoutPassword['password'] = '******';
-            $this->getLogService()->info('system', 'update_settings', '更新邮件服务器设置', $mailerWithoutPassword);
             $this->setFlashMessage('success', 'site.save.success');
         }
 
@@ -389,11 +395,11 @@ class SettingController extends BaseController
         $cloudEmail = $this->getSettingService()->get('cloud_email_crm', array());
         $mailer = $this->getSettingService()->get('mailer', array());
 
-        if (!empty($cloudEmail) && $cloudEmail['status'] === 'enable') {
+        if (!empty($cloudEmail) && 'enable' === $cloudEmail['status']) {
             return 'cloud_email_crm';
         }
 
-        if (!empty($mailer) && $mailer['enabled'] == 1) {
+        if (!empty($mailer) && 1 == $mailer['enabled']) {
             return 'email';
         }
 
@@ -433,7 +439,7 @@ class SettingController extends BaseController
 
         $defaultSetting = array_merge($default, $defaultSetting);
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $defaultSetting = $request->request->all();
 
             if (!isset($defaultSetting['user_name'])) {
@@ -485,7 +491,7 @@ class SettingController extends BaseController
     {
         $settingService = $this->getSettingService();
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $data = $request->request->all();
 
             $purifiedBlackIps = trim(str_replace(array("\r\n", "\n", "\r"), ' ', $data['blackListIps']));
@@ -511,10 +517,6 @@ class SettingController extends BaseController
                 $whiteListIps['ips'] = array_filter(explode(' ', $purifiedWhiteIps));
                 $settingService->set('whitelist_ip', $whiteListIps);
             }
-
-            $logService->info('system', 'update_settings', '更新IP黑名单/白名单',
-                array('blacklist_ip' => $blackListIps['ips'],
-                      'whitelist_ip' => $whiteListIps['ips'], ));
 
             $this->setFlashMessage('success', 'site.save.success');
         }
@@ -555,7 +557,7 @@ class SettingController extends BaseController
 
         $customerServiceSetting = array_merge($default, $customerServiceSetting);
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $customerServiceSetting = $request->request->all();
             $this->getSettingService()->set('customerService', $customerServiceSetting);
             $this->getLogService()->info('system', 'customerServiceSetting', '客服管理设置', $customerServiceSetting);
@@ -595,7 +597,7 @@ class SettingController extends BaseController
         $this->getSettingService()->set('course', $courseSetting);
         $courseSetting = array_merge($default, $courseSetting);
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $courseSetting = $request->request->all();
 
             if (!isset($courseSetting['userinfoFields'])) {
@@ -643,7 +645,7 @@ class SettingController extends BaseController
             $questionsSetting = $default;
         }
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $questionsSetting = $request->request->all();
             $this->getSettingService()->set('questions', $questionsSetting);
             $this->getLogService()->info('system', 'questions_settings', '更新题库设置', $questionsSetting);
@@ -670,7 +672,7 @@ class SettingController extends BaseController
             $bind = null;
         }
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $data = $request->request->all();
             $partnerUser = $this->getAuthService()->checkPartnerLoginByNickname($data['nickname'], $data['password']);
 
@@ -700,7 +702,7 @@ class SettingController extends BaseController
 
     public function performanceAction(Request $request)
     {
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $data = $request->request->all();
             $this->setFlashMessage('success', 'site.save.success');
             $this->getSettingService()->set('performance', $data);
@@ -757,5 +759,13 @@ class SettingController extends BaseController
     protected function getAuthService()
     {
         return $this->createService('User:AuthService');
+    }
+
+    /**
+     * @return H5SettingService
+     */
+    protected function getH5SettingService()
+    {
+        return $this->createService('System:H5SettingService');
     }
 }

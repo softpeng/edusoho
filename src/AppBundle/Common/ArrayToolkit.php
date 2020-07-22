@@ -36,7 +36,7 @@ class ArrayToolkit
 
     public static function columns(array $array, array $columnNames)
     {
-        if (empty($array) or empty($columnNames)) {
+        if (empty($array) || empty($columnNames)) {
             return array();
         }
 
@@ -69,7 +69,7 @@ class ArrayToolkit
             if (!array_key_exists($key, $array)) {
                 return false;
             }
-            if ($strictMode && (is_null($array[$key]) || $array[$key] === '' || $array[$key] === 0)) {
+            if ($strictMode && (is_null($array[$key]) || '' === $array[$key] || 0 === $array[$key])) {
                 return false;
             }
         }
@@ -262,5 +262,103 @@ class ArrayToolkit
         unset($array);
 
         return $thinner;
+    }
+
+    /**
+     * 给数组中的所有key加上前缀
+     */
+    public static function appendKeyPrefix($array, $prefix)
+    {
+        $result = array();
+        foreach ($array as $key => $value) {
+            $result[$prefix.$key] = $value;
+        }
+
+        return $result;
+    }
+
+    /**
+     * 根据$orderBy数组的值排序$array
+     * 如 $array 为
+     *  array(
+     *      1 => array(a,b,c),
+     *      2 => array(d,e,f),
+     *      3 => array(g,h,i)
+     *  )
+     *
+     * $orderArray = array(3,1,2)
+     * 排完序后
+     * array(3 => array(g,h,i), 1 => array(a,b,c), 3 => array(d,e,f))
+     */
+    public static function orderByArray($array, $orderArray)
+    {
+        $keys = array_keys($array);
+        $diffs1 = array_diff($orderArray, $keys);
+        $diffs2 = array_diff($keys, $orderArray);
+        if (count($keys) != count($orderArray) || count($diffs1) > 0 || count($diffs2) > 0) {
+            return $array;
+        }
+
+        return array_replace(array_flip($orderArray), $array);
+    }
+
+    /**
+     * 根据所给的二维数组进行排序, 按照二维数组内的指定属性排序
+     *
+     * @param $arr
+     * @param $attrName
+     * @param $ascending
+     *
+     * $arr 必须为二维数据
+     * $attrName 二维数组内指定的属性
+     * $ascending  默认为升序
+     *
+     * @return array
+     *               如$arr 为
+     *               array(
+     *               array('id' => 1, 'name' => 'hello1'),
+     *               array('id' => 2, 'name' => 'hello2'),
+     *               )
+     *
+     *  $attrName 为 name, $ascending = false
+     *
+     *  排完序后结果为 array(
+     *      array('id' => 2, 'name' => 'hello2'),
+     *      array('id' => 1, 'name' => 'hello1'),
+     *  )
+     */
+    public static function sortPerArrayValue($arr, $attrName, $ascending = true)
+    {
+        usort(
+            $arr,
+            function ($first, $next) use ($ascending, $attrName) {
+                if ($ascending) {
+                    return $first[$attrName] > $next[$attrName] ? 1 : -1;
+                } else {
+                    return $first[$attrName] < $next[$attrName] ? 1 : -1;
+                }
+            }
+        );
+
+        return $arr;
+    }
+
+    /**
+     * 判断2个数组，是否值是相同的 （不同key, 相同value视为相同）
+     */
+    public static function isSameValues($arr1, $arr2)
+    {
+        sort($arr1);
+        sort($arr2);
+
+        return $arr1 == $arr2;
+    }
+
+    public static function insert($array, $position, $insertArray)
+    {
+        $firstArray = array_splice($array, 0, $position);
+        $array = array_merge($firstArray, $insertArray, $array);
+
+        return $array;
     }
 }

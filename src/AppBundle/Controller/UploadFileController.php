@@ -2,19 +2,23 @@
 
 namespace AppBundle\Controller;
 
+use AppBundle\Common\FileToolkit;
+use AppBundle\Common\MessageToolkit;
+use AppBundle\Common\Paginator;
 use Biz\CloudPlatform\Service\AppService;
 use Biz\Content\Service\FileService;
 use Biz\Course\Service\CourseService;
 use Biz\File\Service\UploadFileService;
+use Biz\File\UploadFileException;
 use Biz\System\Service\LogService;
 use Biz\System\Service\SettingService;
 use Biz\User\Service\NotificationService;
 use Biz\User\Service\UserService;
-use AppBundle\Common\Paginator;
-use AppBundle\Common\FileToolkit;
+use Biz\User\TokenException;
+use Biz\User\UserException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class UploadFileController extends BaseController
 {
@@ -32,13 +36,13 @@ class UploadFileController extends BaseController
         $token = $this->getUserService()->getToken('fileupload', $token);
 
         if (empty($token)) {
-            throw $this->createAccessDeniedException('上传TOKEN已过期或不存在。');
+            $this->createNewException(TokenException::TOKEN_INVALID());
         }
 
         $user = $this->getUserService()->getUser($token['userId']);
 
         if (empty($user)) {
-            throw $this->createAccessDeniedException('上传TOKEN非法。');
+            $this->createNewException(TokenException::NOT_MATCH_USER());
         }
         $this->getCurrentUser()->fromArray($user);
 
@@ -61,28 +65,34 @@ class UploadFileController extends BaseController
         $file = $this->getUploadFileService()->getFile($fileId);
 
         if (empty($file)) {
-            throw $this->createNotFoundException();
+            $this->createNewException(UploadFileException::NOTFOUND_FILE());
         }
 
         $this->getLogService()->info('upload_file', 'download', "文件Id #{$fileId}");
 
-        if ($file['storage'] == 'cloud') {
-            return $this->downloadCloudFile($file, $ssl);
+        if (in_array($file['storage'], ['cloud', 'supplier'])) {
+            return $this->downloadCloudFile($request, $file, $ssl);
         } else {
             return $this->downloadLocalFile($request, $file);
         }
     }
 
-    protected function downloadCloudFile($file, $ssl)
+    protected function downloadCloudFile(Request $request, $file, $ssl)
     {
         $file = $this->getUploadFileService()->getDownloadMetas($file['id'], $ssl);
+
+        if (!empty($file['error'])) {
+            $this->setFlashMessage('danger', MessageToolkit::convertMessageToKey($file['error']));
+
+            return $this->redirect($request->server->get('HTTP_REFERER'));
+        }
 
         return $this->redirect($file['url']);
     }
 
     protected function downloadLocalFile(Request $request, $file)
     {
-        $response = BinaryFileResponse::create($file['fullpath'], 200, array(), false);
+        $response = BinaryFileResponse::create($file['fullpath'], 200, [], false);
         $response->trustXSendfileTypeHeader();
 
         $fileName = urlencode(str_replace(' ', '', $file['filename']));
@@ -102,14 +112,14 @@ class UploadFileController extends BaseController
         $user = $this->getCurrentUser();
 
         if (!$user->isTeacher() && !$user->isAdmin()) {
-            throw $this->createAccessDeniedException('您无权查看此页面！');
+            $this->createNewException(UserException::PERMISSION_DENIED());
         }
 
         $conditions = $request->query->all();
 
         $conditions['currentUserId'] = $user['id'];
 
-        if ($conditions['source'] == 'upload') {
+        if ('upload' == $conditions['source']) {
             $conditions['createdUserId'] = $user['id'];
         }
 
@@ -127,7 +137,7 @@ class UploadFileController extends BaseController
 
         $files = $this->getUploadFileService()->searchFiles(
             $conditions,
-            array('createdTime' => 'DESC'),
+            ['createdTime' => 'DESC'],
             $paginator->getOffsetCount(),
             $paginator->getPerPageCount()
         );
@@ -140,7 +150,7 @@ class UploadFileController extends BaseController
         $user = $this->getCurrentUser();
 
         if (!$user->isTeacher() && !$user->isAdmin()) {
-            throw $this->createAccessDeniedException('您无权查看此页面！');
+            $this->createNewException(UserException::PERMISSION_DENIED());
         }
 
         $conditions = $request->query->all();
@@ -148,12 +158,12 @@ class UploadFileController extends BaseController
         if (array_key_exists('targetId', $conditions) && !empty($conditions['targetId'])) {
             $course = $this->getCourseService()->getCourse($conditions['targetId']);
 
-            if ($course['parentId'] > 0 && $course['locked'] == 1) {
+            if ($course['parentId'] > 0 && 1 == $course['locked']) {
                 $conditions['targetId'] = $course['parentId'];
             }
         }
 
-        $files = $this->getUploadFileService()->searchFiles($conditions, array('updatedTime' => 'DESC'), 0, 10000);
+        $files = $this->getUploadFileService()->searchFiles($conditions, ['updatedTime' => 'DESC'], 0, 10000);
 
         return $this->createFilesJsonResponse($files);
     }
@@ -163,13 +173,13 @@ class UploadFileController extends BaseController
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException();
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         $params = $request->query->all();
 
         $params['user'] = $user->id;
-        $params['defaultUploadUrl'] = $this->generateUrl('uploadfile_upload', array('targetType' => $params['targetType'], 'targetId' => $params['targetId'] ?: '0'));
+        $params['defaultUploadUrl'] = $this->generateUrl('uploadfile_upload', ['targetType' => $params['targetType'], 'targetId' => $params['targetId'] ?: '0']);
 
         if (empty($params['lazyConvert'])) {
         } else {
@@ -208,10 +218,10 @@ class UploadFileController extends BaseController
         if (!empty($paginator)) {
             $paginator = Paginator::toArray($paginator);
 
-            return $this->createJsonResponse(array(
+            return $this->createJsonResponse([
                 'files' => $files,
                 'paginator' => $paginator,
-            ));
+            ]);
         } else {
             return $this->createJsonResponse($files);
         }

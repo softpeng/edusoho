@@ -9,6 +9,7 @@ use AppBundle\Common\Paginator;
 use AppBundle\Common\ArrayToolkit;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Biz\Article\ArticleException;
 
 class ArticleController extends BaseController
 {
@@ -52,7 +53,7 @@ class ArticleController extends BaseController
 
     public function createAction(Request $request)
     {
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $formData = $request->request->all();
 
             $article['tags'] = array_filter(explode(',', $formData['tags']));
@@ -78,7 +79,7 @@ class ArticleController extends BaseController
         $article = $this->getArticleService()->getArticle($id);
 
         if (empty($article)) {
-            throw $this->createNotFoundException('文章已删除或者未发布！');
+            $this->createNewException(ArticleException::NOTFOUND());
         }
 
         $tags = $this->getTagService()->findTagsByOwner(array(
@@ -93,7 +94,7 @@ class ArticleController extends BaseController
 
         $categoryTree = $this->getCategoryService()->getCategoryTree();
 
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $formData = $request->request->all();
             $article = $this->getArticleService()->updateArticle($id, $formData);
 
@@ -181,7 +182,7 @@ class ArticleController extends BaseController
 
     public function pictureCropAction(Request $request)
     {
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $options = $request->request->all();
             $files = $this->getArticleService()->changeIndexPicture($options['images']);
 

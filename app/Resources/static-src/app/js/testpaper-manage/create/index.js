@@ -1,6 +1,7 @@
 import sortList from 'common/sortable';
 import { delHtmlTag } from 'common/utils';
 import SelectLinkage from 'app/js/question-manage/widget/select-linkage.js';
+import notify from 'common/notify';
 
 class TestpaperForm {
   constructor($form) {
@@ -32,7 +33,7 @@ class TestpaperForm {
         'min': 0,
         'max': score
       }
-    }
+    };
     if (this.scoreSlider) {
       this.scoreSlider.updateOptions(option);
     } else {
@@ -43,7 +44,7 @@ class TestpaperForm {
       });
     }
     $('.noUi-handle').attr('data-placement', 'top').attr('data-original-title', Translator.trans('activity.testpaper_manage.pass_score_hint', {'passScore' : passScore})).attr('data-container', 'body');
-    $('.noUi-handle').tooltip({ html: true })
+    $('.noUi-handle').tooltip({ html: true });
     $('.noUi-tooltip').text(`${(passScore / score * 100).toFixed(0)}%`);
   }
 
@@ -53,7 +54,7 @@ class TestpaperForm {
       this.$form.find('#difficulty-form-group').removeClass('hidden');
       this.initDifficultySlider();
     } else {
-      this.$form.find('#difficulty-form-group').addClass('hidden')
+      this.$form.find('#difficulty-form-group').addClass('hidden');
     }
   }
 
@@ -78,7 +79,7 @@ class TestpaperForm {
           resolution: 1
         },
       });
-      sliders.noUiSlider.on('update', function (values, handle) {
+      sliders.noUiSlider.on('update', function (values) {
         let simplePercentage = parseInt(values[0]),
           normalPercentage = values[1] - values[0],
           difficultyPercentage = 100 - values[1];
@@ -95,10 +96,11 @@ class TestpaperForm {
   _initEditor(validator) {
     let editor = CKEDITOR.replace(this.$description.attr('id'), {
       toolbar: 'Simple',
+      fileSingleSizeLimit: app.fileSingleSizeLimit,
       filebrowserImageUploadUrl: this.$description.data('imageUploadUrl'),
       height: 100
     });
-    editor.on('change', (a, b, c) => {
+    editor.on('change', () => {
       this.$description.val(delHtmlTag(editor.getData()));
     });
     editor.on('blur', () => {
@@ -124,7 +126,7 @@ class TestpaperForm {
           trim: true,
         },
         description: {
-          required: true,
+          //required: true,
           maxlength: 500,
           trim: true,
         },
@@ -165,13 +167,13 @@ class TestpaperForm {
           return parseInt(self.find('[role="questionNum"]').text());
         },
         digits: true
-      })
+      });
 
       self.find('[data-role="score"]').rules('add', {
         min: 0,
-        max: 100,
-        digits: true
-      })
+        max: 1000,
+        es_score: true
+      });
 
       if (self.find('[data-role="missScore"]').length > 0) {
         self.find('[data-role="missScore"]').rules('add', {
@@ -179,10 +181,10 @@ class TestpaperForm {
           max: function () {
             return parseInt(self.find('[data-role="score"]').val());
           },
-          digits: true
-        })
+          es_score: true
+        });
       }
-    })
+    });
     this._initEditor(this.validator);
   }
 
@@ -198,19 +200,27 @@ class TestpaperForm {
   _submit(event) {
     let $target = $(event.currentTarget);
     let status = this.validator.form();
+    let questionNum = 0;
+    this.$form.find('[data-role="count"]').each(function () {
+        let self = $(this);
+        questionNum+=Number(self.val());
+    });
 
     if (status) {
-      $.post($target.data('checkUrl'),this.$form.serialize(),result => {
-        if (result.status == 'no') {
-          $('.js-build-check').html(Translator.trans('activity.testpaper_manage.question_num_error'));
-        } else {
-          $('.js-build-check').html('');
+        if(questionNum>2000){
+            notify('danger', Translator.trans('activity.testpaper_manage.questions_length_hint'));
+        }else{
+            $.post($target.data('checkUrl'),this.$form.serialize(),result => {
+                if (result.status == 'no') {
+                    $('.js-build-check').html(Translator.trans('activity.testpaper_manage.question_num_error'));
+                } else {
+                    $('.js-build-check').html('');
 
-          $target.button('loading').addClass('disabled');
-          this.$form.submit();
+                    $target.button('loading').addClass('disabled');
+                    this.$form.submit();
+                }
+            });
         }
-      })
-
     }
   }
 }
@@ -221,12 +231,12 @@ new SelectLinkage($('[name="ranges[courseId]"]'),$('[name="ranges[lessonId]"]'))
 $('[name="ranges[courseId]"]').change(function(){
   let url = $(this).data('checkNumUrl');
   checkQuestionNum(url);
-})
+});
 
 $('[name="ranges[lessonId]"]').change(function(){
   let url = $(this).data('checkNumUrl');
   checkQuestionNum(url);
-})
+});
 
 function checkQuestionNum(url) {
   let courseId = $('[name="ranges[courseId]"]').val();
@@ -236,7 +246,7 @@ function checkQuestionNum(url) {
     $('[role="questionNum"]').text(0);
 
     $.each(data,function(i,n){
-      $("[type='"+i+"']").text(n.questionNum);
+      $('[type=\''+i+'\']').text(n.questionNum);
     });
-  })
+  });
 }

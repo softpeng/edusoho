@@ -55,7 +55,7 @@ security:
                 secret: "%secret%"
                 lifetime: 31536000
                 path: /
-                domain: ~
+                domain: "%cookie_domain%"
             logout:
                 path:   logout
                 success_handler: topxia.logout.success_handler
@@ -65,7 +65,8 @@ security:
         - { path: ^/task, role: ROLE_USER }
         - { path: ^/my, role: ROLE_USER }
         - { path: ^/settings, role: ROLE_USER }
-        # - { path: ^/note, role: ROLE_USER }
+        - { path: ^/cashier, role: ROLE_USER }
+        - { path: ^/order, role: ROLE_USER }
         - { path: ^/message, role: ROLE_USER }
         - { path: ^/classroom/\d+/manage/, role: ROLE_USER }
         - { path: ^/admin/course, role: ROLE_BACKEND }

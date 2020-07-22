@@ -22,17 +22,21 @@ class CategoryController extends BaseController
 
     protected function makeCategories($group)
     {
+        if (in_array($group, array('course', 'open_course'))) {
+            $group = 'course';
+        }
+
         $group = $this->getCategoryService()->getGroupByCode($group);
 
         if (empty($group)) {
-            $categories = array();
-        } else {
-            $categories = $this->getCategoryService()->getCategoryTree($group['id']);
+            return array();
+        }
 
-            foreach ($categories as $id => $category) {
-                if ($categories[$id]['parentId'] != '0') {
-                    unset($categories[$id]);
-                }
+        $categories = $this->getCategoryService()->getCategoryTree($group['id']);
+
+        foreach ($categories as $id => $category) {
+            if ('0' != $categories[$id]['parentId']) {
+                unset($categories[$id]);
             }
         }
 
@@ -55,32 +59,32 @@ class CategoryController extends BaseController
     {
         $subCategories = array();
 
-        if (empty($category['category'])) {
+        if (empty($category)) {
             return $subCategories;
         }
 
-        $categoryArray = $this->getCategoryService()->getCategoryByCode($category['category']);
+        $categoryArray = $this->getCategoryService()->getCategoryByCode($category);
 
-        if (!empty($categoryArray) && $categoryArray['parentId'] == 0) {
+        if (!empty($categoryArray) && 0 == $categoryArray['parentId']) {
             $subCategories = $this->getCategoryService()->findAllCategoriesByParentId($categoryArray['id']);
         }
 
-        if (!empty($categoryArray) && $categoryArray['parentId'] != 0) {
+        if (!empty($categoryArray) && 0 != $categoryArray['parentId']) {
             $subCategories = $this->getCategoryService()->findAllCategoriesByParentId($categoryArray['parentId']);
         }
 
         return $subCategories;
     }
 
-    protected function makeThirdCategories($category)
+    protected function makeThirdCategories($selectedSubCategory)
     {
         $thirdCategories = array();
 
-        if (empty($category['subCategory'])) {
+        if (empty($selectedSubCategory)) {
             return $thirdCategories;
         }
 
-        $parentCategory = $this->getCategoryService()->getCategoryByCode($category['subCategory']);
+        $parentCategory = $this->getCategoryService()->getCategoryByCode($selectedSubCategory);
 
         if (empty($parentCategory)) {
             return $thirdCategories;
@@ -89,28 +93,29 @@ class CategoryController extends BaseController
         return $this->getCategoryService()->findAllCategoriesByParentId($parentCategory['id']);
     }
 
-    public function treeNavAction(Request $request, $category, $tags, $path, $filter = array('price' => 'all', 'type' => 'all', 'currentLevelId' => 'all'), $orderBy = 'latest', $group = 'course')
+    public function treeNavAction(Request $request, $category, $tags, $group = 'course')
     {
+        $selectedSubCategory = $request->query->get('subCategory', '');
+        $thirdLevelCategory = $request->query->get('selectedthirdLevelCategory', '');
+
         $categories = $this->makeCategories($group);
         $tagGroups = $this->makeTags();
 
         $subCategories = $this->makeSubCategories($category);
 
-        $thirdLevelCategories = $this->makeThirdCategories($category);
+        $thirdLevelCategories = $this->makeThirdCategories($selectedSubCategory);
 
         return $this->render('category/explore-nav.html.twig', array(
-            'selectedCategory' => $category['category'],
-            'selectedSubCategory' => $category['subCategory'],
-            'selectedthirdLevelCategory' => $category['thirdLevelCategory'],
+            'selectedCategory' => $category,
+            'selectedSubCategory' => $selectedSubCategory,
+            'selectedthirdLevelCategory' => $thirdLevelCategory,
             'thirdLevelCategories' => $thirdLevelCategories,
             'categories' => $categories,
             'subCategories' => $subCategories,
-            'path' => $path,
-            'filter' => $filter,
-            'orderBy' => $orderBy,
             'tagGroups' => $tagGroups,
             'tags' => $tags,
             'group' => $group,
+            'request' => $request,
         ));
     }
 

@@ -8,15 +8,17 @@ use ApiBundle\Api\Util\AssetHelper;
 class UserFilter extends Filter
 {
     protected $simpleFields = array(
-        'id', 'nickname', 'title', 'smallAvatar', 'mediumAvatar', 'largeAvatar'
+        'id', 'nickname', 'title', 'smallAvatar', 'mediumAvatar', 'largeAvatar', 'uuid', 'destroyed',
     );
 
     protected $publicFields = array(
+        'about', 'faceRegistered',
     );
 
     protected $authenticatedFields = array(
-        'email', 'locale', 'uri', 'type', 'roles', 'promotedSeq', 'locked', 'currentIp', 'gender', 'iam', 'city', 'qq', 'signature', 'about', 'company',
-        'job', 'school', 'class', 'weibo', 'weixin', 'isQQPublic', 'isWeixinPublic', 'isWeiboPublic', 'following', 'follower', 'verifiedMobile', 'promotedTime', 'lastPasswordFailTime', 'loginTime', 'approvalTime', 'vip'
+        'email', 'locale', 'uri', 'type', 'roles', 'promotedSeq', 'locked', 'currentIp', 'gender', 'iam', 'city', 'qq', 'signature', 'company',
+        'job', 'school', 'class', 'weibo', 'weixin', 'isQQPublic', 'isWeixinPublic', 'isWeiboPublic', 'following', 'follower', 'verifiedMobile',
+        'promotedTime', 'lastPasswordFailTime', 'loginTime', 'approvalTime', 'vip', 'token', 'havePayPassword',
     );
 
     protected $mode = self::SIMPLE_MODE;
@@ -24,12 +26,19 @@ class UserFilter extends Filter
     protected function simpleFields(&$data)
     {
         $this->transformAvatar($data);
+        $this->destroyedNicknameFilter($data);
+    }
+
+    protected function publicFields(&$data)
+    {
+        if (!isset($data['about'])) {
+            return;
+        }
+        $data['about'] = $this->convertAbsoluteUrl($data['about']);
     }
 
     protected function authenticatedFields(&$data)
     {
-        $data['about'] = $this->convertAbsoluteUrl($data['about']);
-
         $data['promotedTime'] = date('c', $data['promotedTime']);
         $data['lastPasswordFailTime'] = date('c', $data['lastPasswordFailTime']);
         $data['loginTime'] = date('c', $data['loginTime']);
@@ -56,5 +65,10 @@ class UserFilter extends Filter
         unset($data['smallAvatar']);
         unset($data['mediumAvatar']);
         unset($data['largeAvatar']);
+    }
+
+    protected function destroyedNicknameFilter(&$data)
+    {
+        $data['nickname'] = ($data['destroyed'] == 1) ? '帐号已注销' : $data['nickname'];
     }
 }

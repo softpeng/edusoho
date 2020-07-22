@@ -8,19 +8,20 @@ use ApiBundle\Api\Resource\User\UserFilter;
 use ApiBundle\Api\Util\AssetHelper;
 use ApiBundle\Api\Util\Converter;
 use ApiBundle\Api\Util\Money;
+use Biz\Course\Util\CourseTitleUtils;
 use AppBundle\Common\ServiceToolkit;
 
 class CourseFilter extends Filter
 {
     protected $simpleFields = array(
-        'id', 'title'
+        'id', 'title', 'courseSetTitle',
     );
 
     protected $publicFields = array(
-        'courseSet', 'learnMode', 'expiryMode', 'expiryDays', 'expiryStartDate', 'expiryEndDate', 'summary',
+        'subtitle', 'courseSet', 'learnMode', 'expiryMode', 'expiryDays', 'expiryStartDate', 'expiryEndDate', 'summary',
         'goals', 'audiences', 'isDefault', 'maxStudentNum', 'status', 'creator', 'isFree', 'price', 'originPrice',
         'vipLevelId', 'buyable', 'tryLookable', 'tryLookLength', 'watchLimit', 'services', 'ratingNum', 'rating',
-        'taskNum', 'compulsoryTaskNum', 'studentNum', 'teachers', 'parentId', 'createdTime', 'updatedTime', 'enableFinish', 'buyExpiryTime', 'access'
+        'taskNum', 'compulsoryTaskNum', 'studentNum', 'teachers', 'parentId', 'createdTime', 'updatedTime', 'enableFinish', 'buyExpiryTime', 'access', 'isAudioOn',
     );
 
     protected function publicFields(&$data)
@@ -28,7 +29,7 @@ class CourseFilter extends Filter
         $this->learningExpiryDate($data);
         Converter::timestampToDate($data['buyExpiryTime']);
 
-        $data['services'] =  AssetHelper::callAppExtensionMethod('transServiceTags', array(ServiceToolkit::getServicesByCodes($data['services'])));;
+        $data['services'] = AssetHelper::callAppExtensionMethod('transServiceTags', array(ServiceToolkit::getServicesByCodes($data['services'])));
 
         $userFilter = new UserFilter();
         $userFilter->setMode(Filter::SIMPLE_MODE);
@@ -39,11 +40,19 @@ class CourseFilter extends Filter
         $courseSetFilter->setMode(Filter::SIMPLE_MODE);
         $courseSetFilter->filter($data['courseSet']);
 
-        /**
+        /*
          * @TODO 2017-06-29 业务变更、字段变更:publishedTaskNum变更为compulsoryTaskNum,兼容一段时间
          */
         $data['publishedTaskNum'] = $data['compulsoryTaskNum'];
         $data['summary'] = $this->convertAbsoluteUrl($data['summary']);
+    }
+
+    protected function simpleFields(&$data)
+    {
+        $displayedTitle = CourseTitleUtils::getDisplayedTitle($data);
+        if (!empty($displayedTitle)) {
+            $data['displayedTitle'] = $displayedTitle;
+        }
     }
 
     private function learningExpiryDate(&$data)
@@ -62,7 +71,7 @@ class CourseFilter extends Filter
         unset($data['expiryEndDate']);
         unset($data['expiryDays']);
 
-        if ($data['learningExpiryDate']['expiryMode'] == 'forever' || $data['learningExpiryDate']['expiryMode'] == 'days') {
+        if ('forever' == $data['learningExpiryDate']['expiryMode'] || 'days' == $data['learningExpiryDate']['expiryMode']) {
             $data['learningExpiryDate']['expired'] = false;
         } else {
             $data['learningExpiryDate']['expired'] = time() > strtotime($data['learningExpiryDate']['expiryEndDate']);

@@ -3,6 +3,9 @@
 namespace AppBundle\Controller\Admin;
 
 use AppBundle\Common\Paginator;
+use Biz\SchedulerFacade\Service\SchedulerFacadeService;
+use Codeages\Biz\Framework\Scheduler\Service\JobPool;
+use Codeages\Biz\Framework\Scheduler\Service\SchedulerService;
 use Symfony\Component\HttpFoundation\Request;
 
 class JobController extends BaseController
@@ -24,6 +27,8 @@ class JobController extends BaseController
             $paginator->getOffsetCount(),
             $paginator->getPerPageCount()
         );
+
+        $this->checkPoolHealth();
 
         return $this->render('admin/jobs/index.html.twig', array(
             'jobs' => $jobs,
@@ -55,6 +60,18 @@ class JobController extends BaseController
         ));
     }
 
+    private function checkPoolHealth()
+    {
+        $jobPool = new JobPool($this->get('biz'));
+        $defPool = $jobPool->getJobPool('default');
+        $dedPool = $jobPool->getJobPool('dedicated');
+
+        if (($defPool && $defPool['num'] >= $defPool['max_num'])
+            || ($dedPool && $dedPool['num'] >= $dedPool['max_num'])) {
+            $this->setFlashMessage('danger', 'There some pool is full, please go to restore.');
+        }
+    }
+
     public function enabledAction(Request $request, $id)
     {
         $job = $this->getSchedulerService()->enabledJob($id);
@@ -69,6 +86,28 @@ class JobController extends BaseController
         $job = $this->getSchedulerService()->disabledJob($id);
 
         return $this->render('admin/jobs/table-tr.html.twig', array(
+            'job' => $job,
+        ));
+    }
+
+    public function setNextExecTimeAction(Request $request, $id)
+    {
+        $job = $this->getSchedulerFacadeService()->getJob($id);
+        if ('POST' == $request->getMethod()) {
+            $nextFiredTime = $request->request->get('nextExecTime', '');
+            if (empty($nextFiredTime)) {
+                return $this->createJsonResponse(false);
+            }
+            $nextFiredTime = strtotime($nextFiredTime);
+            $job = $this->getSchedulerFacadeService()->setNextFiredTime($id, $nextFiredTime);
+            if (empty($job)) {
+                return $this->createJsonResponse(false);
+            }
+
+            return $this->createJsonResponse(true);
+        }
+
+        return $this->render('admin/jobs/set-next-fired-time-modal.html.twig', array(
             'job' => $job,
         ));
     }
@@ -126,8 +165,19 @@ class JobController extends BaseController
         ));
     }
 
+    /**
+     * @return SchedulerService
+     */
     protected function getSchedulerService()
     {
         return $this->getBiz()->service('Scheduler:SchedulerService');
+    }
+
+    /**
+     * @return SchedulerFacadeService
+     */
+    protected function getSchedulerFacadeService()
+    {
+        return $this->getBiz()->service('SchedulerFacade:SchedulerFacadeService');
     }
 }

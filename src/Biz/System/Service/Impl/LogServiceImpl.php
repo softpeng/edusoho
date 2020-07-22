@@ -2,25 +2,30 @@
 
 namespace Biz\System\Service\Impl;
 
+use Biz\AppLoggerConstant;
 use Biz\BaseService;
+use Biz\Common\CommonException;
+use Biz\LoggerConstantInterface;
 use Biz\System\Dao\LogDao;
 use Biz\User\Service\UserService;
-use Biz\Common\Logger;
 use Biz\System\Service\LogService;
+use AppBundle\Common\DeviceToolkit;
 
 class LogServiceImpl extends BaseService implements LogService
 {
-    public function info($module, $action, $message, array $data = null)
+    const LOG_DATA_LENGTH_LIMIT = 4096;
+
+    public function info($module, $action, $message, $data = null)
     {
         return $this->addLog('info', $module, $action, $message, $data);
     }
 
-    public function warning($module, $action, $message, array $data = null)
+    public function warning($module, $action, $message, $data = null)
     {
         return $this->addLog('warning', $module, $action, $message, $data);
     }
 
-    public function error($module, $action, $message, array $data = null)
+    public function error($module, $action, $message, $data = null)
     {
         return $this->addLog('error', $module, $action, $message, $data);
     }
@@ -38,12 +43,40 @@ class LogServiceImpl extends BaseService implements LogService
                     $sort = array('id' => 'ASC');
                     break;
                 default:
-                    throw $this->createServiceException('参数sort不正确。');
+                    $this->createNewException(CommonException::ERROR_PARAMETER());
                     break;
             }
         }
 
         $logs = $this->getLogDao()->search($conditions, $sort, $start, $limit);
+
+        foreach ($logs as &$log) {
+            $log['data'] = empty($log['data']) ? array() : json_decode($log['data'], true);
+            unset($log);
+        }
+
+        return $logs;
+    }
+
+    public function searchOldLogs($conditions, $sort, $start, $limit)
+    {
+        $conditions = $this->prepareSearchConditions($conditions);
+
+        if (!is_array($sort)) {
+            switch ($sort) {
+                case 'created':
+                    $sort = array('id' => 'DESC');
+                    break;
+                case 'createdByAsc':
+                    $sort = array('id' => 'ASC');
+                    break;
+                default:
+                    $this->createNewException(CommonException::ERROR_PARAMETER());
+                    break;
+            }
+        }
+
+        $logs = $this->getLogOldDao()->search($conditions, $sort, $start, $limit);
 
         foreach ($logs as &$log) {
             $log['data'] = empty($log['data']) ? array() : json_decode($log['data'], true);
@@ -60,18 +93,47 @@ class LogServiceImpl extends BaseService implements LogService
         return $this->getLogDao()->count($conditions);
     }
 
-    protected function addLog($level, $module, $action, $message, array $data = null)
+    public function searchOldLogCount($conditions)
+    {
+        $conditions = $this->prepareSearchConditions($conditions);
+
+        return $this->getLogOldDao()->count($conditions);
+    }
+
+    protected function addLog($level, $module, $action, $message, $data = null)
     {
         $user = $this->getCurrentUser();
 
+        if (!$user->isLogin() && is_array($data) && !empty($data['loginUser'])) {
+            $user['id'] = $data['loginUser']['id'];
+        }
+
+        if (is_array($data)) {
+            if (isset($data['loginUser'])) {
+                unset($data['loginUser']);
+            }
+
+            foreach ($data as &$value) {
+                if (is_string($value) && mb_strlen($value, 'UTF-8') > self::LOG_DATA_LENGTH_LIMIT) {
+                    $value = mb_substr($value, 0, self::LOG_DATA_LENGTH_LIMIT, 'UTF-8');
+                }
+            }
+
+            $data = json_encode($data);
+        }
+
         return $this->getLogDao()->create(
             array(
-                'module' => Logger::getModule($module),
+                'module' => $module,
                 'action' => $action,
                 'message' => $message,
-                'data' => empty($data) ? '' : json_encode($data),
+                'data' => empty($data) ? '' : $data,
                 'userId' => $user['id'],
                 'ip' => $user['currentIp'],
+                'browser' => DeviceToolkit::getBrowse(),
+                'operatingSystem' => DeviceToolkit::getOperatingSystem(),
+                'device' => DeviceToolkit::isMobileClient() ? 'mobile' : 'computer',
+                'userAgent' => isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '',
                 'createdTime' => time(),
                 'level' => $level,
             )
@@ -88,33 +150,66 @@ class LogServiceImpl extends BaseService implements LogService
         return $this->getLogDao()->analysisLoginDataByTime($startTime, $endTime);
     }
 
-    public function getLogModuleDicts()
+    public function getModules()
     {
-        $moduleDicts = Logger::getLogModuleDict();
-        $modules = $this->getLogModules();
-
-        $dealModuleDicts = array();
-        foreach ($modules as $module) {
-            if (in_array($module, array_keys($moduleDicts))) {
-                $dealModuleDicts[$module] = $moduleDicts[$module];
-            }
+        $loggerConstantList = $this->getLoggerConstantList();
+        $modules = array();
+        foreach ($loggerConstantList as $loggerConstant) {
+            $modules = array_merge($modules, $loggerConstant->getModules());
         }
 
-        return $dealModuleDicts;
+        return $modules;
     }
 
-    public function findLogActionDictsyModule($module)
+    public function getActionsByModule($module)
     {
-        $systemActions = Logger::systemModuleConfig();
-        $pluginActions = Logger::pluginModuleConfig();
-
-        $actions = array_merge($systemActions, $pluginActions);
+        $loggerConstantList = $this->getLoggerConstantList();
+        $actions = array();
+        foreach ($loggerConstantList as $loggerConstant) {
+            $actions = array_merge($actions, $loggerConstant->getActions());
+        }
 
         if (isset($actions[$module])) {
             return $actions[$module];
+        } else {
+            return array();
+        }
+    }
+
+    /**
+     * @return array LoggerConstantInterface
+     */
+    protected function getLoggerConstantList()
+    {
+        $loggerList = array();
+        $loggerList[] = new AppLoggerConstant();
+
+        $customLoggerClass = 'CustomBundle\Biz\LoggerConstant';
+        if (class_exists($customLoggerClass)) {
+            $customLogger = new $customLoggerClass();
+
+            if ($customLogger instanceof LoggerConstantInterface) {
+                $loggerList[] = $customLogger;
+            }
         }
 
-        return array();
+        $pcm = $this->biz['pluginConfigurationManager'];
+
+        $installedPlugins = $pcm->getInstalledPlugins();
+
+        foreach ($installedPlugins as $installedPlugin) {
+            $code = ucfirst($installedPlugin['code']);
+            $pluginLoggerClass = "{$code}Plugin\\Biz\\LoggerConstant";
+            if (class_exists($pluginLoggerClass)) {
+                $pluginLogger = new $pluginLoggerClass();
+
+                if ($pluginLogger instanceof LoggerConstantInterface) {
+                    $loggerList[] = $pluginLogger;
+                }
+            }
+        }
+
+        return $loggerList;
     }
 
     /**
@@ -123,6 +218,14 @@ class LogServiceImpl extends BaseService implements LogService
     protected function getLogDao()
     {
         return $this->createDao('System:LogDao');
+    }
+
+    /**
+     * @return LogDao
+     */
+    protected function getLogOldDao()
+    {
+        return $this->createDao('System:LogOldDao');
     }
 
     /**
@@ -154,37 +257,5 @@ class LogServiceImpl extends BaseService implements LogService
         }
 
         return $conditions;
-    }
-
-    private function getLogModules()
-    {
-        $systemModules = array_keys(Logger::systemModuleConfig());
-        $pluginModules = array_keys(Logger::pluginModuleConfig());
-
-        $rootDir = realpath($this->biz['root_directory']);
-
-        $filepath = $rootDir.'/config/plugin.php';
-
-        $plugins = array();
-        if (file_exists($filepath)) {
-            $plugins = require $filepath;
-        }
-
-        $plugins = array_map('strtolower', array_keys($plugins));
-
-        if (empty($plugins)) {
-            return $systemModules;
-        }
-
-        foreach ($pluginModules as $key => $module) {
-            $formatModule = str_replace('_', '', $module);
-            if (!in_array($formatModule, $plugins)) {
-                unset($pluginModules[$key]);
-            }
-        }
-
-        $modules = array_merge($systemModules, $pluginModules);
-
-        return $modules;
     }
 }

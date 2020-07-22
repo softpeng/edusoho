@@ -4,14 +4,12 @@ namespace ApiBundle\Api\Resource\Course;
 
 use ApiBundle\Api\Annotation\ApiConf;
 use ApiBundle\Api\ApiRequest;
-use ApiBundle\Api\Exception\ErrorCode;
 use ApiBundle\Api\Resource\AbstractResource;
+use Biz\Course\CourseException;
 use Biz\Course\Service\CourseService;
-use Biz\Course\Service\CourseSetService;
 use Biz\Course\Service\MemberService;
-use Biz\Order\Service\OrderService;
+use Biz\Exception\UnableJoinException;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class CourseMember extends AbstractResource
 {
@@ -46,6 +44,7 @@ class CourseMember extends AbstractResource
     {
         $courseMember = $this->getMemberService()->getCourseMember($courseId, $userId);
         $this->getOCUtil()->single($courseMember, array('userId'));
+
         return $courseMember;
     }
 
@@ -54,13 +53,7 @@ class CourseMember extends AbstractResource
         $course = $this->getCourseService()->getCourse($courseId);
 
         if (!$course) {
-            throw new NotFoundHttpException('教学计划不存在', null, ErrorCode::RESOURCE_NOT_FOUND);
-        }
-
-        $access = $this->getCourseService()->canJoinCourse($courseId);
-
-        if ($access['code'] != 'success') {
-            throw new BadRequestHttpException($access['msg']);
+            throw CourseException::NOTFOUND_COURSE();
         }
 
         $member = $this->getMemberService()->getCourseMember($courseId, $this->getCurrentUser()->getId());
@@ -71,6 +64,7 @@ class CourseMember extends AbstractResource
 
         if ($member) {
             $this->getOCUtil()->single($member, array('userId'));
+
             return $member;
         }
 
@@ -79,64 +73,26 @@ class CourseMember extends AbstractResource
 
     private function tryJoin($course)
     {
-        $member = null;
-
-        if ($course['buyable']) {
-            $member = $this->freeJoin($course);
+        try {
+            $this->getCourseService()->tryFreeJoin($course['id']);
+        } catch (UnableJoinException $e) {
+            throw new BadRequestHttpException($e->getMessage(), $e, $e->getCode());
         }
 
-        if ($member) {
-            return $member;
-        }
-
-        if ($course['vipLevelId'] > 0) {
-            $member = $this->vipJoin($course);
+        $member = $this->getMemberService()->getCourseMember($course['id'], $this->getCurrentUser()->getId());
+        if (!empty($member)) {
+            $this->getLogService()->info('course', 'join_course', "加入 教学计划《{$course['title']}》", array('courseId' => $course['id'], 'title' => $course['title']));
         }
 
         return $member;
     }
 
-    private function freeJoin($course)
+    /**
+     * @return \Biz\System\Service\Impl\LogServiceImpl
+     */
+    private function getLogService()
     {
-        if ($course['isFree'] == 1 || $course['price'] == 0) {
-            $member = $this->getMemberService()->becomeStudent($course['id'], $this->getCurrentUser()->id);
-
-            $courseSet = $this->getCourseSetService()->getCourseSet($course['courseSetId']);
-
-            $systemOrder = array(
-                'userId' => $this->getCurrentUser()->id,
-                'title' => "购买课程《{$courseSet['title']}》- {$course['title']}",
-                'targetType' => OrderService::TARGETTYPE_COURSE,
-                'targetId' => $course['id'],
-                'amount' => 0,
-                'totalPrice' => $course['price'],
-                'snPrefix' => OrderService::SNPREFIX_C,
-                'payment' => '',
-            );
-
-            $order = $this->getOrderService()->createSystemOrder($systemOrder);
-            $this->getMemberService()->updateMember($member['id'], array(
-                'orderId' => $order['id']
-            ));
-
-            return $member;
-        } else {
-            return null;
-        }
-    }
-
-    private function vipJoin($course)
-    {
-        if (!$this->isPluginInstalled('vip')) {
-            return null;
-        }
-
-        list($success, $message) = $this->service('VipPlugin:Vip:VipFacadeService')->joinCourse($course['id']);
-        if ($success) {
-            return $this->getMemberService()->getCourseMember($course['id'], $this->getCurrentUser()->getId());
-        } else {
-            return null;
-        }
+        return $this->service('System:LogService');
     }
 
     /**
@@ -145,22 +101,6 @@ class CourseMember extends AbstractResource
     private function getMemberService()
     {
         return $this->service('Course:MemberService');
-    }
-
-    /**
-     * @return OrderService
-     */
-    private function getOrderService()
-    {
-        return $this->service('Order:OrderService');
-    }
-
-    /**
-     * @return CourseSetService
-     */
-    private function getCourseSetService()
-    {
-        return $this->service('Course:CourseSetService');
     }
 
     /**

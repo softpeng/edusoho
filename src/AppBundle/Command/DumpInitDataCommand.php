@@ -49,12 +49,32 @@ class DumpInitDataCommand extends BaseCommand
         $port = empty($domain[1]) ? 22 : $domain[1];
         $time = time();
 
-        $command = "ssh -l root {$host} -p {$port} 'mysqldump -u{$user} -p{$password} {$database} --no-create-info --complete-insert --skip-comments --extended-insert --skip-add-locks --ignore-table={$database}.cache --ignore-table={$database}.cloud_app_logs --ignore-table={$database}.sessions --ignore-table={$database}.log --ignore-table={$database}.session2 --ignore-table={$database}.user_token --ignore-table={$database}.status --skip-disable-keys --skip-set-charset --skip-tz-utc --skip-debug-check > edusoho_init.{$time}.sql'";
+        $command = "ssh -l root {$host} -p {$port} \
+        'mysqldump -u{$user} -p {$database} \
+        --no-create-info --complete-insert \
+        --skip-comments --extended-insert \
+        --skip-add-locks --ignore-table={$database}.cache \
+        --ignore-table={$database}.cloud_app_logs \
+        --ignore-table={$database}.sessions \
+        --ignore-table={$database}.log \
+        --ignore-table={$database}.session2 \
+        --ignore-table={$database}.user_token \
+        --ignore-table={$database}.status \
+        --ignore-table={$database}.log_v8 \
+        --ignore-table={$database}.biz_scheduler_job_fired \
+        --ignore-table={$database}.biz_scheduler_job_log \
+        --ignore-table={$database}.biz_scheduler_job_process \
+        --ignore-table={$database}.biz_targetlog \
+        --ignore-table={$database}.xapi_activity_watch_log \
+        --ignore-table={$database}.xapi_statement \
+        --ignore-table={$database}.xapi_statement_archive \
+        --skip-disable-keys --skip-set-charset \
+        --skip-tz-utc > edusoho_init.{$time}.sql'";
 
         $output->writeln("<info>{$command}</info>");
         exec($command);
 
-        $command = "ssh -l root {$host} -p {$port} \"mysqldump -u{$user} -p{$password} -d {$database} --compact --add-drop-table | sed 's/ AUTO_INCREMENT=[0-9]*//g' > edusoho_structure.{$time}.sql\"";
+        $command = "ssh -l root {$host} -p {$port} \"mysqldump -u{$user} -p -d {$database} --compact --add-drop-table | sed 's/ AUTO_INCREMENT=[0-9]*//g' > edusoho_structure.{$time}.sql\"";
 
         $output->writeln("<info>{$command}</info>");
         exec($command);
@@ -82,7 +102,7 @@ class DumpInitDataCommand extends BaseCommand
         $output->writeln("<info>{$command}</info>");
         exec($command);
 
-        $command = "ssh -l root {$host} -p {$port} 'cd {$projectPath} \n zip -r ~/data.{$time}.zip app/data/private_files app/data/udisk'";
+        $command = "ssh -l root {$host} -p {$port} 'cd {$projectPath} \n zip -r ~/data.{$time}.zip app/data/private_files app/data/udisk web/files'";
         $output->writeln("<info>{$command}</info>");
         exec($command);
 

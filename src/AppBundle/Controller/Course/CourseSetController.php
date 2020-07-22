@@ -2,38 +2,36 @@
 
 namespace AppBundle\Controller\Course;
 
-use AppBundle\Common\Paginator;
-use Biz\Task\Service\TaskService;
 use AppBundle\Common\ArrayToolkit;
-use Biz\Taxonomy\Service\TagService;
-use Biz\Course\Service\CourseService;
+use AppBundle\Common\Paginator;
 use AppBundle\Controller\BaseController;
+use Biz\Course\CourseException;
+use Biz\Course\Service\CourseService;
 use Biz\Course\Service\CourseSetService;
+use Biz\Task\Service\TaskService;
 use Biz\Taxonomy\Service\CategoryService;
+use Biz\Taxonomy\Service\TagService;
 use Symfony\Component\HttpFoundation\Request;
 
 class CourseSetController extends BaseController
 {
     public function showAction(Request $request, $id)
     {
-        $course = $this->getCourseService()->getFirstPublishedCourseByCourseSetId($id);
+        $courseSet = $this->getCourseSetService()->getCourseSet($id);
+        $course = $this->getCourseService()->getCourse($courseSet['defaultCourseId']);
         $previewAs = $request->query->get('previewAs');
-        //如果计划都尚未发布，则获取第一个创建的
         if (empty($course)) {
-            $course = $this->getCourseService()->getFirstCourseByCourseSetId($id);
-        }
-        if (empty($course)) {
-            throw $this->createNotFoundException('No Avaliable Course in CourseSet#{$id}');
+            $this->createNewException(CourseException::NOTFOUND_COURSE());
         }
 
         $this->getCourseSetService()->hitCourseSet($id);
 
-        return $this->redirect($this->generateUrl('course_show', array('id' => $course['id'], 'previewAs' => $previewAs)));
+        return $this->redirect($this->generateUrl('course_show', ['id' => $course['id'], 'previewAs' => $previewAs]));
     }
 
     public function courseSetsBlockAction(array $courseSets, $view = 'list', $mode = 'default')
     {
-        $userIds = array();
+        $userIds = [];
 
         $service = $this->getCourseService();
 
@@ -48,34 +46,21 @@ class CourseSetController extends BaseController
 
         $users = $this->getUserService()->findUsersByIds($userIds);
 
-        return $this->render("course-set/block/course-block-{$view}.html.twig", array(
+        return $this->render("course-set/block/course-block-{$view}.html.twig", [
             'courseSets' => $courseSets,
             'users' => $users,
             'mode' => $mode,
-        ));
-    }
-
-    public function favoriteAction($id)
-    {
-        $success = $this->getCourseSetService()->favorite($id);
-
-        return $this->createJsonResponse($success);
-    }
-
-    public function unfavoriteAction($id)
-    {
-        $success = $this->getCourseSetService()->unfavorite($id);
-
-        return $this->createJsonResponse($success);
+        ]);
     }
 
     public function archiveAction()
     {
-        $conditions = array(
+        $conditions = [
             'status' => 'published',
             'parentId' => '0',
-        );
+        ];
 
+        $conditions = $this->getCourseService()->appendReservationConditions($conditions);
         $paginator = new Paginator(
             $this->get('request'),
             $this->getCourseSetService()->countCourseSets($conditions),
@@ -89,21 +74,21 @@ class CourseSetController extends BaseController
             $paginator->getPerPageCount()
         );
 
-        $userIds = array();
+        $userIds = [];
 
         foreach ($courseSets as &$courseSet) {
             $tagIds = $this->getTagIdsByCourseSet($courseSet);
             $courseSet['tags'] = $this->getTagService()->findTagsByIds($tagIds);
-            $userIds = array_merge($userIds, array($courseSet['creator']));
+            $userIds = array_merge($userIds, [$courseSet['creator']]);
         }
 
         $users = $this->getUserService()->findUsersByIds($userIds);
 
-        return $this->render('course-set/archive/index.html.twig', array(
+        return $this->render('course-set/archive/index.html.twig', [
             'courseSets' => $courseSets,
             'paginator' => $paginator,
             'users' => $users,
-        ));
+        ]);
     }
 
     public function archiveDetailAction($courseSetId)
@@ -116,7 +101,7 @@ class CourseSetController extends BaseController
         $tags = $this->getTagService()->findTagsByIds($tagIds);
         $category = $this->getCategoryService()->getCategory($courseSet['categoryId']);
         if (!$course) {
-            $courseDescription = array();
+            $courseDescription = [];
         } else {
             $courseDescription = $course['about'];
             $courseDescription = strip_tags($courseDescription, '');
@@ -124,14 +109,14 @@ class CourseSetController extends BaseController
             $courseDescription = substr($courseDescription, 0, 100);
         }
 
-        return $this->render('course-set/archive/course.html.twig', array(
+        return $this->render('course-set/archive/course.html.twig', [
             'courseSet' => $courseSet,
             'course' => $course,
             'tasks' => $tasks,
             'tags' => $tags,
             'category' => $category,
             'courseDescription' => $courseDescription,
-        ));
+        ]);
     }
 
     public function archiveTaskAction($courseSetId, $taskId)
@@ -143,24 +128,24 @@ class CourseSetController extends BaseController
         $tags = $this->getTagService()->findTagsByIds($tagIds);
 
         $tasks = $this->getTaskService()->findTasksByCourseId($course['id']);
-        if ($taskId == '' && $tasks != null) {
+        if ('' == $taskId && null != $tasks) {
             $currentTask = current($tasks);
         } else {
             $currentTask = $this->getTaskService()->getTask($taskId);
         }
 
-        return $this->render('course-set/archive/task.html.twig', array(
+        return $this->render('course-set/archive/task.html.twig', [
             'course' => $course,
             'courseSet' => $courseSet,
             'tasks' => $tasks,
             'currentTask' => $currentTask,
             'tags' => $tags,
-        ));
+        ]);
     }
 
     protected function getTagIdsByCourseSet(array $courseSet)
     {
-        $tags = $this->getTagService()->findTagsByOwner(array('ownerType' => 'course-set', 'ownerId' => $courseSet['id']));
+        $tags = $this->getTagService()->findTagsByOwner(['ownerType' => 'course-set', 'ownerId' => $courseSet['id']]);
 
         return ArrayToolkit::column($tags, 'id');
     }

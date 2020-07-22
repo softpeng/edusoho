@@ -30,4 +30,19 @@ abstract class Extension extends BizAware implements ExtensionInterface
     {
         return array();
     }
+
+    public function getCourseTypes()
+    {
+        return array();
+    }
+
+    public function getWeChatTemplates()
+    {
+        return array();
+    }
+
+    public function getNewComerTasks()
+    {
+        return array();
+    }
 }

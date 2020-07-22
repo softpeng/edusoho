@@ -3,12 +3,11 @@
 namespace Codeages\PluginBundle\Event;
 
 use Symfony\Component\Config\ConfigCache;
-use Symfony\Component\Config\Resource\FileResource;
+use Symfony\Component\Config\Resource\FileExistenceResource;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 class LazySubscribers
 {
-
     const DEFAULT_PRIORITY = 0;
     /**
      * @var ContainerInterface
@@ -79,7 +78,7 @@ class LazySubscribers
             return;
         }
 
-        $file = new FileResource($this->cache->getPath());
+        $file = new FileExistenceResource($this->cache->getPath());
 
         $eventMap = array();
 

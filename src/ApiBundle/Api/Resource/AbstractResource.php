@@ -3,43 +3,39 @@
 namespace ApiBundle\Api\Resource;
 
 use ApiBundle\Api\ApiRequest;
-use ApiBundle\Api\Exception\ErrorCode;
 use ApiBundle\Api\Util\ObjectCombinationUtil;
+use Biz\Common\CommonException;
 use Biz\User\CurrentUser;
 use Codeages\Biz\Framework\Context\Biz;
 use Codeages\Biz\Framework\Event\Event;
-use Monolog\Logger;
-use Monolog\Handler\StreamHandler;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
-use Topxia\Service\Common\ServiceKernel;
 
 abstract class AbstractResource
 {
     /**
      * @var Biz
      */
-    private $biz;
+    protected $biz;
 
-    private $container;
+    protected $container;
 
     const METHOD_SEARCH = 'search';
     const METHOD_GET = 'get';
     const METHOD_ADD = 'add';
     const METHOD_REMOVE = 'remove';
     const METHOD_UPDATE = 'update';
-    
+
     const DEFAULT_PAGING_LIMIT = 10;
     const DEFAULT_PAGING_OFFSET = 0;
     const MAX_PAGING_LIMIT = 100;
 
     const PREFIX_SORT_DESC = '-';
 
-    public function __construct(ContainerInterface $container)
+    public function __construct(ContainerInterface $container, Biz $biz)
     {
         $this->container = $container;
-        $this->biz = $container->get('biz');
+        $this->biz = $biz;
     }
 
     public function generateUrl($route, $parameters = array(), $referenceType = UrlGeneratorInterface::ABSOLUTE_PATH)
@@ -47,8 +43,16 @@ abstract class AbstractResource
         return $this->container->get('router')->generate($route, $parameters, $referenceType);
     }
 
+    public function getWebExtension()
+    {
+        return $this->container->get('web.twig.extension');
+    }
+
     public function renderView($view, array $parameters = array())
     {
+        //不推荐在API中使用renderView，不要继续使用
+        @trigger_error("renderView in Api is not recommended, dont't use in the future，will removed soon", E_USER_DEPRECATED);
+
         return $this->container->get('templating')->render($view, $parameters);
     }
 
@@ -73,7 +77,7 @@ abstract class AbstractResource
         $requestFields = array_keys($requestData);
         foreach ($requiredFields as $field) {
             if (!in_array($field, $requestFields)) {
-                throw new BadRequestHttpException("缺少必需的请求参数{$field}", null, ErrorCode::INVALID_ARGUMENT);
+                throw CommonException::ERROR_PARAMETER_MISSING();
             }
         }
 
@@ -98,8 +102,11 @@ abstract class AbstractResource
 
     protected function getSort(ApiRequest $request)
     {
-        $sortStr = $request->query->get('sort');
+        return $this->getSortByStr($request->query->get('sort'));
+    }
 
+    protected function getSortByStr($sortStr)
+    {
         if ($sortStr) {
             $explodeSort = explode(',', $sortStr);
 
@@ -107,7 +114,7 @@ abstract class AbstractResource
             foreach ($explodeSort as $part) {
                 $prefix = substr($part, 0, 1);
                 $field = str_replace(self::PREFIX_SORT_DESC, '', $part);
-                if ($prefix == self::PREFIX_SORT_DESC) {
+                if (self::PREFIX_SORT_DESC == $prefix) {
                     $sort[$field] = 'DESC';
                 } else {
                     $sort[$field] = 'ASC';
@@ -132,7 +139,7 @@ abstract class AbstractResource
             static::METHOD_GET,
             static::METHOD_SEARCH,
             static::METHOD_UPDATE,
-            static::METHOD_REMOVE
+            static::METHOD_REMOVE,
         );
     }
 
@@ -148,7 +155,17 @@ abstract class AbstractResource
     {
         return $this->container->get('api.plugin.config.manager')->isPluginInstalled($code);
     }
-    
+
+    public function getClientIp()
+    {
+        return $this->container->get('request_stack')->getMasterRequest()->getClientIp();
+    }
+
+    public function invokeResource(ApiRequest $apiRequest)
+    {
+        return $this->container->get('api_resource_kernel')->handleApiRequest($apiRequest);
+    }
+
     protected function makePagingObject($objects, $total, $offset, $limit)
     {
         return array(
@@ -156,8 +173,8 @@ abstract class AbstractResource
             'paging' => array(
                 'total' => $total,
                 'offset' => $offset,
-                'limit' => $limit
-            )
+                'limit' => $limit,
+            ),
         );
     }
 
@@ -167,11 +184,15 @@ abstract class AbstractResource
     protected function getCurrentUser()
     {
         $biz = $this->getBiz();
+
         return $biz['user'];
     }
 
-    protected function getServiceKernel()
+    /**
+     * @return \Biz\S2B2C\Service\S2B2CFacadeService
+     */
+    protected function getS2B2CFacadeService()
     {
-        return ServiceKernel::instance();
+        return $this->getBiz()->service('S2B2C:S2B2CFacadeService');
     }
 }

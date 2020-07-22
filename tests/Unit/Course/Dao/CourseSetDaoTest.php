@@ -53,6 +53,38 @@ class CourseSetDaoTest extends BaseDaoTestCase
         $this->assertEquals(array($expected[0], $expected[1]), $res);
     }
 
+    public function testFindLinkEmptyTitle()
+    {
+        $expected = array();
+        $expected[] = $this->mockDataObject();
+        $expected[] = $this->mockDataObject(array('title' => 'mm'));
+        $expected[] = $this->mockDataObject(array('title' => 'hehe'));
+
+        $res = $this->getDao()->findLikeTitle(null);
+
+        $this->assertEquals(array($expected[0], $expected[1], $expected[2]), $res);
+    }
+
+    public function testAnalysisCourseSetDataByTime()
+    {
+        $count = 10;
+
+        $startTime = time();
+        for ($i = 0; $i < $count; ++$i) {
+            $data = $this->getDefaultMockFields();
+            $this->getDao()->create($data);
+        }
+        $endTime = time();
+
+        $result = $this->getDao()->analysisCourseSetDataByTime($startTime, $endTime);
+
+        $expectedResult = array(array(
+            'count' => $count,
+            'date' => date('Y-m-d'),
+        ));
+        $this->assertArrayEquals($expectedResult, $result);
+    }
+
     protected function getDefaultMockFields()
     {
         return array(

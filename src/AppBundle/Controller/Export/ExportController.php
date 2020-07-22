@@ -11,7 +11,11 @@ class ExportController extends BaseController
     {
         $conditions = $request->query->all();
 
-        $export = $this->container->get('export_factory')->create($name, $conditions);
+        try {
+            $export = $this->container->get('export_factory')->create($name, $conditions);
+        } catch (\Exception $e) {
+            return $this->createJsonResponse(array('message' => $e->getMessage()));
+        }
         $response = array('success' => 1);
 
         $count = $export->getCount();
@@ -44,13 +48,9 @@ class ExportController extends BaseController
     public function preExportAction(Request $request, $name)
     {
         $conditions = $request->query->all();
-        try {
-            $exporter = $this->container->get('export_factory')->create($name, $conditions);
 
-            $result = $exporter->export($name);
-        } catch (\Exception $e) {
-            return $this->createJsonResponse(array('error' => $e->getMessage()));
-        }
+        $exporter = $this->container->get('export_factory')->create($name, $conditions);
+        $result = $exporter->export($name);
 
         return $this->createJsonResponse($result);
     }

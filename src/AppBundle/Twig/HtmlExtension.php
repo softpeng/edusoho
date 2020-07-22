@@ -27,6 +27,7 @@ class HtmlExtension extends \Twig_Extension
         return array(
             new \Twig_SimpleFunction('select_options', array($this, 'selectOptions'), $options),
             new \Twig_SimpleFunction('radios', array($this, 'radios'), $options),
+            new \Twig_SimpleFunction('cd_radios', array($this, 'cdRadios'), $options),
             new \Twig_SimpleFunction('checkboxs', array($this, 'checkboxs'), $options),
             new \Twig_SimpleFunction('field_value', array($this, 'fieldValue'), $options),
             new \Twig_SimpleFunction('countdown', array($this, 'countdown'), $options),
@@ -66,6 +67,7 @@ class HtmlExtension extends \Twig_Extension
         }
 
         foreach ($choices as $value => $name) {
+            $name = htmlspecialchars($name);
             if ($selected == $value) {
                 $html .= "<option value=\"{$value}\" selected=\"selected\">{$name}</option>";
             } else {
@@ -85,6 +87,21 @@ class HtmlExtension extends \Twig_Extension
                 $html .= "<label><input type=\"radio\" name=\"{$name}\" value=\"{$value}\" {$disable} checked=\"checked\"> {$label}</label>";
             } else {
                 $html .= "<label><input type=\"radio\" name=\"{$name}\" value=\"{$value}\" {$disable}> {$label}</label>";
+            }
+        }
+
+        return $html;
+    }
+
+    public function cdRadios($name, $choices, $checked = null, $disable = null)
+    {
+        $html = '';
+
+        foreach ($choices as $value => $label) {
+            if ($checked == $value) {
+                $html .= "<label class=\"cd-radio checked {$disable}\"><input type=\"radio\" name=\"{$name}\" value=\"{$value}\" {$disable} checked=\"checked\" data-toggle=\"cd-radio\"> {$label}</label>";
+            } else {
+                $html .= "<label class=\"cd-radio {$disable}\"><input type=\"radio\" name=\"{$name}\" value=\"{$value}\" {$disable} data-toggle=\"cd-radio\"> {$label}</label>";
             }
         }
 

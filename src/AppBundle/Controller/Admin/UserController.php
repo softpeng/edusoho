@@ -10,16 +10,19 @@ use Biz\Course\Service\CourseService;
 use Biz\Org\Service\OrgService;
 use Biz\Role\Service\RoleService;
 use Biz\System\Service\LogService;
-use Biz\System\Service\SessionService;
 use Biz\System\Service\SettingService;
 use Biz\User\Service\AuthService;
 use Biz\User\Service\NotificationService;
 use Biz\User\Service\TokenService;
 use Biz\User\Service\UserFieldService;
+use Biz\User\UserException;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class UserController extends BaseController
 {
+    private $keywordType = array('verifiedMobile', 'idcard');
+
     public function indexAction(Request $request)
     {
         $fields = $request->query->all();
@@ -48,12 +51,12 @@ class UserController extends BaseController
             $paginator->getPerPageCount()
         );
 
-        //根据mobile查询user_profile获得userIds
-
-        if (isset($conditions['keywordType']) && $conditions['keywordType'] == 'verifiedMobile' && !empty($conditions['keyword'])) {
-            $profilesCount = $this->getUserService()->searchUserProfileCount(array('mobile' => $conditions['keyword']));
+        //根据mobile或者idcard查询user_profile获得userIds
+        if (isset($conditions['keywordType']) && in_array($conditions['keywordType'], $this->keywordType) && !empty($conditions['keyword'])) {
+            $preConditions = $this->getUserProfileConditions($conditions);
+            $profilesCount = $this->getUserService()->searchUserProfileCount($preConditions);
             $userProfiles = $this->getUserService()->searchUserProfiles(
-                array('mobile' => $conditions['keyword']),
+                $preConditions,
                 array('id' => 'DESC'),
                 0,
                 $profilesCount
@@ -64,6 +67,10 @@ class UserController extends BaseController
                 unset($conditions['keywordType']);
                 unset($conditions['keyword']);
                 $conditions['userIds'] = array_merge(ArrayToolkit::column($users, 'userId'), $userIds);
+            } elseif ('idcard' == $conditions['keywordType']) {
+                unset($conditions['keywordType']);
+                unset($conditions['keyword']);
+                $conditions['userIds'] = empty($userIds) ? array(0) : $userIds;
             }
 
             $userCount = $this->getUserService()->countUsers($conditions);
@@ -153,7 +160,7 @@ class UserController extends BaseController
 
     protected function validateResult($result, $message)
     {
-        if ($result === 'success') {
+        if ('success' === $result) {
             $response = array('success' => true, 'message' => '');
         } else {
             $response = array('success' => false, 'message' => $message);
@@ -164,10 +171,11 @@ class UserController extends BaseController
 
     public function createAction(Request $request)
     {
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $formData = $request->request->all();
             $formData['type'] = 'import';
             $registration = $this->getRegisterData($formData, $request->getClientIp());
+
             $user = $this->getAuthService()->register($registration);
 
             $this->get('session')->set('registed_email', $user['email']);
@@ -204,6 +212,7 @@ class UserController extends BaseController
         $userData['password'] = $formData['password'];
         $userData['createdIp'] = $clientIp;
         $userData['type'] = $formData['type'];
+        $userData['passwordInit'] = 0;
 
         if (isset($formData['orgCode'])) {
             $userData['orgCode'] = $formData['orgCode'];
@@ -216,9 +225,9 @@ class UserController extends BaseController
     {
         $auth = $this->getSettingService()->get('auth');
 
-        if (isset($auth['register_mode']) && $auth['register_mode'] == 'email_or_mobile') {
+        if (isset($auth['register_mode']) && 'email_or_mobile' == $auth['register_mode']) {
             return 'admin/user/create-by-mobile-or-email-modal.html.twig';
-        } elseif (isset($auth['register_mode']) && $auth['register_mode'] == 'mobile') {
+        } elseif (isset($auth['register_mode']) && 'mobile' == $auth['register_mode']) {
             return 'admin/user/create-by-mobile-modal.html.twig';
         } else {
             return 'admin/user/create-modal.html.twig';
@@ -232,12 +241,11 @@ class UserController extends BaseController
         $profile = $this->getUserService()->getUserProfile($user['id']);
         $profile['title'] = $user['title'];
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $profile = $request->request->all();
 
             if (!((strlen($user['verifiedMobile']) > 0) && isset($profile['mobile']))) {
-                $profile = $this->getUserService()->updateUserProfile($user['id'], $profile);
-                $this->getLogService()->info('user', 'edit', "管理员编辑用户资料 {$user['nickname']} (#{$user['id']})", $profile);
+                $profile = $this->getUserService()->updateUserProfile($user['id'], $profile, false);
             } else {
                 $this->setFlashMessage('danger', 'user.settings.profile.unable_change_bind_mobile');
             }
@@ -291,7 +299,7 @@ class UserController extends BaseController
         $user = $this->getUserService()->getUser($id);
         $currentUser = $this->getUser();
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $roles = $request->request->get('roles');
 
             $this->getUserService()->changeUserRoles($user['id'], $roles);
@@ -334,7 +342,7 @@ class UserController extends BaseController
         foreach ($roles as $role) {
             if (in_array($role, $roleDictCodes)) {
                 $roleNames[] = $userRoleDict[$role];
-            } elseif ($role === 'ROLE_BACKEND') {
+            } elseif ('ROLE_BACKEND' === $role) {
                 continue;
             } else {
                 $role = $roleSet[$role];
@@ -396,7 +404,7 @@ class UserController extends BaseController
     {
         $user = $this->getUserService()->getUser($id);
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $options = $request->request->all();
             $this->getUserService()->changeAvatar($id, $options['images']);
 
@@ -440,7 +448,7 @@ class UserController extends BaseController
         $user = $this->getUserService()->getUser($id);
 
         if (empty($user)) {
-            throw $this->createNotFoundException();
+            $this->createNewException(UserException::NOTFOUND_USER());
         }
 
         $token = $this->getUserService()->makeToken('password-reset', $user['id'], strtotime('+1 day'));
@@ -451,7 +459,7 @@ class UserController extends BaseController
                 'template' => 'email_reset_password',
                 'params' => array(
                     'nickname' => $user['nickname'],
-                    'verifyurl' => $this->generateUrl('password_reset_update', array('token' => $token), true),
+                    'verifyurl' => $this->generateUrl('password_reset_update', array('token' => $token), UrlGeneratorInterface::ABSOLUTE_URL),
                     'sitename' => $site['name'],
                     'siteurl' => $site['url'],
                 ),
@@ -459,9 +467,9 @@ class UserController extends BaseController
             $mailFactory = $this->getBiz()->offsetGet('mail_factory');
             $mail = $mailFactory($mailOptions);
             $mail->send();
-            $this->getLogService()->info('user', 'send_password_reset', "管理员给用户 ${user['nickname']}({$user['id']}) 发送密码重置邮件");
+            $this->getLogService()->info('user', 'password-reset', "管理员给用户 ${user['nickname']}({$user['id']}) 发送密码重置邮件");
         } catch (\Exception $e) {
-            $this->getLogService()->error('user', 'send_password_reset', "管理员给用户 ${user['nickname']}({$user['id']}) 发送密码重置邮件失败：".$e->getMessage());
+            $this->getLogService()->error('user', 'password-reset', "管理员给用户 ${user['nickname']}({$user['id']}) 发送密码重置邮件失败：".$e->getMessage());
             throw $e;
         }
 
@@ -473,13 +481,13 @@ class UserController extends BaseController
         $user = $this->getUserService()->getUser($id);
 
         if (empty($user)) {
-            throw $this->createNotFoundException();
+            $this->createNewException(UserException::NOTFOUND_USER());
         }
 
         $token = $this->getUserService()->makeToken('email-verify', $user['id'], strtotime('+1 day'));
 
         $site = $this->getSettingService()->get('site', array());
-        $verifyurl = $this->generateUrl('register_email_verify', array('token' => $token), true);
+        $verifyurl = $this->generateUrl('register_email_verify', array('token' => $token), UrlGeneratorInterface::ABSOLUTE_URL);
 
         try {
             $mailOptions = array(
@@ -496,9 +504,9 @@ class UserController extends BaseController
             $mailFactory = $this->getBiz()->offsetGet('mail_factory');
             $mail = $mailFactory($mailOptions);
             $mail->send();
-            $this->getLogService()->info('user', 'send_email_verify', "管理员给用户 ${user['nickname']}({$user['id']}) 发送Email验证邮件");
+            $this->getLogService()->info('user', 'send_email_verify', "管理员给用户 {$user['nickname']}({$user['id']}) 发送Email验证邮件");
         } catch (\Exception $e) {
-            $this->getLogService()->error('user', 'send_email_verify', "管理员给用户 ${user['nickname']}({$user['id']}) 发送Email验证邮件失败：".$e->getMessage());
+            $this->getLogService()->error('user', 'send_email_verify', "管理员给用户 {$user['nickname']}({$user['id']}) 发送Email验证邮件失败：".$e->getMessage());
             throw $e;
         }
 
@@ -509,7 +517,7 @@ class UserController extends BaseController
     {
         $user = $this->getUserService()->getUser($userId);
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $formData = $request->request->all();
             $this->getAuthService()->changePassword($user['id'], null, $formData['newPassword']);
             $this->kickUserLogout($user['id']);
@@ -524,12 +532,20 @@ class UserController extends BaseController
 
     protected function kickUserLogout($userId)
     {
-        $this->getSessionService()->clearByUserId($userId);
         $tokens = $this->getTokenService()->findTokensByUserIdAndType($userId, 'mobile_login');
         if (!empty($tokens)) {
             foreach ($tokens as $token) {
                 $this->getTokenService()->destoryToken($token['token']);
             }
+        }
+    }
+
+    protected function getUserProfileConditions($conditions)
+    {
+        if ('verifiedMobile' == $conditions['keywordType']) {
+            return array('mobile' => $conditions['keyword']);
+        } else {
+            return array('idcard' => $conditions['keyword']);
         }
     }
 
@@ -563,14 +579,6 @@ class UserController extends BaseController
     protected function getSettingService()
     {
         return $this->createService('System:SettingService');
-    }
-
-    /**
-     * @return SessionService
-     */
-    protected function getSessionService()
-    {
-        return $this->createService('System:SessionService');
     }
 
     /**

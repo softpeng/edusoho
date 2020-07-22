@@ -1,10 +1,9 @@
 import Messenger from 'es-messenger';
-import Emitter from "component-emitter";
+import Emitter from 'component-emitter';
 
 export default class EsMessenger extends Emitter {
   constructor(options) {
     super();
-
     this.name = options.name;
     this.project = options.project;
     this.children = options.children;
@@ -48,7 +47,7 @@ export default class EsMessenger extends Emitter {
   }
 
   convertToString(eventName, args) {
-    var msg = {"eventName": eventName, "args": args};
+    var msg = {'eventName': eventName, 'args': args};
     msg = JSON.stringify(msg);
     return msg;
   }

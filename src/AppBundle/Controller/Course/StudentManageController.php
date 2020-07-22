@@ -3,23 +3,26 @@
 namespace AppBundle\Controller\Course;
 
 use AppBundle\Common\ArrayToolkit;
-use AppBundle\Common\ExportHelp;
 use AppBundle\Common\Paginator;
-use AppBundle\Common\SimpleValidator;
+use AppBundle\Common\TimeMachine;
 use AppBundle\Controller\BaseController;
 use Biz\Activity\Service\ActivityLearnLogService;
 use Biz\Activity\Service\ActivityService;
+use Biz\Course\MemberException;
 use Biz\Course\Service\CourseService;
 use Biz\Course\Service\CourseSetService;
 use Biz\Course\Service\LearningDataAnalysisService;
 use Biz\Course\Service\MemberService;
-use Biz\Order\Service\OrderService;
+use Biz\Course\Util\CourseTitleUtils;
+use Biz\MemberOperation\Service\MemberOperationService;
 use Biz\System\Service\SettingService;
 use Biz\Task\Service\TaskResultService;
 use Biz\Task\Service\TaskService;
 use Biz\Testpaper\Service\TestpaperService;
 use Biz\User\Service\UserFieldService;
 use Biz\User\Service\UserService;
+use Biz\User\UserException;
+use Codeages\Biz\Order\Service\OrderService;
 use Symfony\Component\HttpFoundation\Request;
 use Topxia\Service\Common\ServiceKernel;
 
@@ -27,46 +30,40 @@ class StudentManageController extends BaseController
 {
     public function studentsAction(Request $request, $courseSetId, $courseId)
     {
-        $courseSet = $this->getCourseSetService()->getCourseSet($courseSetId);
         $course = $this->getCourseService()->tryManageCourse($courseId, $courseSetId);
-        $followings = $this->findCurrentUserFollowings();
 
-        $keyword = $request->query->get('keyword', '');
-
-        $conditions = array(
+        $conditions = [
             'courseId' => $course['id'],
             'role' => 'student',
-        );
+        ];
 
+        $keyword = $request->query->get('keyword', '');
         if (!empty($keyword)) {
-            $conditions['userIds'] = $this->getUserIds($keyword);
+            $conditions['userIds'] = $this->getUserService()->getUserIdsByKeyword($keyword);
         }
 
         $paginator = new Paginator(
             $request,
             $this->getCourseMemberService()->countMembers($conditions),
-            20
+            50
         );
 
         $members = $this->getCourseMemberService()->searchMembers(
             $conditions,
-            array('createdTime' => 'DESC'),
+            ['createdTime' => 'DESC'],
             $paginator->getOffsetCount(),
             $paginator->getPerPageCount()
         );
         $this->appendLearningProgress($members);
 
-        $userIds = ArrayToolkit::column($members, 'userId');
-        $users = $this->getUserService()->findUsersByIds($userIds);
-
-        return $this->render('course-manage/student/index.html.twig', array(
-            'courseSet' => $courseSet,
+        return $this->render('course-manage/student/index.html.twig', [
+            'courseSet' => $this->getCourseSetService()->getCourseSet($courseSetId),
             'course' => $course,
             'students' => $members,
-            'followings' => $followings,
-            'users' => $users,
+            'followings' => $this->findCurrentUserFollowings(),
+            'users' => $this->getUserService()->findUsersByIds(array_column($members, 'userId')),
             'paginator' => $paginator,
-        ));
+        ]);
     }
 
     public function findCurrentUserFollowings()
@@ -77,74 +74,47 @@ class StudentManageController extends BaseController
             return ArrayToolkit::index($followings, 'id');
         }
 
-        return array();
+        return [];
     }
 
-    public function studentQuitRecordsAction(Request $request, $courseSetId, $courseId)
+    public function studentRecordsAction(Request $request, $courseSetId, $courseId, $type)
     {
         $courseSet = $this->getCourseSetService()->getCourseSet($courseSetId);
         $course = $this->getCourseService()->tryManageCourse($courseId, $courseSetId);
 
-        $fields = $request->query->all();
-        $condition = array();
-
-        if (isset($fields['keyword']) && !empty($fields['keyword'])) {
-            $condition['userIds'] = $this->getUserIds($fields['keyword']);
-        }
-
-        $condition['targetId'] = $courseId;
-        $condition['targetType'] = 'course';
-        $condition['status'] = 'success';
-
-        $paginator = new Paginator(
-            $request,
-            $this->getOrderService()->countRefunds($condition),
-            20
-        );
-
-        $refunds = $this->getOrderService()->searchRefunds(
-            $condition,
-            array('createdTime' => 'DESC'),
-            $paginator->getOffsetCount(),
-            $paginator->getPerPageCount()
-        );
-
-        foreach ($refunds as $key => $refund) {
-            $refunds[$key]['user'] = $this->getUserService()->getUser($refund['userId']);
-
-            $refunds[$key]['order'] = $this->getOrderService()->getOrder($refund['orderId']);
-        }
-
         return $this->render(
-            'course-manage/student/quit-records.html.twig',
-            array(
+            'course-manage/student/records.html.twig',
+            [
                 'courseSet' => $courseSet,
                 'course' => $course,
-                'refunds' => $refunds,
-                'paginator' => $paginator,
-                'role' => 'student',
-            )
+                'type' => $type,
+            ]
         );
     }
 
     public function createCourseStudentAction(Request $request, $courseSetId, $courseId)
     {
+        $operateUser = $this->getUser();
+        $courseSetting = $this->getSettingService()->get('course');
+        if (!$operateUser->isAdmin() && empty($courseSetting['teacher_manage_student'])) {
+            $this->createNewException(UserException::PERMISSION_DENIED());
+        }
+
         if ($request->isMethod('POST')) {
             $data = $request->request->all();
-            $user = $this->getUserService()->getUserByLoginField($data['queryfield']);
+            $user = $this->getUserService()->getUserByLoginField($data['queryfield'], true);
 
-            if ($this->getCurrentUser()->isAdmin()) {
-                $data['isAdminAdded'] = true;
-            }
-
+            $data['source'] = 'outside';
+            $data['remark'] = empty($data['remark']) ? $operateUser['nickname'].'添加' : $data['remark'];
             $data['userId'] = $user['id'];
             $this->getCourseMemberService()->becomeStudentAndCreateOrder($user['id'], $courseId, $data);
+
             $this->setFlashMessage('success', 'site.add.success');
 
             return $this->redirect(
                 $this->generateUrl(
                     'course_set_manage_course_students',
-                    array('courseSetId' => $courseSetId, 'courseId' => $courseId)
+                    ['courseSetId' => $courseSetId, 'courseId' => $courseId]
                 )
             );
         }
@@ -152,37 +122,33 @@ class StudentManageController extends BaseController
 
         return $this->render(
             'course-manage/student/add-modal.html.twig',
-            array(
+            [
                 'course' => $course,
                 'courseSetId' => $courseSetId,
-            )
+            ]
         );
     }
 
     public function removeCourseStudentAction($courseSetId, $courseId, $userId)
     {
         $this->getCourseService()->tryManageCourse($courseId, $courseSetId);
-        $user = $this->getCurrentUser();
 
-        $condition = array(
-            'targetType' => 'course',
-            'targetId' => $courseId,
-            'userId' => $userId,
-            'status' => 'paid',
-        );
-        $orders = $this->getOrderService()->searchOrders($condition, array('createdTime' => 'DESC'), 0, 1);
-        if (!empty($orders)) {
-            $order = array_shift($orders);
-            $reason = array(
-                'type' => 'other',
-                'note' => '"'.$user['nickname'].'"'.' 手动移除',
-                'operator' => $user['id'],
-            );
-            $this->getOrderService()->applyRefundOrder($order['id'], null, $reason);
-        }
         $this->getCourseMemberService()->removeCourseStudent($courseId, $userId);
 
-        return $this->createJsonResponse(array('success' => true));
+        return $this->createJsonResponse(['success' => true]);
+    }
+
+    public function removeCourseStudentsAction(Request $request, $courseSetId, $courseId)
+    {
+        $this->getCourseService()->tryManageCourse($courseId, $courseSetId);
+
+        $studentIds = $request->request->get('studentIds', []);
+        if (empty($this->getUserService()->findUsersByIds($studentIds))) {
+            return $this->createJsonResponse(['success' => false]);
+        }
+        $this->getCourseMemberService()->removeCourseStudents($courseId, $studentIds);
+
+        return $this->createJsonResponse(['success' => true]);
     }
 
     public function remarkAction(Request $request, $courseSetId, $courseId, $userId)
@@ -192,54 +158,89 @@ class StudentManageController extends BaseController
         $member = $this->getCourseMemberService()->getCourseMember($courseId, $userId);
 
         if (empty($member)) {
-            throw $this->createAccessDeniedException(sprintf('学员#%s不属于教学计划#%s', $userId, $courseId));
+            $this->createNewException(MemberException::NOTFOUND_MEMBER());
         }
 
         if ($request->isMethod('POST')) {
             $data = $request->request->all();
-            $member = $this->getCourseMemberService()->remarkStudent($course['id'], $user['id'], $data['remark']);
+            $this->getCourseMemberService()->remarkStudent($course['id'], $user['id'], $data['remark']);
 
-            return $this->createJsonResponse(array('success' => 1));
+            return $this->createJsonResponse(['success' => 1]);
         }
-        $default = $this->getSettingService()->get('default', array());
+        $default = $this->getSettingService()->get('default', []);
 
         return $this->render(
             'course-manage/student/remark-modal.html.twig',
-            array(
+            [
                 'member' => $member,
                 'user' => $user,
                 'course' => $course,
                 'default' => $default,
-            )
+            ]
         );
     }
 
-    public function addMemberExpiryDaysAction(Request $request, $courseId, $userId)
+    public function batchUpdateMemberDeadlinesAction(Request $request, $courseId)
     {
-        $user = $this->getUserService()->getUser($userId);
-        $course = $this->getCourseService()->getCourse($courseId);
-        if ($request->getMethod() === 'POST') {
+        $course = $this->getCourseService()->tryManageCourse($courseId);
+        $ids = $request->query->get('ids');
+        $ids = is_array($ids) ? $ids : explode(',', $ids);
+        if ('POST' === $request->getMethod()) {
             $fields = $request->request->all();
-            $this->getCourseMemberService()->addMemberExpiryDays($courseId, $userId, $fields['expiryDay']);
+            if ('day' == $fields['updateType']) {
+                $this->getCourseMemberService()->batchUpdateMemberDeadlinesByDay($courseId, $ids, $fields['day'], $fields['waveType']);
+
+                return $this->createJsonResponse(true);
+            }
+            $this->getCourseMemberService()->batchUpdateMemberDeadlinesByDate($courseId, $ids, $fields['deadline']);
 
             return $this->createJsonResponse(true);
         }
-        $default = $this->getSettingService()->get('default', array());
+        $users = $this->getUserService()->findUsersByIds($ids);
+
+        $course['title'] = CourseTitleUtils::getDisplayedTitle($course);
 
         return $this->render(
-            'course-manage/student/set-expiryday-modal.html.twig',
-            array(
+            'course-manage/student/set-deadline-modal.html.twig',
+            [
                 'course' => $course,
-                'user' => $user,
-                'default' => $default,
-            )
+                'users' => $users,
+                'ids' => implode(',', ArrayToolkit::column($users, 'id')),
+                'default' => $this->getSettingService()->get('default', []),
+            ]
         );
+    }
+
+    public function checkDayAction(Request $request, $courseId)
+    {
+        $waveType = $request->query->get('waveType');
+        $day = $request->query->get('day');
+        $ids = $request->query->get('ids');
+        $ids = is_array($ids) ? $ids : explode(',', $ids);
+        if ($this->getCourseMemberService()->checkDayAndWaveTypeForUpdateDeadline($courseId, $ids, $day, $waveType)) {
+            return $this->createJsonResponse(true);
+        }
+
+        return $this->createJsonResponse(false);
+    }
+
+    public function checkDeadlineAction(Request $request, $courseId)
+    {
+        $deadline = $request->query->get('deadline');
+        $deadline = TimeMachine::isTimestamp($deadline) ? $deadline : strtotime($deadline.' 23:59:59');
+        $ids = $request->query->get('ids');
+        $ids = is_array($ids) ? $ids : explode(',', $ids);
+        if ($this->getCourseMemberService()->checkDeadlineForUpdateDeadline($courseId, $ids, $deadline)) {
+            return $this->createJsonResponse(true);
+        }
+
+        return $this->createJsonResponse(false);
     }
 
     public function checkStudentAction(Request $request, $courseSetId, $courseId)
     {
         $keyword = $request->query->get('value');
-        $user = $this->getUserService()->getUserByLoginField($keyword);
+        $user = $this->getUserService()->getUserByLoginField($keyword, true);
 
         $response = true;
         if (!$user) {
@@ -264,27 +265,32 @@ class StudentManageController extends BaseController
     public function showAction(Request $request, $courseSetId, $courseId, $userId)
     {
         if (!$this->getCurrentUser()->isAdmin()) {
-            throw $this->createAccessDeniedException('您无权查看学员详细信息！');
+            $this->createNewException(UserException::PERMISSION_DENIED());
         }
 
-        return $this->forward('AppBundle:Student:show', array(
+        return $this->forward('AppBundle:Student:show', [
             'request' => $request,
             'userId' => $userId,
-        ));
+        ]);
     }
 
     public function definedShowAction(Request $request, $courseId, $userId)
     {
-        $course = $this->getCourseService()->tryManageCourse($courseId);
-        $member = $this->getCourseMemberService()->getCourseMember($courseId, $userId);
-        if (empty($member)) {
-            throw $this->createAccessDeniedException(sprintf('学员#%s不属于教学计划#%s', $userId, $courseId));
+        if (!$this->getCurrentUser()->isAdmin()) {
+            return $this->createMessageResponse('error', '您无权查看学员详细信息！');
         }
 
-        return $this->forward('AppBundle:Student:definedShow', array(
+        $this->getCourseService()->tryManageCourse($courseId);
+        $member = $this->getCourseMemberService()->getCourseMember($courseId, $userId);
+
+        if (empty($member)) {
+            return $this->createMessageResponse('error', sprintf('学员#%s不属于教学计划#%s的学员', $userId, $courseId));
+        }
+
+        return $this->forward('AppBundle:Student:definedShow', [
             'request' => $request,
             'userId' => $userId,
-        ));
+        ]);
     }
 
     public function studyProcessAction($courseSetId, $courseId, $userId)
@@ -293,7 +299,7 @@ class StudentManageController extends BaseController
 
         $student = $this->getCourseMemberService()->getCourseMember($courseId, $userId);
         if (empty($student)) {
-            throw $this->createNotFoundException("Student#{$userId} Not Found");
+            $this->createNewException(MemberException::NOTFOUND_MEMBER());
         }
         $user = $this->getUserService()->getUser($student['userId']);
 
@@ -309,7 +315,7 @@ class StudentManageController extends BaseController
 
         return $this->render(
             'course-manage/student/process-modal.html.twig',
-            array(
+            [
                 'course' => $course,
                 'student' => $student,
                 'user' => $user,
@@ -320,7 +326,7 @@ class StudentManageController extends BaseController
                 'daysCount' => $daysCount,
                 'learnedTime' => round($learnedTime / 60 / 60, 2, PHP_ROUND_HALF_EVEN),
                 'learnedTimePerDay' => round($learnedTimePerDay / 60 / 60, 2, PHP_ROUND_HALF_EVEN),
-            )
+            ]
         );
     }
 
@@ -329,144 +335,6 @@ class StudentManageController extends BaseController
         $reportCard = $this->createReportCard($course, $user);
 
         return $this->render('course-manage/student/report-card.html.twig', $reportCard);
-    }
-
-    public function exportCsvAction(Request $request, $courseSetId, $courseId)
-    {
-        $fileName = sprintf('course-%s-students-(%s).csv', $courseId, date('Y-n-d'));
-
-        return ExportHelp::exportCsv($request, $fileName);
-    }
-
-    public function exportDatasAction(Request $request, $courseSetId, $courseId)
-    {
-        $courseSetting = $this->getSettingService()->get('course', array());
-        if (!$this->hasAdminRole() || !empty($courseSetting['teacher_export_student'])) {
-            $this->getCourseService()->tryManageCourse($courseId, $courseSetId);
-        }
-
-        list($start, $limit, $exportAllowCount) = ExportHelp::getMagicExportSetting($request);
-
-        list($title, $students, $courseMemberCount) = $this->getExportContent(
-            $courseId,
-            $start,
-            $limit,
-            $exportAllowCount
-        );
-
-        $file = '';
-        if ($start == 0) {
-            $file = ExportHelp::addFileTitle($request, 'course_students', $title);
-        }
-
-        $content = implode("\r\n", $students);
-        $file = ExportHelp::saveToTempFile($request, $content, $file);
-
-        $status = ExportHelp::getNextMethod($start + $limit, $courseMemberCount);
-
-        return $this->createJsonResponse(
-            array(
-                'status' => $status,
-                'fileName' => $file,
-                'start' => $start + $limit,
-            )
-        );
-    }
-
-    protected function getExportContent($id, $start, $limit, $exportAllowCount)
-    {
-        $gender = array(
-            'female' => $this->getServiceKernel()->trans('女'),
-            'male' => $this->getServiceKernel()->trans('男'),
-            'secret' => $this->getServiceKernel()->trans('秘密'),
-        );
-
-        $userinfoFields = array();
-
-        $course = $this->getCourseService()->getCourse($id);
-        $courseSetting = $this->setting('course', array());
-
-        if (isset($courseSetting['userinfoFields'])) {
-            $userinfoFields = array_diff(
-                $courseSetting['userinfoFields'],
-                array('truename', 'job', 'mobile', 'qq', 'company', 'gender', 'idcard', 'weixin')
-            );
-        }
-
-        $condition = array(
-            'courseId' => $course['id'],
-            'role' => 'student',
-        );
-
-        $courseMemberCount = $this->getCourseMemberService()->countMembers($condition);
-
-        $courseMemberCount = ($courseMemberCount > $exportAllowCount) ? $exportAllowCount : $courseMemberCount;
-        if ($courseMemberCount < ($start + $limit + 1)) {
-            $limit = $courseMemberCount - $start;
-        }
-        $courseMembers = $this->getCourseMemberService()->searchMembers(
-            $condition,
-            array('createdTime' => 'DESC'),
-            $start,
-            $limit
-        );
-        $userFields = $this->getUserFieldService()->getEnabledFieldsOrderBySeq();
-
-        $fields['weibo'] = $this->getServiceKernel()->trans('微博');
-
-        foreach ($userFields as $userField) {
-            $fields[$userField['fieldName']] = $userField['title'];
-        }
-
-        $userinfoFields = array_flip($userinfoFields);
-
-        $fields = array_intersect_key($fields, $userinfoFields);
-
-        if (empty($courseSetting['buy_fill_userinfo'])) {
-            $fields = array();
-        }
-
-        $studentUserIds = ArrayToolkit::column($courseMembers, 'userId');
-
-        $users = $this->getUserService()->findUsersByIds($studentUserIds);
-        $users = ArrayToolkit::index($users, 'id');
-
-        $profiles = $this->getUserService()->findUserProfilesByIds($studentUserIds);
-        $profiles = ArrayToolkit::index($profiles, 'id');
-
-        $this->appendLearningProgress($courseMembers);
-
-        $str = $this->getServiceKernel()->trans('用户名,Email,加入学习时间,学习进度,姓名,性别,QQ号,微信号,手机号,公司,职业,头衔');
-
-        foreach ($fields as $key => $value) {
-            $str .= ','.$value;
-        }
-
-        $students = array();
-
-        foreach ($courseMembers as $courseMember) {
-            $member = '';
-            $member .= $users[$courseMember['userId']]['nickname'].',';
-            $member .= $users[$courseMember['userId']]['email'].',';
-            $member .= date('Y-n-d H:i:s', $courseMember['createdTime']).',';
-            $member .= $courseMember['learningProgressPercent'].',';
-            $member .= $profiles[$courseMember['userId']]['truename'] ? $profiles[$courseMember['userId']]['truename'].',' : '-'.',';
-            $member .= $gender[$profiles[$courseMember['userId']]['gender']].',';
-            $member .= $profiles[$courseMember['userId']]['qq'] ? $profiles[$courseMember['userId']]['qq'].',' : '-'.',';
-            $member .= $profiles[$courseMember['userId']]['weixin'] ? $profiles[$courseMember['userId']]['weixin'].',' : '-'.',';
-            $member .= $profiles[$courseMember['userId']]['mobile'] ? $profiles[$courseMember['userId']]['mobile'].',' : '-'.',';
-            $member .= $profiles[$courseMember['userId']]['company'] ? $profiles[$courseMember['userId']]['company'].',' : '-'.',';
-            $member .= $profiles[$courseMember['userId']]['job'] ? $profiles[$courseMember['userId']]['job'].',' : '-'.',';
-            $member .= $users[$courseMember['userId']]['title'] ? $users[$courseMember['userId']]['title'].',' : '-'.',';
-
-            foreach ($fields as $key => $value) {
-                $member .= $profiles[$courseMember['userId']][$key] ? $profiles[$courseMember['userId']][$key].',' : '-'.',';
-            }
-
-            $students[] = $member;
-        }
-
-        return array($str, $students, $courseMemberCount);
     }
 
     private function appendLearningProgress(&$members)
@@ -489,131 +357,112 @@ class StudentManageController extends BaseController
 
     private function createReportCard($course, $user)
     {
-        $reportCard = array();
-
-        //homeworks&testpapers合并处理，定义为：test(type=[homework,testpaper])
-        $activities = array();
-        $allTests = array();
-        $finishedTests = array();
-        $reviewingTests = array();
-        $bestTests = array();
+        $reportCard = [];
+        $activities = [];
         $homeworksCount = 0;
         $testpapersCount = 0;
         $finishedHomeworksCount = 0;
         $finishedTestpapersCount = 0;
 
         $tasks = $this->getTaskService()->findTasksByCourseId($course['id']);
-
-        if (empty($tasks)) {
-            goto result;
-        }
         $activitiyIds = ArrayToolkit::column($tasks, 'activityId');
         $activitiesWithMeta = $this->getActivityService()->findActivities($activitiyIds, true);
 
         foreach ($activitiesWithMeta as $activity) {
-            if ($activity['mediaType'] === 'homework') {
-                $homeworksCount += 1;
-                $activities[] = array(
+            if ('homework' === $activity['mediaType']) {
+                ++$homeworksCount;
+                $activities[] = [
                     'id' => $activity['id'],
-                    'mediaId' => $activity['mediaId'],
+                    'mediaType' => 'homework',
+                    'mediaId' => $activity['ext']['assessmentId'],
                     'name' => $activity['title'],
-                );
-            } elseif ($activity['mediaType'] === 'testpaper') {
-                $testpapersCount += 1;
-                $activities[] = array(
+                    'answerSceneId' => $activity['ext']['answerSceneId'],
+                ];
+            } elseif ('testpaper' === $activity['mediaType']) {
+                ++$testpapersCount;
+                $activities[] = [
                     'id' => $activity['id'],
+                    'mediaType' => 'testpaper',
                     'mediaId' => $activity['ext']['mediaId'],
                     'name' => $activity['title'],
-                );
+                    'answerSceneId' => $activity['ext']['answerSceneId'],
+                ];
             }
         }
 
-        $finishedTargets = array();
-        $reviewingTargets = array();
-        if (!empty($activities)) {
-            $testIds = ArrayToolkit::column($activities, 'mediaId');
-            $allTests = $this->getTestpaperService()->searchTestpapers(
-                array(
-                    'ids' => $testIds,
-                ),
-                array('createdTime' => 'ASC'),
-                0,
-                PHP_INT_MAX
-            );
-
-            $finishedTargets = $this->getTestpaperService()->searchTestpaperResults(
-                array(
-                    'courseId' => $course['id'],
-                    'userId' => $user['id'],
-                    'status' => 'finished',
-                    'types' => array('homework', 'testpaper'),
-                ),
-                array('lessonId' => 'ASC', 'beginTime' => 'ASC'),
-                0,
-                PHP_INT_MAX
-            );
-
-            $reviewingTargets = $this->getTestpaperService()->searchTestpaperResults(
-                array(
-                    'courseId' => $course['id'],
-                    'userId' => $user['id'],
-                    'status' => 'reviewing',
-                    'types' => array('homework', 'testpaper'),
-                ),
-                array('lessonId' => 'ASC', 'beginTime' => 'ASC'),
-                0,
-                PHP_INT_MAX
-            );
+        if (empty($activities)) {
+            return [
+                'finishedHomeworksCount' => 0,
+                'finishedTestpapersCount' => 0,
+            ];
         }
 
-        if (!empty($finishedTargets)) {
-            $currentActivityId = 0;
-            foreach ($finishedTargets as $target) {
-                if ($currentActivityId == 0 || $currentActivityId != $target['lessonId']) {
-                    $currentActivityId = $target['lessonId'];
-                }
-                if ($target['type'] === 'homework') {
-                    $finishedHomeworksCount += 1;
+        $assessments = $this->getAssessmentService()->findAssessmentsByIds(ArrayToolkit::column($activities, 'mediaId'));
+        $activities = ArrayToolkit::index($activities, 'answerSceneId');
+
+        $answerRecords = $this->getAnswerRecordService()->search(
+            ['user_id' => $user['id'], 'answer_scene_ids' => ArrayToolkit::column($activities, 'answerSceneId')],
+            [],
+            0,
+            PHP_INT_MAX
+        );
+        $answerReports = ArrayToolkit::index(
+            $this->getAnswerReportService()->findByIds(ArrayToolkit::column($answerRecords, 'answer_report_id')),
+            'id'
+        );
+        foreach ($answerRecords as &$answerRecord) {
+            if (empty($answerReports[$answerRecord['answer_report_id']])) {
+                $answerRecord['score'] = 0;
+                $answerRecord['grade'] = 'none';
+                $answerRecord['comment'] = '';
+            } else {
+                $answerRecord['score'] = $answerReports[$answerRecord['answer_report_id']]['score'];
+                $answerRecord['grade'] = $answerReports[$answerRecord['answer_report_id']]['grade'];
+                $answerRecord['comment'] = $answerReports[$answerRecord['answer_report_id']]['comment'];
+            }
+        }
+        $answerRecords = ArrayToolkit::group($answerRecords, 'answer_scene_id');
+
+        foreach ($answerRecords as $answerSceneId => &$answerSceneRecords) {
+            $answerSceneRecords = ArrayToolkit::group($answerSceneRecords, 'status');
+            !isset($answerSceneRecords['finished']) && $answerSceneRecords['finished'] = [];
+            !isset($answerSceneRecords['paused']) && $answerSceneRecords['paused'] = [];
+            !isset($answerSceneRecords['doing']) && $answerSceneRecords['doing'] = [];
+            !isset($answerSceneRecords['reviewing']) && $answerSceneRecords['reviewing'] = [];
+            if (empty($answerSceneRecords['finished']) && empty($answerSceneRecords['reviewing'])) {
+                continue;
+            }
+            if (!empty($answerSceneRecords['finished']) || !empty($answerSceneRecords['reviewing'])) {
+                if ('testpaper' == $activities[$answerSceneId]['mediaType']) {
+                    ++$finishedTestpapersCount;
+                    $sortRecords = ArrayToolkit::sortPerArrayValue($answerSceneRecords['finished'], 'score', false);
+                    $answerSceneRecords['bestRecord'] = empty($sortRecords[0]) ? [] : $sortRecords[0];
                 } else {
-                    $finishedTestpapersCount += 1;
+                    ++$finishedHomeworksCount;
+                    $bestRecord = [];
+                    $homeworkGroupGrade = ArrayToolkit::group($answerSceneRecords['finished'], 'grade');
+                    if (!empty($homeworkGroupGrade['excellent'])) {
+                        $bestRecord = $homeworkGroupGrade['excellent'][0];
+                    } elseif (!empty($homeworkGroupGrade['good'])) {
+                        $bestRecord = $homeworkGroupGrade['good'][0];
+                    } elseif (!empty($homeworkGroupGrade['passed'])) {
+                        $bestRecord = $homeworkGroupGrade['passed'][0];
+                    } elseif (!empty($homeworkGroupGrade['unpassed'])) {
+                        $bestRecord = $homeworkGroupGrade['unpassed'][0];
+                    } elseif (!empty($homeworkGroupGrade['none'])) {
+                        $bestRecord = $homeworkGroupGrade['none'][0];
+                    } else {
+                        $bestRecord = [];
+                    }
+                    $answerSceneRecords['bestRecord'] = $bestRecord;
                 }
-
-                if (empty($bestTests[$currentActivityId])) {
-                    $bestTests[$currentActivityId] = array();
-                }
-                if ($this->gradeBetterThan($target, $bestTests[$currentActivityId])) {
-                    $bestTests[$currentActivityId] = $target;
-                }
-
-                if (empty($finishedTests[$currentActivityId])) {
-                    $finishedTests[$currentActivityId] = array();
-                }
-                $finishedTests[$currentActivityId][] = $target;
             }
+
+            $activities[$answerSceneId]['data'] = $answerSceneRecords;
         }
 
-        if (!empty($reviewingTargets)) {
-            $currentActivityId = 0;
-            foreach ($reviewingTargets as $target) {
-                if ($currentActivityId == 0 || $currentActivityId != $target['lessonId']) {
-                    $currentActivityId = $target['lessonId'];
-                }
-                if (empty($reviewingTests[$currentActivityId])) {
-                    $reviewingTests[$currentActivityId] = array();
-                }
-                $reviewingTests[$currentActivityId][] = $target;
-            }
-        }
-
-        goto result;
-
-        result:
         $reportCard['activities'] = $activities;
-        $reportCard['allTests'] = ArrayToolkit::index($allTests, 'id');
-        $reportCard['finishedTests'] = $finishedTests;
-        $reportCard['reviewingTests'] = $reviewingTests;
-        $reportCard['bestTests'] = $bestTests;
-
+        $reportCard['assessments'] = $assessments;
         $reportCard['homeworksCount'] = $homeworksCount;
         $reportCard['testpapersCount'] = $testpapersCount;
         $reportCard['finishedHomeworksCount'] = $finishedHomeworksCount;
@@ -628,7 +477,7 @@ class StudentManageController extends BaseController
             return true;
         }
 
-        $levels = array('excellent', 'good', 'passed', 'unpassed', 'none');
+        $levels = ['excellent', 'good', 'passed', 'unpassed', 'none'];
         $levels = array_values($levels);
         $sourceIndex = array_search($source['passedStatus'], $levels);
         $targetIndex = array_search($target['passedStatus'], $levels);
@@ -641,36 +490,6 @@ class StudentManageController extends BaseController
         }
 
         return false;
-    }
-
-    private function getUserIds($keyword)
-    {
-        if (SimpleValidator::email($keyword)) {
-            $user = $this->getUserService()->getUserByEmail($keyword);
-
-            return $user ? array($user['id']) : array(-1);
-        }
-        if (SimpleValidator::mobile($keyword)) {
-            $mobileVerifiedUser = $this->getUserService()->getUserByVerifiedMobile($keyword);
-            $profileUsers = $this->getUserService()->searchUserProfiles(
-                array('tel' => $keyword),
-                array('id' => 'DESC'),
-                0,
-                PHP_INT_MAX
-            );
-            $mobileNameUser = $this->getUserService()->getUserByNickname($keyword);
-            $userIds = $profileUsers ? ArrayToolkit::column($profileUsers, 'id') : null;
-
-            $userIds[] = $mobileVerifiedUser ? $mobileVerifiedUser['id'] : null;
-            $userIds[] = $mobileNameUser ? $mobileNameUser['id'] : null;
-
-            $userIds = array_unique($userIds);
-
-            return $userIds ? $userIds : array(-1);
-        }
-        $user = $this->getUserService()->getUserByNickname($keyword);
-
-        return $user ? array($user['id']) : array(-1);
     }
 
     /**
@@ -775,6 +594,29 @@ class StudentManageController extends BaseController
     protected function getLearningDataAnalysisService()
     {
         return $this->createService('Course:LearningDataAnalysisService');
+    }
+
+    /**
+     * @return MemberOperationService
+     */
+    protected function getMemberOperationService()
+    {
+        return $this->createService('MemberOperation:MemberOperationService');
+    }
+
+    protected function getAnswerRecordService()
+    {
+        return $this->createService('ItemBank:Answer:AnswerRecordService');
+    }
+
+    protected function getAnswerReportService()
+    {
+        return $this->createService('ItemBank:Answer:AnswerReportService');
+    }
+
+    protected function getAssessmentService()
+    {
+        return $this->createService('ItemBank:Assessment:AssessmentService');
     }
 
     protected function getServiceKernel()

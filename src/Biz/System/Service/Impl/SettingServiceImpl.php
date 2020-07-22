@@ -23,6 +23,46 @@ class SettingServiceImpl extends BaseService implements SettingService
         $this->clearCache();
     }
 
+    /**
+     * @param $name
+     * @param null $default
+     *
+     * @return array|mixed|null
+     *                          get single node setting; eg: 'site.name.test' => get('site')['name']['test']
+     */
+    public function node($name, $default = null)
+    {
+        $names = explode('.', $name);
+
+        $name = array_shift($names);
+
+        if (empty($name)) {
+            return $default;
+        }
+
+        $value = $this->get($name);
+
+        if (!isset($value)) {
+            return $default;
+        }
+
+        if (empty($names)) {
+            return $value;
+        }
+
+        $result = $value;
+
+        foreach ($names as $name) {
+            if (!isset($result[$name])) {
+                return $default;
+            }
+
+            $result = $result[$name];
+        }
+
+        return $result;
+    }
+
     public function get($name, $default = array())
     {
         if (is_null($this->cached)) {
@@ -77,6 +117,13 @@ class SettingServiceImpl extends BaseService implements SettingService
         $this->clearCache();
     }
 
+    public function isReservationOpen()
+    {
+        $setting = $this->get('plugin_reservation', array());
+
+        return !empty($setting['reservation_enabled']) && 1 == $setting['reservation_enabled'];
+    }
+
     protected function clearCache()
     {
         $this->getCacheService()->clear(self::CACHE_NAME);
@@ -97,7 +144,7 @@ class SettingServiceImpl extends BaseService implements SettingService
     {
         try {
             $user = $this->getCurrentUser()->toArray();
-            if (empty($user['selectedOrgId']) || $user['selectedOrgId'] === 1) {
+            if (empty($user['selectedOrgId']) || 1 === $user['selectedOrgId']) {
                 return 'default';
             }
 

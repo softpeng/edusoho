@@ -15,7 +15,7 @@ class ActivityLearnLogDaoImpl extends GeneralDaoImpl implements ActivityLearnLog
     public function create($fields)
     {
         $month = date('m', time());
-        if ($month % 2 !== 0) {
+        if (0 !== $month % 2) {
             return parent::create($fields);
         }
         $lock = $this->getLock();
@@ -64,20 +64,23 @@ class ActivityLearnLogDaoImpl extends GeneralDaoImpl implements ActivityLearnLog
      * 对activity_learn_log分表后无法使用该方式统计用户对某一课程的累计学习天数，应使用临时表的方式解决：
      * 即：定时将activity_learn_log原始数据按照业务进行精简汇总保存到某临时表中，从临时表查询所需数据
      *
-     * @param $courseId
+     * @param $activityIds
      * @param $userId
      *
      * @return int
      */
-    public function countLearnedDaysByCourseIdAndUserId($courseId, $userId)
+    public function countLearnedDaysByActivityIdsAndUserId($activityIds, $userId)
     {
+        if (empty($activityIds)) {
+            return 0;
+        }
+
+        $marks = str_repeat('?,', count($activityIds) - 1).'?';
         $sql = "SELECT count(distinct (from_unixtime(createdTime, '%Y-%m-%d')))
                 FROM {$this->table()}
-                WHERE userId = ? AND activityId IN (
-                    SELECT id FROM activity WHERE fromCourseId = ?
-                    )";
+                WHERE userId = ? AND activityId IN ({$marks});";
 
-        return $this->db()->fetchColumn($sql, array($userId, $courseId)) ?: 0;
+        return $this->db()->fetchColumn($sql, array_merge(array($userId), $activityIds)) ?: 0;
     }
 
     public function deleteByActivityId($activityId)
@@ -92,6 +95,19 @@ class ActivityLearnLogDaoImpl extends GeneralDaoImpl implements ActivityLearnLog
         return $this->db()->fetchAssoc($sql, array($activityId, $userId));
     }
 
+    public function sumLearnTimeGroupByUserId($conditions)
+    {
+        $conditions['learnedTime_GE'] = 0;
+        $conditions['learnedTime_LE'] = 24 * 60 * 60;
+        $conditions['event_NEQ'] = 'watching';
+
+        $builder = $this->createQueryBuilder($conditions)
+            ->select('sum(`learnedTime`) as learnedTime, `userId`')
+            ->groupBy('userId');
+
+        return $builder->execute()->fetchAll();
+    }
+
     public function declares()
     {
         return array(
@@ -103,9 +119,15 @@ class ActivityLearnLogDaoImpl extends GeneralDaoImpl implements ActivityLearnLog
             ),
             'conditions' => array(
                 'activityId = :activityId',
-                'event_EQ = :event',
-                'event_NEQ <> :event',
+                'event = :event_EQ',
+                'event <> :event_NEQ',
                 'userId = :userId',
+                'userId IN ( :userIds )',
+                'learnedTime >= :learnedTime_GE',
+                'learnedTime <= :learnedTime_LE',
+                'createdTime >= :createdTime_GE',
+                'createdTime <= :createdTime_LE',
+                'createdTime < :createdTime_LT',
             ),
         );
     }

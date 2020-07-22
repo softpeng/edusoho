@@ -3,19 +3,21 @@
 namespace AppBundle\Controller\Admin;
 
 use Symfony\Component\HttpFoundation\Request;
-use Codeages\RestApiClient\RestApiClient;
-use Codeages\RestApiClient\Specification\JsonHmacSpecification2;
+use Biz\Marketing\Util\MarketingUtils;
+use Biz\Marketing\MarketingAPIFactory;
 
 class MarketingController extends BaseController
 {
-    public function toMarketingAction(Request $request)
+    public function loginMarketingAction(Request $request)
     {
         $merchantUrl = $request->getSchemeAndHttpHost();
         $user = $this->getCurrentUser();
 
-        $client = $this->createMarketingClient();
+        $client = MarketingAPIFactory::create();
 
-        $siteInfo = $this->getSiteInfo();
+        $siteInfo = MarketingUtils::getSiteInfo($this->getSettingService(), $this->getWebExtension());
+        $entry = $request->query->get('entry');
+        $target = $request->query->get('target', 'login');
 
         try {
             $login = $client->post('/login', array(
@@ -24,68 +26,37 @@ class MarketingController extends BaseController
                 'user_id' => $user['id'],
                 'user_name' => $user['nickname'],
                 'user_avatar' => $this->getWebExtension()->getFurl($user['largeAvatar'], 'avatar.png'),
+                'entry' => $entry,
             ));
-
-            return  $this->redirect($login['url']);
+            // 返回的login链接格式固定是：{微营销域名}/login?key=xxxx
+            return  $this->redirect($login['url'].'&target='.$target);
         } catch (\Exception $e) {
             return $this->createMessageResponse('error', $e->getMessage());
         }
     }
 
-    private function createMarketingClient()
+    public function loginDistributorAction(Request $request)
     {
-        $storage = $this->getSettingService()->get('storage', array());
-        $developerSetting = $this->getSettingService()->get('developer', array());
+        $form = MarketingUtils::generateLoginFormForCurrentUser(array(
+            'settingService' => $this->getSettingService(),
+            'webExtension' => $this->getWebExtension(),
+            'request' => $request,
+            'currentUser' => $this->getCurrentUser(),
+            'drpService' => $this->getDistributorUserService()->getDrpService(),
+        ));
 
-        $marketingDomain = (
-                            isset($developerSetting['marketing_domain']) &&
-                            !empty($developerSetting['marketing_domain'])
-                        ) ? $developerSetting['marketing_domain'] : 'http://wyx.edusoho.cn';
-
-        $config = array(
-            'accessKey' => $storage['cloud_access_key'],
-            'secretKey' => $storage['cloud_secret_key'],
-            'endpoint' => $marketingDomain.'/merchant',
-        );
-        $spec = new JsonHmacSpecification2('sha1');
-        $client = new RestApiClient($config, $spec);
-
-        return $client;
-    }
-
-    private function getSiteInfo()
-    {
-        $site = $this->getSettingService()->get('site', array());
-
-        $site['logo'] = preg_replace('#files/#', '', $site['logo'], 1);
-        $consult = $this->getSettingService()->get('consult', array());
-        $wechatFile = isset($consult['webchatURI']) ? $consult['webchatURI'] : '';
-        $consult['webchatURI'] = preg_replace('#files/#', '', $wechatFile, 1);
-
-        $siteInfo = array(
-            'name' => $site['name'],
-            'logo' => empty($site['logo']) ? '' : $this->getWebExtension()->getFurl($site['logo']),
-            'about' => $site['slogan'],
-            'wechat' => empty($consult['webchatURI']) ? '' : $this->getWebExtension()->getFurl($consult['webchatURI']),
-            'qq' => empty($consult['qq']) ? '' : $consult['qq'][0]['number'],
-            'telephone' => empty($consult['phone']) ? '' : $consult['phone'][0]['number'],
-        );
-
-        return $siteInfo;
-    }
-
-    public function canOpenMarketing(Request $request)
-    {
-        return true;
-    }
-
-    protected function getFileService()
-    {
-        return $this->createService('Content:FileService');
+        return $this->render('admin/marketing/login.html.twig', array(
+            'form' => $form,
+        ));
     }
 
     protected function getSettingService()
     {
         return $this->createService('System:SettingService');
+    }
+
+    protected function getDistributorUserService()
+    {
+        return $this->createService('Distributor:DistributorUserService');
     }
 }

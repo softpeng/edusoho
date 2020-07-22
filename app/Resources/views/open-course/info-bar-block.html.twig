@@ -1,14 +1,16 @@
 <div class="es-section open-course-detail clearfix">
   <div class="open-course-detail-main media hidden-sm hidden-xs">
     <div class="media-left">
-      <img class="img-responsive" src="{{ filepath(course.smallPicture|default(''), 'course.png') }}"
+      <img class="img-responsive" src="{{ filepath(course.middlePicture|default(''), 'course.png') }}"
            alt="{{ course.title }}">
     </div>
     <div class="media-body">
       <div class="title">{{ course.title }}</div>
       <div class="metas">
         <span><i class="es-icon es-icon-removeredeye mrs"></i>{{ course.hitNum }}</span>
-        <span><i class="es-icon es-icon-textsms mrs"></i>{{ course.postNum }}</span>
+        {% if setting('openCourse.show_comment', '1') == 1 %}
+          <span><i class="es-icon es-icon-textsms mrs"></i>{{ course.postNum }}</span>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -22,7 +24,7 @@
       <span>{{ course.likeNum }}</span>
     </div>
     <div class="operation-list">
-      <div class="operation-img  operation-share es-share top">
+      <div class="operation-img  operation-share es-share top js-es-share">
         <a href="" class="dropdown-toggle" data-toggle="dropdown"><i class="es-icon es-icon-share"></i></a>
         {% include 'common/share-dropdown.html.twig' with { type:'open_course', 'useSeajs': true } %}
       </div>
@@ -31,8 +33,8 @@
     <div class="operation-list  no-border">
       <div class="operation-img operation-collection {% if memberFavorite %}active{% endif %}">
         <a href="javascript:;" class="js-favorite-num"
-           data-cancel-favorite-url="{{ path('open_course_unfavorite',{id:course.id}) }}"
-           data-favorite-url="{{ path('open_course_favorite',{id:course.id}) }}"
+           data-target-type="openCourse"
+           data-target-id="{{ course.id }}"
            data-login-url="{{ path('login_ajax') }}"
            ><i
               class="es-icon es-icon-bookmarkoutline"></i></a>

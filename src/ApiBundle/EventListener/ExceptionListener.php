@@ -4,7 +4,6 @@ namespace ApiBundle\EventListener;
 
 use ApiBundle\Api\Util\ExceptionUtil;
 use ApiBundle\ApiBundle;
-use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent;
 
@@ -22,11 +21,12 @@ class ExceptionListener
 
             list($error, $httpCode) = ExceptionUtil::getErrorAndHttpCodeFromException($exception, $this->isDebug());
 
+            $error['message'] = $this->container->get('translator')->trans($error['message']);
+
             $response = $this->container->get('api_response_viewer')->view(array('error' => $error), $httpCode);
             $event->setResponse($response);
             $event->stopPropagation();
         }
-
     }
 
     private function isApiPath($request)
@@ -36,7 +36,8 @@ class ExceptionListener
 
     private function isDebug()
     {
-        $env = $this->container->get( 'kernel' )->getEnvironment();
+        $env = $this->container->get('kernel')->getEnvironment();
+
         return $env == 'dev' || $env == 'test';
     }
 }

@@ -2,12 +2,17 @@
 
 namespace AppBundle\Controller\Admin;
 
-use Vip\Service\Vip\VipService;
-use AppBundle\Common\CurlToolkit;
 use AppBundle\Common\ArrayToolkit;
-use Biz\CloudPlatform\CloudAPIFactory;
-use Symfony\Component\HttpFoundation\Request;
+use AppBundle\Common\CurlToolkit;
 use AppBundle\Component\Echats\EchartsBuilder;
+use Biz\CloudPlatform\CloudAPIFactory;
+use Biz\Common\CommonException;
+use Biz\Review\Service\ReviewService;
+use Codeages\Biz\Order\Service\OrderService;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Topxia\Service\Common\ServiceKernel;
+use VipPlugin\Biz\Vip\Service\VipService;
 
 class DefaultController extends BaseController
 {
@@ -16,30 +21,30 @@ class DefaultController extends BaseController
         $tabMenu = $this->container->get('permission.twig.permission_extension')->getFirstChild($permission);
         $tabMenu = $this->container->get('permission.twig.permission_extension')->getFirstChild($tabMenu);
 
-        if (!empty($tabMenu['mode']) && $tabMenu['mode'] == 'capsules') {
+        if (!empty($tabMenu['mode']) && 'capsules' == $tabMenu['mode']) {
             $tabMenu = $this->container->get('permission.twig.permission_extension')->getFirstChild($tabMenu);
         }
 
-        $permissionPath = $this->container->get('permission.twig.permission_extension')->getPermissionPath($this, array('needs_context' => true, 'needs_environment' => true), $tabMenu);
+        $permissionPath = $this->container->get('permission.twig.permission_extension')->getPermissionPath($this, ['needs_context' => true, 'needs_environment' => true], $tabMenu);
 
         return $this->redirect($permissionPath);
     }
 
     public function indexAction(Request $request)
     {
-        $weekAndMonthDate = array('weekDate' => date('Y-m-d', time() - 6 * 24 * 60 * 60), 'monthDate' => date('Y-m-d', time() - 29 * 24 * 60 * 60));
+        $weekAndMonthDate = ['weekDate' => date('Y-m-d', time() - 6 * 24 * 60 * 60), 'monthDate' => date('Y-m-d', time() - 29 * 24 * 60 * 60)];
 
-        return $this->render('admin/default/index.html.twig', array(
+        return $this->render('admin/default/index.html.twig', [
             'dates' => $weekAndMonthDate,
-        ));
+        ]);
     }
 
     public function feedbackAction(Request $request)
     {
         $site = $this->getSettingService()->get('site');
         $user = $this->getUser();
-        $token = CurlToolkit::request('POST', 'http://www.edusoho.com/question/get/token', array());
-        $site = array('name' => $site['name'], 'url' => $site['url'], 'token' => $token, 'username' => $user->nickname);
+        $token = CurlToolkit::request('POST', 'http://www.edusoho.com/question/get/token', []);
+        $site = ['name' => $site['name'], 'url' => $site['url'], 'token' => $token, 'username' => $user->nickname];
         $site = urlencode(http_build_query($site));
 
         return $this->redirect('http://www.edusoho.com/question?site='.$site.'');
@@ -47,23 +52,23 @@ class DefaultController extends BaseController
 
     public function validateDomainAction(Request $request)
     {
-        $inspectList = array(
+        $inspectList = [
             $this->addInspectRole('host', $this->domainInspect($request)),
-        );
+        ];
         $inspectList = array_filter($inspectList);
 
-        return $this->render('admin/default/domain.html.twig', array(
+        return $this->render('admin/default/domain.html.twig', [
             'inspectList' => $inspectList,
-        ));
+        ]);
     }
 
     private function addInspectRole($name, $value)
     {
-        if ($value['status'] == 'ok') {
-            return array();
+        if ('ok' == $value['status']) {
+            return [];
         }
 
-        return array('name' => $name, 'value' => $value);
+        return ['name' => $name, 'value' => $value];
     }
 
     private function domainInspect($request)
@@ -71,42 +76,42 @@ class DefaultController extends BaseController
         $currentHost = $request->server->get('HTTP_HOST');
         $siteSetting = $this->getSettingService()->get('site');
         $settingUrl = $this->generateUrl('admin_setting_site');
-        $filter = array('http://', 'https://');
+        $filter = ['http://', 'https://'];
         $siteSetting['url'] = rtrim($siteSetting['url']);
         $siteSetting['url'] = rtrim($siteSetting['url'], '/');
 
         if ($currentHost != str_replace($filter, '', $siteSetting['url'])) {
-            return array(
+            return [
                 'status' => 'warning',
-                'errorMessage' => '当前域名和设置域名不符，为避免影响云短信功能的正常使用，请到【系统】-【站点设置】-【基础信息】-【网站域名】',
+                'errorMessage' => ServiceKernel::instance()->trans('admin.domain_error_hint'),
                 'except' => $siteSetting['url'],
                 'actually' => $currentHost,
                 'settingUrl' => $settingUrl,
-            );
+            ];
         }
 
-        return array('status' => 'ok', 'except' => $siteSetting['url'], 'actually' => $currentHost, 'settingUrl' => $settingUrl);
+        return ['status' => 'ok', 'except' => $siteSetting['url'], 'actually' => $currentHost, 'settingUrl' => $settingUrl];
     }
 
     public function getCloudNoticesAction(Request $request)
     {
         if ($this->getWebExtension()->isTrial()) {
-            $domain = $this->generateUrl('homepage', array(), true);
+            $domain = $this->generateUrl('homepage', [], UrlGeneratorInterface::ABSOLUTE_URL);
             $api = CloudAPIFactory::create('root');
-            $result = $api->get('/trial/remainDays', array('domain' => $domain));
+            $result = $api->get('/trial/remainDays', ['domain' => $domain]);
 
-            return $this->render('admin/default/cloud-notice.html.twig', array(
+            return $this->render('admin/default/cloud-notice.html.twig', [
                 'trialTime' => (isset($result)) ? $result : null,
-            ));
+            ]);
         } elseif ($this->getWebExtension()->isWithoutNetwork()) {
-            $notices = array();
+            $notices = [];
         } else {
             $notices = $this->getNoticesFromOpen();
         }
 
-        return $this->render('admin/default/cloud-notice.html.twig', array(
+        return $this->render('admin/default/cloud-notice.html.twig', [
             'notices' => $notices,
-        ));
+        ]);
     }
 
     private function getNoticesFromOpen()
@@ -123,30 +128,30 @@ class DefaultController extends BaseController
         $upgradeAppCount = count($apps);
 
         $indexApps = ArrayToolkit::index($apps, 'code');
-        $mainAppUpgrade = empty($indexApps['MAIN']) ? array() : $indexApps['MAIN'];
+        $mainAppUpgrade = empty($indexApps['MAIN']) ? [] : $indexApps['MAIN'];
 
         if ($mainAppUpgrade) {
             $upgradeAppCount = $upgradeAppCount - 1;
         }
 
-        return $this->render('admin/default/system-status.html.twig', array(
+        return $this->render('admin/default/system-status.html.twig', [
             'mainAppUpgrade' => $mainAppUpgrade,
             'upgradeAppCount' => $upgradeAppCount,
             'disabledCloudServiceCount' => $this->getDisabledCloudServiceCount(),
-        ));
+        ]);
     }
 
     protected function getDisabledCloudServiceCount()
     {
         $disabledCloudServiceCount = 0;
 
-        $settingKeys = array(
+        $settingKeys = [
             'course.live_course_enabled' => '',
             'cloud_sms.sms_enabled' => '',
             'cloud_search.search_enabled' => '',
             'cloud_consult.cloud_consult_setting_enabled' => 0,
             'storage.upload_mode' => 'cloud',
-        );
+        ];
 
         foreach ($settingKeys as $settingName => $expect) {
             $value = $this->setting($settingName);
@@ -165,29 +170,36 @@ class DefaultController extends BaseController
         $todayTimeStart = strtotime(date('Y-m-d', time()));
         $todayTimeEnd = strtotime(date('Y-m-d', time() + 24 * 3600));
 
-        $onlineCount = $this->getStatisticsService()->countOnline(15 * 60);
-        $loginCount = $this->getStatisticsService()->countLogin(15 * 60);
+        $onlineCount = $this->getStatisticsService()->countOnline(time() - 15 * 60);
+        $loginCount = $this->getStatisticsService()->countLogin(time() - 15 * 60);
 
-        $todayRegisterNum = $this->getUserService()->countUsers(array('startTime' => $todayTimeStart, 'endTime' => $todayTimeEnd));
-        $totalRegisterNum = $this->getUserService()->countUsers(array());
+        $todayRegisterNum = $this->getUserService()->countUsers(['startTime' => $todayTimeStart, 'endTime' => $todayTimeEnd]);
+        $totalRegisterNum = $this->getUserService()->countUsers([]);
 
-        $todayCourseMemberNum = $this->getOrderService()->countOrders(array('paidStartTime' => $todayTimeStart, 'paidEndTime' => $todayTimeEnd, 'targetType' => 'course', 'status' => 'paid'));
-        $todayClassroomMemberNum = $this->getOrderService()->countOrders(array('paidStartTime' => $todayTimeStart, 'paidEndTime' => $todayTimeEnd, 'targetType' => 'classroom', 'status' => 'paid'));
+        $todayCourseMemberNum = $this->getMemberOperationService()->countRecords(['operate_time_GE' => $todayTimeStart, 'operate_time_LT' => $todayTimeEnd, 'target_type' => 'course', 'operate_type' => 'join']);
+        $todayClassroomMemberNum = $this->getMemberOperationService()->countRecords(['operate_time_GE' => $todayTimeStart, 'operate_time_LT' => $todayTimeEnd, 'target_type' => 'classroom', 'operate_type' => 'join', 'exclude_reason_type' => 'auditor_join']);
 
-        $totalCourseMemberNum = $this->getOrderService()->countOrders(array('targetType' => 'course', 'status' => 'paid'));
-        $totalClassroomMemberNum = $this->getOrderService()->countOrders(array('targetType' => 'classroom', 'status' => 'paid'));
+        $totalCourseMemberNum = $this->getMemberOperationService()->countRecords(['target_type' => 'course', 'operate_type' => 'join']);
+        $totalClassroomMemberNum = $this->getMemberOperationService()->countRecords(['target_type' => 'classroom', 'operate_type' => 'join', 'exclude_reason_type' => 'auditor_join']);
 
         $todayVipNum = 0;
         $totalVipNum = 0;
         if ($this->isPluginInstalled('vip')) {
-            $totalVipNum = $this->getVipService()->searchMembersCount(array());
-            $todayVipNum = $this->getVipService()->searchMembersCount(array('boughtTime_GT' => $todayTimeStart, 'boughtTime_LTE' => $todayTimeEnd, 'boughtType' => 'new'));
+            $totalVipNum = $this->getVipService()->searchMembersCount([]);
+            $todayVipNum = $this->getMemberOperationService()->countUserIdsByConditions(['operate_time_GE' => $todayTimeStart, 'operate_time_LT' => $todayTimeEnd, 'target_type' => 'vip', 'operate_type' => 'join']);
         }
 
-        $todayThreadUnAnswerNum = $this->getThreadService()->countThreads(array('startCreatedTime' => $todayTimeStart, 'endCreatedTime' => $todayTimeEnd, 'postNum' => 0, 'type' => 'question'));
-        $totalThreadNum = $this->getThreadService()->countThreads(array('postNum' => 0, 'type' => 'question'));
+        $toInvoiceNum = 0;
+        $totalInvoiceNum = 0;
+        if ($this->isPluginInstalled('Invoice')) {
+            $totalInvoiceNum = $this->getInvoiceService()->countInvoices([]);
+            $toInvoiceNum = $this->getInvoiceService()->countInvoices(['status' => 'unchecked']);
+        }
 
-        return $this->render('admin/default/operation-analysis-dashbord.html.twig', array(
+        $todayThreadUnAnswerNum = $this->getThreadService()->countThreads(['startCreatedTime' => $todayTimeStart, 'endCreatedTime' => $todayTimeEnd, 'postNum' => 0, 'type' => 'question']);
+        $totalThreadNum = $this->getThreadService()->countThreads(['postNum' => 0, 'type' => 'question']);
+
+        return $this->render('admin/default/operation-analysis-dashbord.html.twig', [
             'onlineCount' => $onlineCount,
             'loginCount' => $loginCount,
 
@@ -205,12 +217,15 @@ class DefaultController extends BaseController
 
             'todayThreadUnAnswerNum' => $todayThreadUnAnswerNum,
             'totalThreadNum' => $totalThreadNum,
-        ));
+
+            'totalInvoiceNum' => $totalInvoiceNum,
+            'toInvoiceNum' => $toInvoiceNum,
+        ]);
     }
 
     public function userStatisticAction(Request $request, $period)
     {
-        $series = array();
+        $series = [];
         $days = $this->getDaysDiff($period);
         $timeRange = $this->getTimeRange($period);
 
@@ -234,7 +249,7 @@ class DefaultController extends BaseController
     public function completedTaskStatisticAction(Request $request, $period)
     {
         $days = $this->getDaysDiff($period);
-        $series = array();
+        $series = [];
         $timeRange = $this->getTimeRange($period);
         $finishedTaskData = $this->getTaskResultService()->analysisCompletedTaskDataByTime($timeRange['startTime'], $timeRange['endTime']);
         $series['finishedTaskCount'] = $finishedTaskData;
@@ -245,23 +260,22 @@ class DefaultController extends BaseController
     /**
      * 订单统计
      *
-     * @param Request $request
      * @param  $period
      *
      * @return \Symfony\Component\HttpFoundation\JsonResponse
      */
     public function studyStatisticAction(Request $request, $period)
     {
-        $series = array();
+        $series = [];
         $days = $this->getDaysDiff($period);
         $timeRange = $this->getTimeRange($period);
 
-        $conditions = array('paidStartTime' => $timeRange['startTime'], 'paidEndTime' => $timeRange['endTime'], 'status' => 'paid');
-        $newOrders = $this->getOrderService()->analysisOrderDate($conditions);
+        $conditions = ['pay_time_GT' => $timeRange['startTime'], 'pay_time_LT' => $timeRange['endTime'], 'statuses' => ['paid', 'success', 'finished', 'refunded']];
+        $newOrders = $this->getOrderService()->countGroupByDate($conditions, 'ASC');
         $series['newOrderCount'] = $newOrders;
 
-        $conditions['totalPriceGreaterThan'] = 0;
-        $newPaidOrders = $this->getOrderService()->analysisOrderDate($conditions);
+        $conditions['pay_amount_GT'] = 0;
+        $newPaidOrders = $this->getOrderService()->countGroupByDate($conditions, 'ASC');
         $series['newPaidOrderCount'] = $newPaidOrders;
 
         $userAnalysis = EchartsBuilder::createLineDefaultData($days, 'Y/m/d', $series);
@@ -274,18 +288,38 @@ class DefaultController extends BaseController
         $days = $this->getDaysDiff($period);
 
         $startTime = strtotime(date('Y-m-d', time() - $days * 24 * 60 * 60));
+        $conditions = [
+            'pay_time_GT' => $startTime,
+            'target_type' => 'course',
+            'pay_amount_GT' => 0,
+            'statuses' => ['paid', 'success', 'finished', 'refunded'],
+        ];
 
-        $orderDatas = $this->getOrderService()->analysisPaidOrderGroupByTargetType($startTime, 'targetType');
+        $courseOrdersCount = $this->getOrderService()->countOrderItems($conditions);
 
-        $defaults = array(
-            'course' => array('targetType' => 'course', 'value' => 0),
-            'vip' => array('targetType' => 'vip', 'value' => 0),
-            'classroom' => array('targetType' => 'classroom', 'value' => 0),
-        );
+        $conditions['target_type'] = 'classroom';
+        $classroomOrdersCount = $this->getOrderService()->countOrderItems($conditions);
+
+        if ($this->isPluginInstalled('vip')) {
+            $conditions['target_type'] = 'vip';
+            $vipOrdersCount = $this->getOrderService()->countOrderItems($conditions);
+        }
+
+        $orderDatas = [
+            'course' => ['targetType' => 'course', 'value' => $courseOrdersCount],
+            'vip' => ['targetType' => 'vip', 'value' => isset($vipOrdersCount) ? $vipOrdersCount : 0],
+            'classroom' => ['targetType' => 'classroom', 'value' => $classroomOrdersCount],
+        ];
+
+        $defaults = [
+            'course' => ['targetType' => 'course', 'value' => 0],
+            'vip' => ['targetType' => 'vip', 'value' => 0],
+            'classroom' => ['targetType' => 'classroom', 'value' => 0],
+        ];
         $orderDatas = ArrayToolkit::index($orderDatas, 'targetType');
         $orderDatas = array_merge($defaults, $orderDatas);
 
-        $names = array('course' => '课程订单', 'vip' => '会员订单', 'classroom' => '班级订单');
+        $names = ['course' => ServiceKernel::instance()->trans('admin.index.course_order'), 'vip' => ServiceKernel::instance()->trans('admin.index.vip_order'), 'classroom' => ServiceKernel::instance()->trans('admin.index.classroom_order')];
         array_walk($orderDatas, function (&$orderData) use ($names) {
             $orderData['name'] = $names[$orderData['targetType']];
             unset($orderData['targetType']);
@@ -302,41 +336,41 @@ class DefaultController extends BaseController
         $days = $this->getDaysDiff($period);
         $startTime = strtotime(date('Y-m-d', time() - $days * 24 * 60 * 60));
 
-        $memberCounts = $this->getCourseMemberService()->searchMemberCountGroupByFields(array('startTimeGreaterThan' => $startTime, 'classroomId' => 0, 'role' => 'student'), 'courseSetId', 0, 10);
+        $memberCounts = $this->getCourseMemberService()->searchMemberCountGroupByFields(['startTimeGreaterThan' => $startTime, 'classroomId' => 0, 'role' => 'student'], 'courseSetId', 0, 10);
         $courseSetIds = ArrayToolkit::column($memberCounts, 'courseSetId');
         $courseSets = $this->getCourseSetService()->findCourseSetsByIds($courseSetIds);
         $courseSets = ArrayToolkit::index($courseSets, 'id');
 
-        return $this->render('admin/default/parts/course-explore-table.html.twig', array(
+        return $this->render('admin/default/parts/course-explore-table.html.twig', [
             'memberCounts' => $memberCounts,
             'courseSets' => $courseSets,
-        ));
+        ]);
     }
 
     public function courseReviewAction(Request $request)
     {
         $reviews = $this->getReviewService()->searchReviews(
-            array('parentId' => 0),
-            'latest',
+            ['parentId' => 0, 'targetType' => 'course'],
+            ['createdTime' => 'DESC'],
             0,
             10
         );
 
-        return $this->render('admin/default/parts/course-review-table.html.twig', array(
+        return $this->render('admin/default/parts/course-review-table.html.twig', [
             'reviews' => $reviews,
-        ));
+        ]);
     }
 
     public function unsolvedQuestionsBlockAction(Request $request)
     {
-        $questions = $this->getThreadService()->searchThreads(array('type' => 'question', 'postNum' => 0), 'createdNotStick', 0, 10);
+        $questions = $this->getThreadService()->searchThreads(['type' => 'question', 'postNum' => 0], 'createdNotStick', 0, 10);
 
         $courses = $this->getCourseService()->findCoursesByIds(ArrayToolkit::column($questions, 'courseId'));
 
-        return $this->render('admin/default/unsolved-questions-block.html.twig', array(
+        return $this->render('admin/default/unsolved-questions-block.html.twig', [
             'questions' => $questions,
             'courses' => $courses,
-        ));
+        ]);
     }
 
     public function questionRemindTeachersAction(Request $request, $courseId, $questionId)
@@ -345,38 +379,56 @@ class DefaultController extends BaseController
         $courseSet = $this->getCourseSetService()->getCourseSet($course['courseSetId']);
         $question = $this->getThreadService()->getThread($courseId, $questionId);
 
-        $message = array(
+        $message = [
             'courseTitle' => $courseSet['title'],
             'courseId' => $course['id'],
             'threadId' => $question['id'],
             'questionTitle' => strip_tags($question['title']),
-        );
+        ];
 
         foreach ($course['teacherIds'] as $receiverId) {
             $result = $this->getNotificationService()->notify($receiverId, 'questionRemind', $message);
         }
 
-        return $this->createJsonResponse(array('success' => true, 'message' => 'ok'));
+        return $this->createJsonResponse(['success' => true, 'message' => 'ok']);
     }
 
     public function cloudSearchRankingAction(Request $request)
     {
         $api = CloudAPIFactory::create('root');
-        $result = $api->get('/search/words/ranking', array());
-        $searchRanking = isset($result['items']) ? $result['items'] : array();
+        $result = $api->get('/search/words/ranking', []);
+        $searchRanking = isset($result['items']) ? $result['items'] : [];
 
-        return $this->render('admin/default/cloud-search-ranking.html.twig', array('searchRankings' => $searchRanking));
+        return $this->render('admin/default/cloud-search-ranking.html.twig', ['searchRankings' => $searchRanking]);
     }
 
     public function weekday($time)
     {
         if (is_numeric($time)) {
-            $weekday = array('星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六');
+            $weekday = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
 
             return $weekday[date('w', $time)];
         }
 
         return false;
+    }
+
+    public function upgradeV2SettingAction(Request $request)
+    {
+        $setting = $this->getSettingService()->get('backstage', ['is_v2' => 0]);
+
+        if (!empty($setting) && $setting['is_v2']) {
+            $this->createNewException(CommonException::UPGRADE_V2_ERROR());
+        }
+        $user = $this->getCurrentUser();
+        if (0 == count(array_intersect($user['roles'], ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']))) {
+            return $this->createJsonResponse(['status' => 'error', 'message' => $this->trans('admin_v2.upgrade_v2_setting_permission.error')]);
+        }
+        $setting['is_v2'] = 1;
+        $this->getSettingService()->set('backstage', $setting);
+        $this->pushEventTracking('switchToAdminV2');
+
+        return $this->createJsonResponse(['status' => 'success', 'url' => $this->generateUrl('admin_v2')]);
     }
 
     private function getRegisterCount($timeRange)
@@ -406,7 +458,7 @@ class DefaultController extends BaseController
 
     private function getLostUserCount($userAnalysis)
     {
-        $lostUserCount = array();
+        $lostUserCount = [];
 
         $dayRegisterTotal = $userAnalysis['series']['registerTotalCount'];
         $activeUserCount = $userAnalysis['series']['activeUserCount'];
@@ -419,7 +471,7 @@ class DefaultController extends BaseController
 
     private function getDaysDiff($period)
     {
-        $days = $period == 'week' ? 6 : 29;
+        $days = 'week' == $period ? 6 : 29;
 
         return $days;
     }
@@ -428,12 +480,12 @@ class DefaultController extends BaseController
     {
         $days = $this->getDaysDiff($period);
 
-        return array('startTime' => strtotime(date('Y-m-d', time() - $days * 24 * 60 * 60)), 'endTime' => strtotime(date('Y-m-d', time() + 24 * 3600)));
+        return ['startTime' => strtotime(date('Y-m-d', time() - $days * 24 * 60 * 60)), 'endTime' => strtotime(date('Y-m-d', time() + 24 * 3600))];
     }
 
     protected function makeDateRange($startTime, $endTime)
     {
-        $dates = array();
+        $dates = [];
 
         $currentTime = $startTime;
 
@@ -453,7 +505,7 @@ class DefaultController extends BaseController
 
     protected function generateDateRange($days, $format = 'Y/m/d')
     {
-        $dates = array();
+        $dates = [];
         for ($i = $days; $i >= 0; --$i) {
             $dates[] = date($format, time() - $i * 24 * 60 * 60);
         }
@@ -464,7 +516,7 @@ class DefaultController extends BaseController
     protected function fillActiveUserCount($days, $activeAnalysis)
     {
         $xAxisDate = $this->generateDateRange($days, 'Y-m-d');
-        $result = array();
+        $result = [];
         array_walk($xAxisDate, function ($date) use ($activeAnalysis, &$result) {
             foreach ($activeAnalysis as $index => $value) {
                 //在30天内登录过系统的用户即为活跃用户
@@ -474,12 +526,12 @@ class DefaultController extends BaseController
                 }
             }
             if (empty($result[$date])) {
-                $result[$date] = array();
+                $result[$date] = [];
             }
         });
 
         array_walk($result, function (&$data, $key) {
-            $data = array('count' => count(array_unique($data)), 'date' => $key);
+            $data = ['count' => count(array_unique($data)), 'date' => $key];
         });
 
         return $result; //array_values($result);
@@ -492,7 +544,7 @@ class DefaultController extends BaseController
 
         $xAxisDate = $this->generateDateRange($days, 'Y-m-d');
         foreach ($xAxisDate as $date) {
-            $zeroAnalysis[$date] = array('count' => 0, 'date' => $date);
+            $zeroAnalysis[$date] = ['count' => 0, 'date' => $date];
         }
 
         $dayRegisterTotal = array_merge($zeroAnalysis, $dayRegisterTotal);
@@ -564,19 +616,17 @@ class DefaultController extends BaseController
         return $this->createService('CloudPlatform:AppService');
     }
 
-    protected function getCashService()
-    {
-        return $this->createService('Cash:CashService');
-    }
-
     protected function getUpgradeNoticeService()
     {
         return $this->createService('User:UpgradeNoticeService');
     }
 
+    /**
+     * @return ReviewService
+     */
     protected function getReviewService()
     {
-        return $this->createService('Course:ReviewService');
+        return $this->createService('Review:ReviewService');
     }
 
     protected function getUserActiveService()
@@ -597,9 +647,22 @@ class DefaultController extends BaseController
         return $this->createService('VipPlugin:Vip:VipService');
     }
 
+    /**
+     * @return \Codeages\Biz\Invoice\Service\Impl\InvoiceServiceImpl
+     */
+    protected function getInvoiceService()
+    {
+        return $this->createService('Invoice:InvoiceService');
+    }
+
     protected function getTaskResultService()
     {
         return $this->createService('Task:TaskResultService');
+    }
+
+    protected function getMemberOperationService()
+    {
+        return $this->createService('MemberOperation:MemberOperationService');
     }
 
     protected function isPluginInstalled($name)

@@ -1,20 +1,21 @@
 import '../tab-manage';
-import notify from 'common/notify';
 
 let ids = [];
 let $searchForm = $('.form-search');
+let $sure = $('#sure');
 
-$('#sure').on('click', function () {
-  $('#sure').button('submiting').addClass('disabled');
+$sure.on('click', function () {
+  $sure.button('submiting').addClass('disabled');
 
   $.ajax({
-    type: "post",
+    type: 'post',
     url: $('#sure').data('url'),
     data: { 'ids': ids },
     async: false,
     success: function (response) {
       if (!response['result']) {
-	      notify('danger',response['message']);
+        $sure.removeClass('disabled');
+        cd.message({ type: 'danger', message: response['message']});
       } else {
         $('.modal').modal('hide');
         window.location.reload();
@@ -53,7 +54,7 @@ $('#all-courses').on('click', function () {
 
 });
 
-$('.row').on('click', ".course-item ", function () {
+$('.row').on('click', '.course-item ', function () {
 
   let id = $(this).data('id');
 

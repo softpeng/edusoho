@@ -2,7 +2,7 @@ import MaterialLibChoose from './base/materiallib-choose';
 import VideoImport from './base/import-video';
 import CourseFileChoose from './base/coursefile-choose';
 import UploadChooser from './base/upload-chooser';
-import Emitter from "component-emitter";
+import Emitter from 'component-emitter';
 
 class FileChooser extends Emitter{
   constructor(options) {
@@ -16,12 +16,12 @@ class FileChooser extends Emitter{
   }
 
   initTab() {
-    $("#material a").click(function (e) {
+    $('#material a').click(function (e) {
       e.preventDefault();
       let $this = $(this);
       $this.find('[type="radio"]').prop('checked', 'checked');
       $this.closest('li').siblings('li').find('[type="radio"]').prop('checked', false);
-      $this.tab('show')
+      $this.tab('show');
     });
 
     if($('.js-import-video').data('link')){
@@ -46,13 +46,12 @@ class FileChooser extends Emitter{
   }
 
   fillTitle(file){
-    let $title = $("#title");
+    let $title = $('#title');
     if ($title.length > 0 && $title.val()=='') {
-      let title = file.name.substring(0,file.name.lastIndexOf('.'));
+      let title = file.name.substring(0,file.name.lastIndexOf('.') !== -1 ? file.name.lastIndexOf('.') : file.name.length);
       $title.val(title);
     }
   }
-
   static openUI() {
     $('.file-chooser-bar').addClass('hidden');
     $('.file-chooser-main').removeClass('hidden');

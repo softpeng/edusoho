@@ -2,8 +2,8 @@
 
 namespace ApiBundle\Security\Firewall;
 
+use Biz\User\UserException;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\Exception\UsernameNotFoundException;
@@ -22,14 +22,15 @@ class SessionAuthenticationListener extends BaseAuthenticationListener
         if (null !== $this->getTokenStorage()->getToken()) {
             return;
         }
-
+        $sessionIgnore = $request->headers->get('SessionIgnore', false);
         $session = $this->container->get('session');
-
-        if (null === $session || null === $token = $session->get($this->sessionKey)) {
+        if ((bool) $sessionIgnore || null === $session || null === $token = $session->get($this->sessionKey)) {
             return;
         }
 
-        $this->validateCsrfToken($request);
+        if (!$this->isCrsfTokenValid($request)) {
+            return;
+        }
 
         $token = unserialize($token);
 
@@ -42,7 +43,7 @@ class SessionAuthenticationListener extends BaseAuthenticationListener
         $this->getTokenStorage()->setToken($token);
     }
 
-    private function validateCsrfToken(Request $request)
+    private function isCrsfTokenValid(Request $request)
     {
         if ($request->isXmlHttpRequest()) {
             $token = $request->headers->get('X-CSRF-Token');
@@ -50,9 +51,7 @@ class SessionAuthenticationListener extends BaseAuthenticationListener
             $token = $request->request->get('_csrf_token', '');
         }
 
-        if (!$this->container->get('security.csrf.token_manager')->isTokenValid(new CsrfToken('site', $token))) {
-            throw new AccessDeniedHttpException('The page has expired, please resubmit.');
-        }
+        return $this->container->get('security.csrf.token_manager')->isTokenValid(new CsrfToken('site', $token));
     }
 
     /**
@@ -62,7 +61,7 @@ class SessionAuthenticationListener extends BaseAuthenticationListener
      *
      * @return TokenInterface|null
      *
-     * @throws \RuntimeException
+     * @throws UserException
      */
     protected function refreshUser(TokenInterface $token)
     {
@@ -80,12 +79,11 @@ class SessionAuthenticationListener extends BaseAuthenticationListener
             } catch (UnsupportedUserException $e) {
                 // let's try the next user provider
             } catch (UsernameNotFoundException $e) {
-
                 return null;
             }
         }
 
-        throw new \RuntimeException(sprintf('There is no user provider for user "%s".', get_class($user)));
+        throw UserException::NO_USER_PROVIDER();
     }
 
     /**
@@ -94,8 +92,7 @@ class SessionAuthenticationListener extends BaseAuthenticationListener
     private function getUserProviders()
     {
         return array(
-            $this->container->get('topxia.user_provider')
+            $this->container->get('topxia.user_provider'),
         );
     }
-
 }

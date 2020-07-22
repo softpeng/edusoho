@@ -6,9 +6,9 @@ use AppBundle\Common\ArrayToolkit;
 use Biz\Course\Service\CourseService;
 use Biz\Course\Service\CourseSetService;
 use Biz\Course\Service\MemberService;
+use Biz\Review\Service\ReviewService;
 use Biz\Task\Service\TaskService;
 use Biz\User\Service\UserService;
-use Topxia\Service\Common\ServiceKernel;
 
 abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
 {
@@ -17,7 +17,7 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
      */
     protected function getCourseService()
     {
-        return $this->getServiceKernel()->createService('Course:CourseService');
+        return $this->getServiceKernel()->getBiz()->service('Course:CourseService');
     }
 
     /**
@@ -33,7 +33,7 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
      */
     protected function getCourseMemberService()
     {
-        return $this->getServiceKernel()->createService('Course:MemberService');
+        return $this->getServiceKernel()->getBiz()->service('Course:MemberService');
     }
 
     /**
@@ -41,7 +41,7 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
      */
     protected function getUserService()
     {
-        return ServiceKernel::instance()->getBiz()->service('User:UserService');
+        return $this->getServiceKernel()->getBiz()->service('User:UserService');
     }
 
     /**
@@ -49,7 +49,7 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
      */
     protected function getTaskService()
     {
-        return $this->getServiceKernel()->createService('Task:TaskService');
+        return $this->getServiceKernel()->getBiz()->service('Task:TaskService');
     }
 
     protected function getCategoryService()
@@ -59,12 +59,15 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
 
     protected function getThreadService()
     {
-        return $this->getServiceKernel()->createService('Course:ThreadService');
+        return $this->getServiceKernel()->getBiz()->service('Course:ThreadService');
     }
 
+    /**
+     * @return ReviewService
+     */
     protected function getReviewService()
     {
-        return $this->getServiceKernel()->createService('Course:ReviewService');
+        return $this->getServiceKernel()->getBiz()->service('Review:ReviewService');
     }
 
     protected function getActivityService()
@@ -107,9 +110,9 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
     protected function checkCourseArguments(array $arguments)
     {
         if (empty($arguments['courseId'])) {
-            $conditions = array();
+            $conditions = [];
         } else {
-            $conditions = array('courseId' => $arguments['courseId']);
+            $conditions = ['courseId' => $arguments['courseId']];
         }
 
         return $conditions;
@@ -145,8 +148,8 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
 
     protected function fillCourseSetTeachersAndCategoriesAttribute(array $courseSets)
     {
-        $userIds = array();
-        $categoryIds = array();
+        $userIds = [];
+        $categoryIds = [];
 
         foreach ($courseSets as &$set) {
             if (!empty($set['teacherIds'])) {
@@ -159,7 +162,7 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
         $profiles = $this->getUserService()->findUserProfilesByIds($userIds);
 
         foreach ($users as $key => $user) {
-            if ($user['id'] == $profiles[$user['id']]['id']) {
+            if ($profiles[$user['id']]['id'] == $user['id']) {
                 $users[$key]['profile'] = $profiles[$user['id']];
             }
         }
@@ -168,11 +171,11 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
 
         foreach ($courseSets as &$set) {
             $categoryId = $set['categoryId'];
-            if ($categoryId != 0 && array_key_exists($categoryId, $categories)) {
+            if (0 != $categoryId && array_key_exists($categoryId, $categories)) {
                 $set['category'] = $categories[$categoryId];
             }
 
-            $teachers = array();
+            $teachers = [];
 
             if (empty($set['teacherIds'])) {
                 continue;
@@ -199,8 +202,8 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
 
     protected function getCourseTeachersAndCategories($courses)
     {
-        $userIds = array();
-        $categoryIds = array();
+        $userIds = [];
+        $categoryIds = [];
 
         foreach ($courses as $course) {
             $userIds = array_merge($userIds, $course['teacherIds']);
@@ -211,7 +214,7 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
         $profiles = $this->getUserService()->findUserProfilesByIds($userIds);
 
         foreach ($users as $key => $user) {
-            if ($user['id'] == $profiles[$user['id']]['id']) {
+            if ($profiles[$user['id']]['id'] == $user['id']) {
                 $users[$key]['profile'] = $profiles[$user['id']];
             }
         }
@@ -219,7 +222,7 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
         $categories = $this->getCategoryService()->findCategoriesByIds($categoryIds);
 
         foreach ($courses as &$course) {
-            $teachers = array();
+            $teachers = [];
 
             foreach ($course['teacherIds'] as $teacherId) {
                 if (!$teacherId) {
@@ -236,7 +239,7 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
 
             $categoryId = $course['categoryId'];
 
-            if ($categoryId != 0 && array_key_exists($categoryId, $categories)) {
+            if (0 != $categoryId && array_key_exists($categoryId, $categories)) {
                 $course['category'] = $categories[$categoryId];
             }
         }
@@ -246,12 +249,12 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
 
     protected function getCoursesAndUsers($courseRelations)
     {
-        $userIds = array();
-        $courseIds = array();
+        $userIds = [];
+        $courseIds = [];
 
         foreach ($courseRelations as &$courseRelation) {
             $userIds[] = $courseRelation['userId'];
-            $courseIds[] = $courseRelation['courseId'];
+            $courseIds[] = isset($courseRelation['courseId']) ? $courseRelation['courseId'] : $courseRelation['targetId'];
         }
 
         $users = $this->getUserService()->findUsersByIds($userIds);
@@ -264,7 +267,7 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
             unset($user['salt']);
             $courseRelation['User'] = $user;
 
-            $courseId = $courseRelation['courseId'];
+            $courseId = isset($courseRelation['courseId']) ? $courseRelation['courseId'] : $courseRelation['targetId'];
             $course = $courses[$courseId];
             $courseRelation['course'] = $course;
         }
@@ -287,7 +290,7 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
         $courses = $this->getCourseService()->findCoursesByCourseSetIds(ArrayToolkit::column($courseSets, 'id'));
         if (!empty($courses)) {
             $tryLookAbleCourses = array_filter($courses, function ($course) {
-                return !empty($course['tryLookable']) && $course['status'] === 'published';
+                return !empty($course['tryLookable']) && 'published' === $course['status'];
             });
             $tryLookAbleCourseIds = ArrayToolkit::column($tryLookAbleCourses, 'id');
             $activities = $this->getActivityService()->findActivitySupportVideoTryLook($tryLookAbleCourseIds);
@@ -296,7 +299,7 @@ abstract class CourseBaseDataTag extends BaseDataTag implements DataTag
             $tasks = ArrayToolkit::index($tasks, 'activityId');
 
             $activities = array_filter($activities, function ($activity) use ($tasks) {
-                return $tasks[$activity['id']]['status'] === 'published';
+                return 'published' === $tasks[$activity['id']]['status'];
             });
 
             //返回有云视频任务的课程

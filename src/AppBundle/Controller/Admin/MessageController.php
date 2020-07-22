@@ -11,6 +11,7 @@ class MessageController extends BaseController
     public function indexAction(Request $request)
     {
         $conditions = $request->query->all();
+        $conditions['isDelete'] = 0; // 默认显示未删除的数据
 
         $paginator = new Paginator(
             $request,
@@ -45,18 +46,6 @@ class MessageController extends BaseController
         } else {
             return $this->createJsonResponse(array('status' => 'success'));
         }
-    }
-
-    public function deleteAction(Request $request, $id)
-    {
-        $this->getFileService()->deleteFile($id);
-
-        return $this->createNewJsonResponse(true);
-    }
-
-    public function uploadAction(Request $request)
-    {
-        return $this->render('admin/file/upload-modal.html.twig');
     }
 
     protected function getMessageService()

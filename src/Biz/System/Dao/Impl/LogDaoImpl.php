@@ -7,7 +7,7 @@ use Codeages\Biz\Framework\Dao\GeneralDaoImpl;
 
 class LogDaoImpl extends GeneralDaoImpl implements LogDao
 {
-    protected $table = 'log';
+    protected $table = 'log_v8';
 
     public function declares()
     {
@@ -18,13 +18,17 @@ class LogDaoImpl extends GeneralDaoImpl implements LogDao
             ),
             'conditions' => array(
                 'module = :module',
+                'module IN (:modules)',
                 'action = :action',
+                'action IN ( :actions )',
+                'action NOT IN ( :excludeActions )',
                 'level = :level',
                 'userId = :userId',
                 'createdTime > :startDateTime',
                 'createdTime < :endDateTime',
                 'createdTime >= :startDateTime_GE',
                 'userId IN ( :userIds )',
+                'userId != :exceptedUserId',
             ),
         );
     }

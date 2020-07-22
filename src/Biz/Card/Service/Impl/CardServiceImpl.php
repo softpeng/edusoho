@@ -3,10 +3,12 @@
 namespace Biz\Card\Service\Impl;
 
 use Biz\BaseService;
+use Biz\Card\CardException;
 use Biz\Card\Dao\CardDao;
 use Biz\Card\DetailProcessor\DetailFactory;
 use Biz\Card\DetailProcessor\DetailProcessor;
 use Biz\Card\Service\CardService;
+use Biz\Common\CommonException;
 use Biz\User\Service\UserService;
 use AppBundle\Common\ArrayToolkit;
 
@@ -15,12 +17,26 @@ class CardServiceImpl extends BaseService implements CardService
     public function addCard($card)
     {
         if (!ArrayToolkit::requireds($card, array('cardType', 'cardId', 'deadline', 'userId'))) {
-            throw $this->createInvalidArgumentException('缺少必要字段，新创建卡失败！');
+            $this->createNewException(CommonException::ERROR_PARAMETER_MISSING());
         }
 
         $card['createdTime'] = time();
 
         return $this->getCardDao()->create($card);
+    }
+
+    public function batchAddCouponCards(array $userCards)
+    {
+        if (empty($userCards)) {
+            $this->createNewException(CommonException::ERROR_PARAMETER_MISSING());
+        }
+        $userCards = array_values($userCards);
+
+        if (!ArrayToolkit::requireds($userCards[0], array('cardType', 'cardId', 'deadline', 'userId'))) {
+            $this->createNewException(CommonException::ERROR_PARAMETER_MISSING());
+        }
+
+        return $this->getCardDao()->batchCreate($userCards);
     }
 
     public function getCard($id)
@@ -85,23 +101,41 @@ class CardServiceImpl extends BaseService implements CardService
 
     private function isAvailable($coupon, $targetType, $targetId)
     {
+        if ('receive' != $coupon['status']) {
+            return false;
+        }
+
         if ($coupon['deadline'] + 86400 < time()) {
             return false;
         }
 
-        if ($coupon['targetType'] == 'all' || $coupon['targetType'] == 'fullDiscount') {
+        if ('all' == $coupon['targetType'] || 'fullDiscount' == $coupon['targetType']) {
             return true;
         }
 
-        if ($coupon['targetType'] == $targetType && ($coupon['targetId'] == 0 || $coupon['targetId'] == $targetId)) {
+        if ($coupon['targetType'] != $targetType) {
+            return false;
+        }
+
+        if (0 == $coupon['targetId']) {
             return true;
         }
+
+        if ('vip' == $targetType && $coupon['targetId'] == $targetId) {
+            return true;
+        }
+
+        if (in_array($targetType, array('course', 'classroom')) && in_array($targetId, $coupon['targetIds'])) {
+            return true;
+        }
+
+        return false;
     }
 
     public function findCardsByUserIdAndCardType($userId, $cardType)
     {
         if (empty($cardType)) {
-            throw $this->createNotFoundException('缺少必要字段，请明确卡的类型');
+            $this->createNewException(CardException::TYPE_REQUIRED());
         }
 
         return $this->getCardDao()->findByUserIdAndCardType($userId, $cardType);
@@ -160,7 +194,7 @@ class CardServiceImpl extends BaseService implements CardService
     private function _prepareRecordConditions($conditions)
     {
         $conditions = array_filter($conditions, function ($value) {
-            if ($value == 0) {
+            if (0 == $value) {
                 return true;
             }
 

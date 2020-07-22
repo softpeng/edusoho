@@ -4,14 +4,13 @@ namespace ApiBundle\Api\Resource\Course;
 
 use ApiBundle\Api\Annotation\ApiConf;
 use ApiBundle\Api\ApiRequest;
-use ApiBundle\Api\Exception\ErrorCode;
 use ApiBundle\Api\Resource\AbstractResource;
+use Biz\Common\CommonException;
 use Biz\Course\Service\CourseService;
 use Biz\Course\Service\LearningDataAnalysisService;
 use Biz\Task\Service\TaskResultService;
 use Biz\Task\Service\TaskService;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Biz\Task\TaskException;
 
 class CourseTaskEvent extends AbstractResource
 {
@@ -25,7 +24,7 @@ class CourseTaskEvent extends AbstractResource
     public function update(ApiRequest $request, $courseId, $taskId, $eventName)
     {
         if (!in_array($eventName, array(self::EVENT_DOING, self::EVENT_FINISH))) {
-            throw new BadRequestHttpException('Event name mismatch', null, ErrorCode::INVALID_ARGUMENT);
+            throw CommonException::ERROR_PARAMETER();
         }
 
         $taskResult = $this->getTaskResultService()->getUserTaskResultByTaskId($taskId);
@@ -34,15 +33,15 @@ class CourseTaskEvent extends AbstractResource
             $this->start($request, $courseId, $taskId, self::EVENT_START);
         }
 
-        if ($eventName == self::EVENT_DOING) {
+        if (self::EVENT_DOING == $eventName) {
             return $this->doing($request, $courseId, $taskId, $eventName);
         }
 
-        if ($eventName == self::EVENT_FINISH) {
+        if (self::EVENT_FINISH == $eventName) {
             return $this->finish($request, $courseId, $taskId, $eventName);
         }
 
-        throw new BadRequestHttpException('Bad request', null, ErrorCode::INVALID_ARGUMENT);
+        throw CommonException::ERROR_PARAMETER();
     }
 
     private function start(ApiRequest $request, $courseId, $taskId, $eventName)
@@ -54,12 +53,17 @@ class CourseTaskEvent extends AbstractResource
     {
         $this->getCourseService()->tryTakeCourse($courseId);
 
-        // TODO  API无session，无法与Web端业务一致
-        $result = $this->getTaskService()->trigger($taskId, $eventName, array(
-            'lastTime' => $request->request->get('lastTime', time())
-        ));
+        $lastTime = $request->request->get('lastTime', time());
+        $watchTime = $request->request->get('watchTime', 0);
 
-        if ($result['status'] == self::EVENT_FINISH) {
+        $data = array('lastTime' => $lastTime);
+        if (!empty($watchTime)) {
+            $data['events']['watching']['watchTime'] = $watchTime;
+        }
+
+        $result = $this->getTaskService()->trigger($taskId, $eventName, $data);
+
+        if (self::EVENT_FINISH == $result['status']) {
             $nextTask = $this->getTaskService()->getNextTask($taskId);
             $progress = $this->getLearningDataAnalysisService()->getUserLearningProgress($courseId, $result['userId']);
             $completionRate = $progress['percent'];
@@ -73,7 +77,7 @@ class CourseTaskEvent extends AbstractResource
             'event' => $eventName,
             'nextTask' => $nextTask,
             'lastTime' => time(),
-            'completionRate' => $completionRate
+            'completionRate' => $completionRate,
         );
     }
 
@@ -83,19 +87,20 @@ class CourseTaskEvent extends AbstractResource
 
         $task = $this->getTaskService()->getTask($taskId);
 
-        if ($task['status'] != 'published') {
-            throw new NotFoundHttpException('Task not publish', null, ErrorCode::RESOURCE_NOT_FOUND);
+        if ('published' != $task['status']) {
+            throw TaskException::UNPUBLISHED_TASK();
         }
 
         $result = $this->getTaskService()->finishTaskResult($taskId);
 
         $nextTask = $this->getTaskService()->getNextTask($taskId);
         $learningProgress = $this->getLearningDataAnalysisService()->getUserLearningProgress($courseId, $result['userId']);
+
         return array(
             'result' => $result,
             'event' => $eventName,
-            'nextTask' => $nextTask ? : null,
-            'completionRate' => $learningProgress['percent']
+            'nextTask' => $nextTask ?: null,
+            'completionRate' => $learningProgress['percent'],
         );
     }
 

@@ -6,7 +6,7 @@
           <span class="tag-open-live"></span>
         </span>
       {% endif %}
-      {{ lazy_img(filepath(course.middlePicture, 'course.png'), 'img-responsive', course.title) }}
+      {{ lazy_img(filepath(course.largePicture, 'course.png'), 'img-responsive', course.title) }}
     </a>
     {% set lessons = data('OpenCourseLessons',{courseId:course.id,count:1}) %}
     {% if course.type == 'liveOpen' %}
@@ -22,13 +22,15 @@
           <span class="label label-warning mrm">{{'open_course.status.living'|trans}}</span>
         {% endif %}
       {% endif %}
-      <a class="link-dark" href="{{ path('open_course_show', {courseId:course.id}) }}" target="_blank" title="{{ course.title }}">
+      <a class="link-darker" href="{{ path('open_course_show', {courseId:course.id}) }}" target="_blank" title="{{ course.title }}">
         {{ course.title }}
       </a>
     </div>
     <div class="metas clearfix">
       <span class="num"><i class="es-icon es-icon-removeredeye"></i>{{ course.hitNum }}</span>
-      <span class="comment"><i class="es-icon es-icon-textsms"></i>{{ course.postNum }}</span>
+      {% if setting('openCourse.show_comment', '1') == 1 %}
+        <span class="comment"><i class="es-icon es-icon-textsms"></i>{{ course.postNum }}</span>
+      {% endif %}
     </div>
   </div>
 </div>

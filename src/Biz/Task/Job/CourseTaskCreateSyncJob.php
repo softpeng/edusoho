@@ -2,21 +2,15 @@
 
 namespace Biz\Task\Job;
 
-use AppBundle\Common\ExceptionPrintingToolkit;
 use Biz\Activity\Config\Activity;
 use Biz\Activity\Dao\ActivityDao;
-use Biz\Common\Logger;
-use Biz\Course\Copy\Chain\ActivityTestpaperCopy;
+use Biz\AppLoggerConstant;
 use Biz\Course\Dao\CourseChapterDao;
-use Biz\Course\Dao\CourseDao;
 use Biz\Course\Dao\CourseMaterialDao;
-use Biz\System\Service\LogService;
-use Biz\Task\Dao\TaskDao;
-use Biz\Task\Service\TaskService;
 use Codeages\Biz\Framework\Dao\BatchCreateHelper;
-use Codeages\Biz\Framework\Scheduler\AbstractJob;
+use Codeages\Biz\Framework\Event\Event;
 
-class CourseTaskCreateSyncJob extends AbstractJob
+class CourseTaskCreateSyncJob extends AbstractSyncJob
 {
     public function execute()
     {
@@ -28,6 +22,10 @@ class CourseTaskCreateSyncJob extends AbstractJob
 
             $taskHelper = new BatchCreateHelper($this->getTaskDao());
             foreach ($copiedCourses as $cc) {
+                $copiedTask = $this->getTaskService()->getCourseTaskByCourseIdAndCopyId($cc['id'], $task['id']);
+                if (!empty($copiedTask)) {
+                    continue;
+                }
                 $newActivity = $this->createActivity($activity, $cc);
 
                 $newTask = array(
@@ -40,6 +38,7 @@ class CourseTaskCreateSyncJob extends AbstractJob
                     'title' => $task['title'],
                     'isFree' => $task['isFree'],
                     'isOptional' => $task['isOptional'],
+                    'isLesson' => $task['isLesson'],
                     'startTime' => $task['startTime'],
                     'endTime' => $task['endTime'],
                     'number' => $task['number'],
@@ -49,31 +48,29 @@ class CourseTaskCreateSyncJob extends AbstractJob
                     'copyId' => $task['id'],
                     'maxOnlineNum' => $task['maxOnlineNum'],
                     'status' => $task['status'],
+                    'length' => $task['length'],
                 );
 
-                if (!empty($task['mode'])) {
-                    $newChapter = $this->getChapterDao()->getByCopyIdAndLockedCourseId($task['categoryId'], $cc['id']);
-                    $newTask['categoryId'] = $newChapter['id'];
-                }
+                //if (!empty($task['mode'])) {
+                $newChapter = $this->getChapterDao()->getByCopyIdAndLockedCourseId($task['categoryId'], $cc['id']);
+                $newTask['categoryId'] = $newChapter['id'];
+                //}
 
                 $taskHelper->add($newTask);
             }
 
             $taskHelper->flush();
 
-            $this->getLogService()->info(Logger::COURSE, Logger::ACTION_SYNC_WHEN_TASK_CREATE, 'course.log.task.create.sync.success_tips', array('taskId' => $task['id']));
+            $this->dispatchEvent('course.task.create.sync', new Event($task));
+
+            $this->getLogService()->info(AppLoggerConstant::COURSE, 'sync_when_task_create', 'course.log.task.create.sync.success_tips', array('taskId' => $task['id']));
         } catch (\Exception $e) {
-            $this->getLogService()->error(Logger::COURSE, Logger::ACTION_SYNC_WHEN_TASK_CREATE, 'course.log.task.create.sync.fail_tips', ExceptionPrintingToolkit::printTraceAsArray($e));
+            $this->getLogService()->error(AppLoggerConstant::COURSE, 'sync_when_task_create', 'course.log.task.create.sync.fail_tips', array('error' => $e->getMessage()));
         }
     }
 
     private function createActivity($activity, $copiedCourse)
     {
-        //create testpaper&questions if ref exists
-        $testpaper = $this->syncTestpaper($activity, $copiedCourse);
-
-        $testId = empty($testpaper) ? 0 : $testpaper['id'];
-
         $newActivity = array(
             'title' => $activity['title'],
             'remark' => $activity['remark'],
@@ -86,10 +83,12 @@ class CourseTaskCreateSyncJob extends AbstractJob
             'startTime' => $activity['startTime'],
             'endTime' => $activity['endTime'],
             'copyId' => $activity['id'],
+            'finishType' => $activity['finishType'],
+            'finishData' => $activity['finishData'],
         );
 
         $ext = $this->getActivityConfig($activity['mediaType'])->copy($activity, array(
-            'testId' => $testId, 'refLiveroom' => 1, 'newActivity' => $newActivity, 'isCopy' => 1, 'isSync' => 1,
+            'refLiveroom' => 1, 'newActivity' => $newActivity, 'isCopy' => 1, 'isSync' => 1,
         ));
 
         if (!empty($ext)) {
@@ -131,24 +130,8 @@ class CourseTaskCreateSyncJob extends AbstractJob
             if ($material['lessonId'] > 0) {
                 $newMaterial['lessonId'] = $activity['id'];
             }
-
             $this->getMaterialDao()->create($newMaterial);
         }
-    }
-
-    private function syncTestpaper($activity, $copiedCourse)
-    {
-        if ($activity['mediaType'] != 'testpaper') {
-            return array();
-        }
-
-        $testpaperCopy = new ActivityTestpaperCopy($this->biz);
-
-        return $testpaperCopy->copy($activity, array(
-            'newCourseSetId' => $copiedCourse['courseSetId'],
-            'newCourseId' => $copiedCourse['id'],
-            'isCopy' => 1,
-        ));
     }
 
     protected function copyFields($source, $target, $fields)
@@ -163,22 +146,6 @@ class CourseTaskCreateSyncJob extends AbstractJob
         }
 
         return $target;
-    }
-
-    /**
-     * @return TaskService
-     */
-    private function getTaskService()
-    {
-        return $this->biz->service('Task:TaskService');
-    }
-
-    /**
-     * @return CourseDao
-     */
-    private function getCourseDao()
-    {
-        return $this->biz->dao('Course:CourseDao');
     }
 
     /**
@@ -198,14 +165,6 @@ class CourseTaskCreateSyncJob extends AbstractJob
     }
 
     /**
-     * @return TaskDao
-     */
-    private function getTaskDao()
-    {
-        return $this->biz->dao('Task:TaskDao');
-    }
-
-    /**
      * @param  $type
      *
      * @return Activity
@@ -213,14 +172,6 @@ class CourseTaskCreateSyncJob extends AbstractJob
     private function getActivityConfig($type)
     {
         return $this->biz["activity_type.{$type}"];
-    }
-
-    /**
-     * @return LogService
-     */
-    private function getLogService()
-    {
-        return $this->biz->service('System:LogService');
     }
 
     /**

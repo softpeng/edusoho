@@ -1,4 +1,5 @@
 import SmsSender from 'app/common/widget/sms-sender';
+import notify from 'common/notify';
 
 export default class UserInfoFieldsItemValidate {
   constructor(options) {
@@ -99,8 +100,21 @@ export default class UserInfoFieldsItemValidate {
         mobile: {
           phone: Translator.trans('validate.phone.message'),
         }
+      },
+      submitHandler: form => {
+        if ($(form).valid()) {
+          $.post($(form).attr('action'), $(form).serialize(), resp => {
+            if (resp.url) {
+              location.href = resp.url;
+            } else {
+              notify('success', Translator.trans('site.save_success_hint'));
+              $('#modal').modal('hide');
+            }
+
+          });
+        }
       }
-      });
+    });
     this.getCustomFields();
   }
 
@@ -119,7 +133,7 @@ export default class UserInfoFieldsItemValidate {
               $('.js-sms-send').removeClass('disabled');
             } else {
               $('.js-sms-send').addClass('disabled');
-              $('.js-captch-num').find('#getcode_num').attr("src",$("#getcode_num").data("url")+ "?" + Math.random());
+              $('.js-captch-num').find('#getcode_num').attr('src',$('#getcode_num').data('url')+ '?' + Math.random());
             }
           }
         },
@@ -138,11 +152,11 @@ export default class UserInfoFieldsItemValidate {
         messages: {
           required: Translator.trans('validate.sms_code_input.message'),
         }
-      })
+      });
     }
   }
 
-  sendSms(e) {
+  sendSms() {
 
     new SmsSender({
       element: '.js-sms-send',
@@ -163,7 +177,7 @@ export default class UserInfoFieldsItemValidate {
     for (var i = 1; i <= 5; i++) {
       $(`[name="intField${i}"]`).rules('add', {
         required: true,
-        int: true,
+        positive_integer: true,
       });
       $(`[name="floatField${i}"]`).rules('add', {
         required: true,
@@ -174,7 +188,7 @@ export default class UserInfoFieldsItemValidate {
         date: true,
       });
     }
-    for (var i = 1; i <= 10; i++) {
+    for (i = 1; i <= 10; i++) {
       $(`[name="varcharField${i}"]`).rules('add', {
         required: true,
       });
@@ -186,6 +200,6 @@ export default class UserInfoFieldsItemValidate {
 
   changeCaptcha(e) {
     var $code = $(e.currentTarget);
-    $code.attr("src", $code.data("url") + "?" + Math.random());
+    $code.attr('src', $code.data('url') + '?' + Math.random());
   }
 }

@@ -2,7 +2,7 @@
 
 namespace AppBundle\Component\MediaParser\ItemParser;
 
-use AppBundle\Component\MediaParser\ParseException;
+use AppBundle\Component\MediaParser\ParserException;
 
 class QQVideoItemParser extends AbstractItemParser
 {
@@ -19,7 +19,7 @@ class QQVideoItemParser extends AbstractItemParser
         'p10' => '/^https\:\/\/v\.qq\.com\/x\/cover\//s',
     );
 
-    public function parse($url)
+    protected function parseForWebUrl($item, $url)
     {
         $matched = preg_match('/vid=(\w+)/s', $url, $matches);
         $response = array();
@@ -28,15 +28,13 @@ class QQVideoItemParser extends AbstractItemParser
             $vid = $matches[1];
         } else {
             $response = $this->fetchUrl($url);
-
-            if ($response['code'] != 200) {
-                throw new ParseException('获取QQ视频页面信息失败');
+            if (200 != $response['code']) {
+                throw ParserException::PARSED_FAILED_QQ();
             }
-
             $matched = preg_match('/VIDEO_INFO.*?[\"]?vid[\"]?\s*:\s*"(\w+?)"/s', $response['content'], $matches);
 
             if (empty($matched)) {
-                throw new ParseException('解析QQ视频ID失败');
+                throw ParserException::PARSED_FAILED_QQ();
             }
 
             $vid = $matches[1];
@@ -49,15 +47,14 @@ class QQVideoItemParser extends AbstractItemParser
             $videoUrl = 'http://sns.video.qq.com/tvideo/fcgi-bin/video?otype=json&vid='.$vid;
 
             $response = $this->fetchUrl($videoUrl);
-
-            if ($response['code'] != 200) {
-                throw new ParseException('获取QQ视频信息失败');
+            if (200 != $response['code']) {
+                throw ParserException::PARSED_FAILED_QQ();
             }
 
             $matched = preg_match('/{.*}/s', $response['content'], $matches);
 
             if (empty($matched)) {
-                throw new ParseException('解析QQ视频信息失败');
+                throw ParserException::PARSED_FAILED_QQ();
             }
 
             $video = json_decode($matches[0], true) ?: array();
@@ -78,52 +75,47 @@ class QQVideoItemParser extends AbstractItemParser
             $duration = $video ? $video['duration'] : '';
             $pageUrl = $video ? 'http://v.qq.com/cover/'.substr($video['cover'], 0, 1)."/{$video['cover']}.html?vid={$vid}" : $url;
 
-            $item = $this->getItem($vid, $title, $summary, $duration, $pageUrl);
+            $parsedInfo = $this->getItem($vid, $title, $summary, $duration, $pageUrl);
         } else {
             $title = $this->getVideoTitle($response);
 
             if (empty($title)) {
-                throw new ParseException('解析QQ视频ID失败');
+                throw ParserException::PARSED_FAILED_QQ();
             }
         }
 
-        return $this->getItem($vid, $title, '', '', $url);
+        $parsedInfo = $this->getItem($vid, $title, '', '', $url);
+
+        return array_merge($item, $parsedInfo);
     }
 
-    protected function getItem($vid, $title, $summary, $duration, $pageUrl)
+    protected function getUrlPrefixes()
     {
-        $item = array(
-            'type' => 'video',
-            'source' => 'qqvideo',
-            'uuid' => 'qqvideo:'.$vid,
-            'name' => $title,
-            'summary' => $summary,
-            'duration' => $duration,
-            'page' => $pageUrl,
-            'pictures' => array(
-                array('url' => "http://shp.qpic.cn/qqvideo/0/{$vid}/400"),
-            ),
-            'files' => array(
-                array('type' => 'swf', 'url' => "http://static.video.qq.com/TPout.swf?vid={$vid}&auto=1"),
-                array('type' => 'mp4', 'url' => "http://video.store.qq.com/{$vid}.mp4"),
-            ),
+        return array(
+            'v.qq.com',
         );
-
-        return $item;
     }
 
-    public function detect($url)
+    protected function convertMediaUri($video)
     {
-        $matched = $this->getUrlMatched($url);
-
+        $video['mediaUri'] = str_replace('static.video.qq.com', 'imgcache.qq.com/tencentvideo_v1/playerv3', $video['mediaUri']);
+        $matched = preg_match('/^(http|https):(\S*)/s', $video['mediaUri'], $matches);
         if ($matched) {
-            return true;
+            $video['mediaUri'] = $matches[2];
         }
 
-        return false;
+        return $video;
     }
 
-    protected function getUrlMatched($url)
+    protected function getDefaultParsedInfo()
+    {
+        return array(
+            'source' => 'qqvideo',
+            'name' => 'QQ视频',
+        );
+    }
+
+    private function getUrlMatched($url)
     {
         foreach ($this->patterns as $key => $pattern) {
             $matched = preg_match($pattern, $url);
@@ -136,7 +128,7 @@ class QQVideoItemParser extends AbstractItemParser
         return false;
     }
 
-    protected function getVideoTitle($responseInfo)
+    private function getVideoTitle($responseInfo)
     {
         $matched = preg_match('/VIDEO_INFO.*?[\"]?title[\"]?\s*:\s*"(.*?)"/s', $responseInfo['content'], $matches);
 
@@ -145,5 +137,25 @@ class QQVideoItemParser extends AbstractItemParser
         }
 
         return $matches[1];
+    }
+
+    private function getItem($vid, $title, $summary, $duration, $pageUrl)
+    {
+        $item = array(
+            'uuid' => 'qqvideo:'.$vid,
+            'name' => $title,
+            'summary' => $summary,
+            'duration' => $duration,
+            'page' => $pageUrl,
+            'pictures' => array(
+                array('url' => "http://shp.qpic.cn/qqvideo/0/{$vid}/400"),
+            ),
+            'files' => array(
+                array('type' => 'swf', 'url' => "//imgcache.qq.com/tencentvideo_v1/playerv3/TPout.swf?vid={$vid}&auto=1"),
+                array('type' => 'mp4', 'url' => "//video.store.qq.com/{$vid}.mp4"),
+            ),
+        );
+
+        return $item;
     }
 }

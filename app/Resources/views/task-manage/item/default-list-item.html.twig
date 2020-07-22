@@ -19,9 +19,11 @@
 
       {{ task.title|sub_text(30) }}
       {% if task.activity.mediaType is same as('live') %}
+        {% set isLiveFinished = is_live_finished(task.activity.id, 'course') %}
+        
         {% if not task.activity.ext.roomCreated|default(true) %}
           <span class="color-warning">{{ 'course.plan_task.edit_tips'|trans }}</span>
-        {% elseif task.activity.endTime < date().timestamp %}
+        {% elseif isLiveFinished %}
           <span class="color-gray">{{ 'course.plan_task.live_finish_tips'|trans }}</span>
         {% else %}
           <span class="color-success mls">
@@ -82,6 +84,7 @@
                 <i class="es-icon es-icon--check-circle mrm"></i>{{'course.plan_task.publish_btn'|trans}}
               </a>
             </li>
+            {{ slot('task.menu.extension', {'task': task}) }}
             <li>
             <a class='delete-item {% if status == 1 %}hidden{% endif %}' href="javascript:;" data-type="task"
               data-url="{{ path('course_manage_task_delete', {taskId:task.id,courseId:task.courseId}) }}">
@@ -98,7 +101,7 @@
         data-backdrop="static" data-keyboard="false"
         data-help="popover" data-placement="top" data-html="true" data-trigger="hover"
         {% if not tasks.preparation|default(null) %}
-          data-content="{{'course.plan_task.preparation_tips'|trans}}"
+          data-content="{{'course.plan_task.preparation_tips'|trans({'%taskName%':setting('course.task_name')|default('admin.setting_course.task'|trans)})}}"
           data-url="{{ path('course_manage_task_create', {courseId:course.id, type: 'preparation', categoryId: chapter.id}) }}">
         {% else %}
           data-content="<i class='mr10 es-icon
@@ -126,7 +129,7 @@
             {{ activity_metas(task.activity.mediaType).icon }}
           {% endif %} '></i>{{task.title|trans}}">
         <i class="es-icon es-icon-book mrm" data-role="task"></i>
-        {{'course.plan_task.task'|trans}}
+        {{'course.plan_task.task'|trans({'%taskName%':setting('course.task_name')|default('admin.setting_course.task'|trans)})}}
       </a>
       <i class="es-icon es-icon-angledoubleright after"></i>
     </div>

@@ -2,12 +2,15 @@
 
 namespace Biz\Activity\Service\Impl;
 
+use Biz\Activity\ActivityException;
+use Biz\Activity\DownloadActivityException;
 use Biz\BaseService;
+use Biz\Course\MaterialException;
 use Biz\Course\Service\MaterialService;
 use Biz\Activity\Service\ActivityService;
 use Biz\Activity\Dao\DownloadFileRecordDao;
 use Biz\Activity\Service\DownloadActivityService;
-use Codeages\Biz\Framework\Service\Exception\AccessDeniedException;
+use Biz\User\UserException;
 
 class DownloadActivityServiceImpl extends BaseService implements DownloadActivityService
 {
@@ -15,7 +18,7 @@ class DownloadActivityServiceImpl extends BaseService implements DownloadActivit
     {
         $user = $this->getCurrentUser();
         if (!$user->isLogin()) {
-            throw new AccessDeniedException();
+            $this->createNewException(UserException::UN_LOGIN());
         }
         $record = array(
             'downloadActivityId' => $activity['id'],
@@ -28,16 +31,31 @@ class DownloadActivityServiceImpl extends BaseService implements DownloadActivit
         return $this->getDownloadFileRecordDao()->create($record);
     }
 
-    public function downloadActivityFile($activityId, $materialId)
+    public function downloadActivityFile($courseId, $activityId, $materialId)
     {
         $activity = $this->getActivityService()->getActivity($activityId, $fetchMedia = true);
         if (empty($activity)) {
-            throw $this->createNotFoundException('activity not found');
+            $this->createNewException(ActivityException::NOTFOUND_ACTIVITY());
         }
+
+        if ($courseId != $activity['fromCourseId']) {
+            $this->createNewException(ActivityException::ACTIVITY_NOT_IN_COURSE());
+        }
+
         $material = $this->getMaterialService()->getMaterial($activity['fromCourseId'], $materialId);
 
         if (empty($material)) {
-            throw $this->createNotFoundException('file not found');
+            $this->createNewException(MaterialException::NOTFOUND_MATERIAL());
+        }
+
+        $downloadAvtivity = $activity['ext'];
+
+        if (!isset($downloadAvtivity['fileIds'])) {
+            $this->createNewException(DownloadActivityException::NOT_DOWNLOAD_ACTIVITY());
+        }
+
+        if (!in_array($material['fileId'], $downloadAvtivity['fileIds']) && !in_array($material['link'], $downloadAvtivity['fileIds'])) {
+            $this->createNewException(DownloadActivityException::FILE_NOT_IN_ACTIVITY());
         }
         $this->createDownloadFileRecord($activity, $material);
 

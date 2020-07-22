@@ -4,7 +4,8 @@ let heigth = ($('.js-sidebar-pane').height() - 175);
 let $content = $('#note-content-field');
 let lastNoteContent;
 let editor = CKEDITOR.replace('note-content-field', {
-  toolbar: 'Simple',
+  toolbar: 'Minimal',
+  fileSingleSizeLimit: app.fileSingleSizeLimit,
   filebrowserImageUploadUrl: $content.data('imageUploadUrl'),
   allowedContent: true,
   height: heigth < 300 ? 200 : heigth,
@@ -24,7 +25,7 @@ setInterval(saveNote,30000);
 
 function saveNote($btn = null) {
   if(!$.trim($content.val())) {
-    $btn ? notify('danger', '请输入笔记内容！') : '';
+    $btn ? notify('danger', Translator.trans('course.notebook.empty_note_content_notice')) : '';
     return;
   }
   let $form = $('#task-note-plugin-form');
@@ -33,7 +34,7 @@ function saveNote($btn = null) {
     return;
   }
   saveRedmineLoading();
-  $btn ? $btn.attr('disabled', 'disabled'): "";
+  $btn ? $btn.attr('disabled', 'disabled'): '';
   $.post($form.attr('action'), data)
     .then((response) => {
       saveRedmineSuccess();

@@ -6,7 +6,6 @@ use Biz\BaseService;
 use Biz\CloudFile\Service\CloudFileService;
 use Biz\MaterialLib\Service\MaterialLibService;
 use AppBundle\Common\ArrayToolkit;
-use Topxia\Service\Common\ServiceKernel;
 
 class MaterialLibServiceImpl extends BaseService implements MaterialLibService
 {
@@ -85,9 +84,7 @@ class MaterialLibServiceImpl extends BaseService implements MaterialLibService
     public function batchShare($ids)
     {
         foreach ($ids as $key => $id) {
-            $fields = array('isPublic' => '1');
-
-            $this->getUploadFileService()->update($id, $fields);
+            $this->getUploadFileService()->sharePublic($id);
         }
 
         return array('success' => true);
@@ -95,9 +92,7 @@ class MaterialLibServiceImpl extends BaseService implements MaterialLibService
 
     public function unShare($id)
     {
-        $fields = array('isPublic' => '0');
-
-        $this->getUploadFileService()->update($id, $fields);
+        $this->getUploadFileService()->unsharePublic($id);
 
         return array('success' => true);
     }
@@ -137,7 +132,7 @@ class MaterialLibServiceImpl extends BaseService implements MaterialLibService
 
     protected function getUploadFileService()
     {
-        return ServiceKernel::instance()->createService('File:UploadFileService');
+        return $this->createService('File:UploadFileService');
     }
 
     /**
@@ -145,16 +140,16 @@ class MaterialLibServiceImpl extends BaseService implements MaterialLibService
      */
     protected function getCloudFileService()
     {
-        return $this->biz->service('CloudFile:CloudFileService');
+        return $this->createService('CloudFile:CloudFileService');
     }
 
     protected function getUploadFileTagService()
     {
-        return ServiceKernel::instance()->createService('File:UploadFileTagService');
+        return $this->createService('File:UploadFileTagService');
     }
 
     protected function getUserService()
     {
-        return ServiceKernel::instance()->createService('User:UserService');
+        return $this->createService('User:UserService');
     }
 }

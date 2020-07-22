@@ -3,23 +3,25 @@
 namespace Biz\Activity\Type;
 
 use AppBundle\Common\ArrayToolkit;
+use Biz\Activity\ActivityException;
 use Biz\Activity\Config\Activity;
 use Biz\Activity\Dao\ActivityDao;
 use Biz\Activity\Service\LiveActivityService;
-use Codeages\Biz\Framework\Service\Exception\InvalidArgumentException;
+use Biz\Common\CommonException;
 
 class Live extends Activity
 {
     protected function registerListeners()
     {
         return array(
+            'watching' => 'Biz\Activity\Listener\LiveActivityWatchListener',
         );
     }
 
     public function preCreateCheck($fields)
     {
         if (!ArrayToolkit::requireds($fields, array('fromCourseId', 'startTime', 'length'), true)) {
-            throw new InvalidArgumentException('activity.missing_params');
+            throw CommonException::ERROR_PARAMETER_MISSING();
         }
 
         $overlapTimeActivities = $this->getActivityDao()->findOverlapTimeActivitiesByCourseId(
@@ -29,7 +31,7 @@ class Live extends Activity
         );
 
         if ($overlapTimeActivities) {
-            throw new InvalidArgumentException('activity.live.overlap_time');
+            throw ActivityException::LIVE_OVERLAP_TIME();
         }
     }
 
@@ -40,7 +42,7 @@ class Live extends Activity
         }
 
         if (!ArrayToolkit::requireds($newFields, array('fromCourseId', 'startTime', 'length'), true)) {
-            throw new InvalidArgumentException('activity.missing_params');
+            throw CommonException::ERROR_PARAMETER_MISSING();
         }
 
         $overlapTimeActivities = $this->getActivityDao()->findOverlapTimeActivitiesByCourseId(
@@ -51,7 +53,7 @@ class Live extends Activity
         );
 
         if ($overlapTimeActivities) {
-            throw new InvalidArgumentException('activity.live.overlap_time');
+            throw ActivityException::LIVE_OVERLAP_TIME();
         }
     }
 
@@ -62,10 +64,10 @@ class Live extends Activity
 
     public function copy($activity, $config = array())
     {
-        $biz = $this->getBiz();
+        $user = $this->getCurrentUser();
         $live = $this->getLiveActivityService()->getLiveActivity($activity['mediaId']);
         if (empty($config['refLiveroom'])) {
-            $activity['fromUserId'] = $biz['user']['id'];
+            $activity['fromUserId'] = $user['id'];
             unset($activity['id']);
             unset($activity['startTime']);
             unset($activity['endTime']);
@@ -89,7 +91,9 @@ class Live extends Activity
 
     public function update($id, &$fields, $activity)
     {
-        return $this->getLiveActivityService()->updateLiveActivity($id, $fields, $activity);
+        list($liveActivity, $fields) = $this->getLiveActivityService()->updateLiveActivity($id, $fields, $activity);
+
+        return $liveActivity;
     }
 
     public function get($targetId)
@@ -97,14 +101,18 @@ class Live extends Activity
         return $this->getLiveActivityService()->getLiveActivity($targetId);
     }
 
-    public function find($targetIds)
+    public function find($targetIds, $showCloud = 1)
     {
         return $this->getLiveActivityService()->findLiveActivitiesByIds($targetIds);
     }
 
     public function delete($targetId)
     {
-        return $this->getLiveActivityService()->deleteLiveActivity($targetId);
+        $conditions = array('type' => 'live', 'mediaId' => $targetId);
+        $count = $this->getActivityService()->count($conditions);
+        if (1 == $count) {
+            return $this->getLiveActivityService()->deleteLiveActivity($targetId);
+        }
     }
 
     public function allowEventAutoTrigger()
@@ -118,6 +126,14 @@ class Live extends Activity
     protected function getLiveActivityService()
     {
         return $this->getBiz()->service('Activity:LiveActivityService');
+    }
+
+    /**
+     * @return ActivityService
+     */
+    protected function getActivityService()
+    {
+        return $this->getBiz()->service('Activity:ActivityService');
     }
 
     /**

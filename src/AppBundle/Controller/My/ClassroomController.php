@@ -24,11 +24,34 @@ class ClassroomController extends BaseController
             return $this->createMessageResponse('error', '您不是老师，不能查看此页面！');
         }
 
-        $classrooms = $this->getClassroomService()->searchMembers(array('role' => 'teacher', 'userId' => $user->getId()), array('createdTime' => 'desc'), 0, PHP_INT_MAX);
-        $classrooms = array_merge($classrooms, $this->getClassroomService()->searchMembers(array('role' => 'assistant', 'userId' => $user->getId()), array('createdTime' => 'desc'), 0, PHP_INT_MAX));
-        $classroomIds = ArrayToolkit::column($classrooms, 'classroomId');
+        $orderBy = array('createdTime' => 'desc');
 
-        $classrooms = $this->getClassroomService()->findClassroomsByIds($classroomIds);
+        $classroomMembers = $this->getClassroomService()->searchMembers(array('role' => 'teacher', 'userId' => $user->getId()), $orderBy, 0, PHP_INT_MAX);
+        $classroomMembers = array_merge($classroomMembers, $this->getClassroomService()->searchMembers(array('role' => 'assistant', 'userId' => $user->getId()), $orderBy, 0, PHP_INT_MAX));
+        $classroomIds = ArrayToolkit::column($classroomMembers, 'classroomId');
+
+        if (empty($classroomIds)) {
+            return $this->render('my/teaching/classroom.html.twig', array(
+                'classrooms' => array(),
+                'members' => array(),
+                'paginator' => array(),
+            ));
+        }
+
+        $conditions = array('classroomIds' => $classroomIds);
+
+        $paginator = new Paginator(
+            $this->get('request'),
+            $this->getClassroomService()->countClassrooms($conditions),
+            20
+        );
+
+        $classrooms = $this->getClassroomService()->searchClassrooms(
+            $conditions,
+            $orderBy,
+            $paginator->getOffsetCount(),
+            $paginator->getPerPageCount()
+        );
 
         $members = $this->getClassroomService()->findMembersByUserIdAndClassroomIds($user->id, $classroomIds);
 
@@ -48,10 +71,9 @@ class ClassroomController extends BaseController
 
             $todayTimeStart = strtotime(date('Y-m-d', time()));
             $todayTimeEnd = strtotime(date('Y-m-d', time() + 24 * 3600));
-            $todayFinishedTaskNum = $this->getTaskResultService()->countTaskResults(array('courseIds' => $courseIds, 'createdTime' => $todayTimeStart, 'finishedTime' => $todayTimeEnd, 'status' => 'finish'));
 
+            $todayFinishedTaskNum = $this->getTaskResultService()->countTaskResults(array('courseIds' => (!empty($courseIds)) ? $courseIds : array(-1), 'createdTime_GE' => $todayTimeStart, 'status' => 'finish'));
             $threadCount = $this->getThreadService()->searchThreadCount(array('targetType' => 'classroom', 'targetId' => $classroom['id'], 'type' => 'discussion', 'startTime' => $todayTimeStart, 'endTime' => $todayTimeEnd, 'status' => 'open'));
-
             $classrooms[$key]['threadCount'] = $threadCount;
 
             $classrooms[$key]['todayFinishedTaskNum'] = $todayFinishedTaskNum;
@@ -60,6 +82,7 @@ class ClassroomController extends BaseController
         return $this->render('my/teaching/classroom.html.twig', array(
             'classrooms' => $classrooms,
             'members' => $members,
+            'paginator' => $paginator,
         ));
     }
 
@@ -72,6 +95,12 @@ class ClassroomController extends BaseController
             'userId' => $user->id,
         ), array('createdTime' => 'desc'), 0, PHP_INT_MAX);
 
+        $assistants = $this->getClassroomService()->searchMembers(array(
+            'role' => 'assistant',
+            'userId' => $user->id,
+        ), null, 0, PHP_INT_MAX);
+
+        $members = array_merge($members, $assistants);
         $members = ArrayToolkit::index($members, 'classroomId');
 
         $classroomIds = ArrayToolkit::column($members, 'classroomId');
@@ -125,6 +154,40 @@ class ClassroomController extends BaseController
         $classrooms = $this->getClassroomService()->findClassroomsByIds(ArrayToolkit::column($threads, 'targetId'));
 
         return $this->render('my/learning/classroom/discussions.html.twig', array(
+            'threadType' => 'classroom',
+            'paginator' => $paginator,
+            'threads' => $threads,
+            'users' => $users,
+            'classrooms' => $classrooms,
+        ));
+    }
+
+    public function classroomQuestionsAction(Request $request)
+    {
+        $user = $this->getUser();
+
+        $conditions = array(
+            'userId' => $user['id'],
+            'type' => 'question',
+            'targetType' => 'classroom',
+        );
+
+        $paginator = new Paginator(
+            $request,
+            $this->getThreadService()->searchThreadCount($conditions),
+            20
+        );
+        $threads = $this->getThreadService()->searchThreads(
+            $conditions,
+            'createdNotStick',
+            $paginator->getOffsetCount(),
+            $paginator->getPerPageCount()
+        );
+
+        $users = $this->getUserService()->findUsersByIds(ArrayToolkit::column($threads, 'lastPostUserId'));
+        $classrooms = $this->getClassroomService()->findClassroomsByIds(ArrayToolkit::column($threads, 'targetId'));
+
+        return $this->render('my/learning/classroom/questions.html.twig', array(
             'threadType' => 'classroom',
             'paginator' => $paginator,
             'threads' => $threads,

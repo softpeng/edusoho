@@ -8,10 +8,16 @@
 <html class="lt-ie9"> <![endif]-->
 <!--[if gt IE 8]><!-->
 <html> <!--<![endif]-->
-{# returns app.request.locale if available and app.request.defaultLocale if app.request.locale is not set#}
-{% set mobile = is_show_mobile_page() %}
+
 {% set lang = app.request.getLocale() %}
-<html lang="{{ lang }}" class="{% if mobile  and setting('theme.code', 'jianmo') == 'jianmo' %}es-mobile{% endif %}{% if lang == 'en' %}es-en{% endif %}">
+{% set mobile = is_show_mobile_page() %}
+
+{% set currentTheme = current_theme() %}
+{% set themeConfig = app.request.get('themeEditing')|default(false) ? currentTheme.config  : currentTheme.confirmConfig %}
+{% set maincolor = themeConfig.maincolor|default('default') %}
+{% set navigationcolor = themeConfig.navigationcolor|default('default') %}
+
+<html lang="{{ lang }}" class="{% if lang == 'en' %}es-en{% endif %}">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge,Chrome=1">
@@ -29,9 +35,11 @@
 {% spaceless %}{% block keywords %}{{ setting('site.seo_keywords') }}{% endblock %}{% endspaceless %}"/>
     <meta name="description"
           content="{% spaceless %}{% block description %}{{ setting('site.seo_description') }}{% endblock %}{% endspaceless %}"/>
+    <meta name="format-detection"
+          content="{% spaceless %}{% block format_detection %}{% endblock %}{% endspaceless %}"/>
     <meta content="{{ csrf_token('site') }}" name="csrf-token"/>
     <meta content="{{ app.user.isLogin()|default(0) }}" name="is-login"/>
-    <meta content="{{ setting('login_bind.weixinmob_enabled')|default(0) }}" name="is-open"/>
+    <meta content="{{ wechat_login_bind_enabled()|default(0) }}" name="wechat_login_bind"/>
   {% endblock %}
 
 
@@ -48,25 +56,13 @@
   <![endif]-->
 
   {% block stylesheets %}
-    {% set currentTheme = current_theme() %}
     {% include 'css_loader.html.twig' %}
-    {% include 'default/stylesheet-webpack.html.twig' with {config: currentTheme, isEditColor: isEditColor|default(false)} %}
+    {% include 'default/stylesheet-webpack.html.twig' %}
   {% endblock %}
 
   {% block head_scripts %}{% endblock %}
-
-  {% set currentTheme = current_theme() %}
-  {% if isEditColor|default(0) %}
-    {% set maincolor = currentTheme.config.maincolor|default(currentTheme.config.color|default('default')) %}
-    {% set navigationcolor = currentTheme.config.navigationcolor|default('default') %}
-  {% else %}
-    {% set maincolor = currentTheme.confirmConfig.maincolor|default(currentTheme.confirmConfig.color|default('default')) %}
-    {% set navigationcolor = currentTheme.confirmConfig.navigationcolor|default('default') %}
-  {% endif %}
-
 </head>
-<body class="{{ 'es-main-' ~ maincolor }} {{ 'es-nav-' ~ navigationcolor }} {% if bodyClass|default('') %}{{ bodyClass }}{% endif %}">
-
+<body class="{% block bodyClass %}{{ 'es-main-' ~ maincolor }} {{ 'es-nav-' ~ navigationcolor }} {% if bodyClass|default('') %}{{ bodyClass }}{% endif %}{% endblock %}">
 <!--[if lt IE 9]>
 <script src="{{ asset('static-dist/libs/fix-ie.js') }}"></script>
 {% include 'default/ie8-alert.html.twig' %}
@@ -74,10 +70,10 @@
 
 {% block body %}
   <div class="es-wrap">
-
     {% block header %}
       {% include 'site-hint.html.twig' %}
       {% include 'default/header.html.twig' %}
+      {% include 'default/exception.html.twig' %}
     {% endblock %}
 
     {% block full_content %}
@@ -101,16 +97,24 @@
   </div>
 
   {% block esBar %}
-    {% if setting('esBar.enabled', 0) %}
+    {% if setting('esBar.enabled', 0) and app.user.isLogin()|default(false) %}
       {% include 'es-bar/index.html.twig' %}
     {% endif %}
   {% endblock %}
 
-  {% block floatConsult %}
+  {% block wechatInform %}
+    {% if (siteNav|default() == '/') %}
+      {% if (is_mobile_client() == false or (is_mobile_client() and (app.request.headers.get('User-Agent') matches '/MicroMessenger/'))) and app.user.isLogin()|default(false) %}
+        {% include 'wechat-inform.html.twig' %}
+      {% endif %}
+    {% endif %}
+  {% endblock %}
 
-    {% set cloud_consult = setting('cloud_consult', '') %}
-    {% if cloud_consult and cloud_consult.cloud_consult_setting_enabled |default(0) and cloud_consult.cloud_consult_is_buy |default(0) and cloud_consult.cloud_consult_js |default('') %}
-      {{ cloud_consult.cloud_consult_js | raw }}
+  {% block floatConsult %}
+  
+    {% set cloudConsultPath = cloudConsultPath() %}
+    {% if cloudConsultPath|default() %}
+      {{ cloudConsultPath | raw }}
     {% endif %}
 
     {% if setting('consult.enabled', 0) and (consultDisplay|default(false) or siteNav|default() == '/' ) %}
@@ -137,6 +141,12 @@
   {% include 'default/script-webpack.html.twig' %}
   {% include 'script_boot.html.twig' %}
 {% endblock %}
+
+{% if setting('auth.register_mode') == 'mobile' and app.user.isLogin()|default(false) and app.user.verifiedMobile is empty  %}
+  <div id="mobile-bind-modal" class="modal" >
+    {% include 'mobile-bind-modal.html.twig' %}
+  </div>
+{% endif %}
 
 </body>
 </html>

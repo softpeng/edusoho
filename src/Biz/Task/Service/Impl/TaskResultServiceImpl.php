@@ -9,9 +9,17 @@ use AppBundle\Common\ArrayToolkit;
 use Biz\Course\Service\CourseService;
 use Biz\Task\Service\TaskResultService;
 use Biz\Task\Service\TaskService;
+use Biz\User\UserException;
 
 class TaskResultServiceImpl extends BaseService implements TaskResultService
 {
+    public function countTaskNumGroupByUserId($conditions)
+    {
+        $result = $this->getTaskResultDao()->countTaskNumGroupByUserId($conditions);
+
+        return ArrayToolkit::index($result, 'userId');
+    }
+
     public function analysisCompletedTaskDataByTime($startTime, $endTime)
     {
         return $this->getTaskResultDao()->analysisCompletedTaskDataByTime($startTime, $endTime);
@@ -22,7 +30,7 @@ class TaskResultServiceImpl extends BaseService implements TaskResultService
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('can not get task results because user not login');
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         return $this->getTaskResultDao()->findByCourseIdAndUserId($courseId, $user['id']);
@@ -33,7 +41,7 @@ class TaskResultServiceImpl extends BaseService implements TaskResultService
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('can not get task result because user not login');
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         return $this->getTaskResultDao()->getByTaskIdAndUserId($taskId, $user['id']);
@@ -44,9 +52,8 @@ class TaskResultServiceImpl extends BaseService implements TaskResultService
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('can not get task result because user not login');
+            $this->createNewException(UserException::UN_LOGIN());
         }
-        $this->getLogService()->info('course', 'delete_taskLearn', "删除任务学习记录, taskId:(#{$taskId})");
 
         return $this->getTaskResultDao()->deleteByTaskIdAndUserId($taskId, $user['id']);
     }
@@ -54,6 +61,11 @@ class TaskResultServiceImpl extends BaseService implements TaskResultService
     public function deleteTaskResultsByTaskId($taskId)
     {
         return $this->getTaskResultDao()->deleteByTaskId($taskId);
+    }
+
+    public function getTaskResult($resultId)
+    {
+        return $this->getTaskResultDao()->get($resultId);
     }
 
     public function createTaskResult($taskResult)
@@ -68,7 +80,7 @@ class TaskResultServiceImpl extends BaseService implements TaskResultService
         $user = $this->biz['user'];
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('user must be login');
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         $taskResult['status'] = 'start';
@@ -106,7 +118,7 @@ class TaskResultServiceImpl extends BaseService implements TaskResultService
         $course = $this->getCourseService()->getCourse($task['courseId']);
 
         //只有视频课程才限制观看时长
-        if (empty($course['watchLimit']) || $task['type'] !== 'video') {
+        if (empty($course['watchLimit']) || 'video' !== $task['type']) {
             return array('status' => 'ignore');
         }
 
@@ -129,7 +141,7 @@ class TaskResultServiceImpl extends BaseService implements TaskResultService
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('unlogin');
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         $conditions = array(
@@ -148,7 +160,7 @@ class TaskResultServiceImpl extends BaseService implements TaskResultService
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('unlogin');
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         $conditions = array(
@@ -167,7 +179,7 @@ class TaskResultServiceImpl extends BaseService implements TaskResultService
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('unlogin');
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         $conditions = array(
@@ -191,7 +203,7 @@ class TaskResultServiceImpl extends BaseService implements TaskResultService
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('unlogin');
+            $this->createNewException(UserException::UN_LOGIN());
         }
         $conditions = array(
             'userId' => $user->getId(),
@@ -207,10 +219,7 @@ class TaskResultServiceImpl extends BaseService implements TaskResultService
     {
         $user = $this->getCurrentUser();
 
-        if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('unlogin');
-        }
-        if (empty($taskIds)) {
+        if (!$user->isLogin() || empty($taskIds)) {
             return array();
         }
 
@@ -219,7 +228,7 @@ class TaskResultServiceImpl extends BaseService implements TaskResultService
 
     public function countUsersByTaskIdAndLearnStatus($taskId, $status)
     {
-        if ($status === 'all') {
+        if ('all' === $status) {
             $status = null;
         }
         $task = $this->getTaskService()->getTask($taskId);
@@ -300,6 +309,16 @@ class TaskResultServiceImpl extends BaseService implements TaskResultService
     public function findTaskresultsByTaskId($taskId)
     {
         return $this->getTaskResultDao()->findTaskresultsByTaskId($taskId);
+    }
+
+    public function getTaskResultByTaskIdAndUserId($taskId, $userId)
+    {
+        return $this->getTaskResultDao()->getByTaskIdAndUserId($taskId, $userId);
+    }
+
+    public function sumCourseSetLearnedTimeByTaskIds($taskIds)
+    {
+        return $this->getTaskResultDao()->sumCourseSetLearnedTimeByTaskIds($taskIds);
     }
 
     /**

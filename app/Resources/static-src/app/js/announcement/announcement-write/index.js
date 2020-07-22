@@ -25,9 +25,9 @@ function initValidator() {
 function initEvent() {
   $('#modal').modal('show');
   $('a[data-role="announcement-modal"]').click(function () {
-    var $modal = $("#modal");
-    $modal.html("").load($(this).data('url'));
-  })
+    var $modal = $('#modal');
+    $modal.html('').load($(this).data('url'));
+  });
   $('.js-save-btn').click(function () {
     if (validator.form()) {
       $('.js-save-btn').button('loading');
@@ -35,13 +35,14 @@ function initEvent() {
         window.location.reload();
       }, 'json');
     }
-  })
+  });
 }
 
 function initCkeditor(validator) {
   // group: 'course'
   var editor = CKEDITOR.replace('announcement-content-field', {
     toolbar: 'Simple',
+    fileSingleSizeLimit: app.fileSingleSizeLimit,
     filebrowserImageUploadUrl: $('#announcement-content-field').data('imageUploadUrl')
   });
 
@@ -57,8 +58,8 @@ function initCkeditor(validator) {
 
 function initDatetimePicker(validator) {
   var now = new Date();
-  $("[name=startTime]").datetimepicker({
-    language: "zh",
+  $('[name=startTime]').datetimepicker({
+    language: 'zh',
     autoclose: true
   }).on('hide', function (ev) {
     validator.form();
@@ -69,9 +70,9 @@ function initDatetimePicker(validator) {
     $('[name=endTime]').datetimepicker('setStartDate', $('[name=startTime]').val().substring(0, 16));
   });
 
-  $("[name=endTime]").datetimepicker({
+  $('[name=endTime]').datetimepicker({
     autoclose: true,
-    language: "zh",
+    language: 'zh',
   }).on('hide', function (ev) {
     validator.form();
   });

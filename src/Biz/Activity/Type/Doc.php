@@ -6,6 +6,7 @@ use AppBundle\Common\ArrayToolkit;
 use Biz\Activity\Config\Activity;
 use Biz\Activity\Dao\DocActivityDao;
 use Biz\CloudPlatform\Client\CloudAPIIOException;
+use Biz\Common\CommonException;
 use Biz\File\Service\UploadFileService;
 use Biz\Activity\Service\ActivityService;
 
@@ -27,6 +28,16 @@ class Doc extends Activity
 
     public function create($fields)
     {
+        if (empty($fields['media'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $media = json_decode($fields['media'], true);
+
+        if (empty($media['id'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $fields['mediaId'] = $media['id'];
+
         $default = array(
             'finishDetail' => 1,
         );
@@ -38,8 +49,8 @@ class Doc extends Activity
             'finishDetail',
         ));
 
-        $biz = $this->getBiz();
-        $doc['createdUserId'] = $biz['user']['id'];
+        $user = $this->getCurrentUser();
+        $doc['createdUserId'] = $user['id'];
         $doc['createdTime'] = time();
 
         $doc = $this->getDocActivityDao()->create($doc);
@@ -49,13 +60,13 @@ class Doc extends Activity
 
     public function copy($activity, $config = array())
     {
-        $biz = $this->getBiz();
+        $user = $this->getCurrentUser();
         $doc = $this->getDocActivityDao()->get($activity['mediaId']);
         $newDoc = array(
             'mediaId' => $doc['mediaId'],
             'finishType' => $doc['finishType'],
             'finishDetail' => $doc['finishDetail'],
-            'createdUserId' => $biz['user']['id'],
+            'createdUserId' => $user['id'],
         );
 
         return $this->getDocActivityDao()->create($newDoc);
@@ -72,19 +83,17 @@ class Doc extends Activity
         return $this->getDocActivityDao()->update($doc['id'], $doc);
     }
 
-    public function isFinished($activityId)
-    {
-        $activity = $this->getActivityService()->getActivity($activityId);
-        $doc = $this->getDocActivityDao()->get($activity['mediaId']);
-
-        $result = $this->getTaskResultService()->getMyLearnedTimeByActivityId($activityId);
-        $result /= 60;
-
-        return !empty($result) && $result >= $doc['finishDetail'];
-    }
-
     public function update($targetId, &$fields, $activity)
     {
+        if (empty($fields['media'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $media = json_decode($fields['media'], true);
+
+        if (empty($media['id'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $fields['mediaId'] = $media['id'];
         $updateFields = ArrayToolkit::parts($fields, array(
             'mediaId',
             'finishType',
@@ -105,19 +114,21 @@ class Doc extends Activity
     {
         $activity = $this->getDocActivityDao()->get($targetId);
 
-        $activity['file'] = $this->getUploadFileService()->getFullFile($activity['mediaId']);
+        if ($activity) {
+            $activity['file'] = $this->getUploadFileService()->getFullFile($activity['mediaId']);
+        }
 
         return $activity;
     }
 
-    public function find($targetIds)
+    public function find($targetIds, $showCloud = 1)
     {
         $docActivities = $this->getDocActivityDao()->findByIds($targetIds);
         $mediaIds = ArrayToolkit::column($docActivities, 'mediaId');
         try {
             $files = $this->getUploadFileService()->findFilesByIds(
                 $mediaIds,
-                $showCloud = 1
+                $showCloud
             );
         } catch (CloudAPIIOException $e) {
             $files = array();
@@ -135,6 +146,11 @@ class Doc extends Activity
         );
 
         return $docActivities;
+    }
+
+    public function findWithoutCloudFiles($targetIds)
+    {
+        return $this->getDocActivityDao()->findByIds($targetIds);
     }
 
     public function materialSupported()

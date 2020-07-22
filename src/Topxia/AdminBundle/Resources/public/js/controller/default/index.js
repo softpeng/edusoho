@@ -7,30 +7,24 @@ define(function (require, exports, module) {
     var Cookie = require('cookie');
 
     exports.run = function () {
-
-        //云广告
-        showCloudAd();
         popover();
-
-
-        //ajax 获取数据
-        loadAjaxData();
-
         //图表
         courseExplore();
         studyCountStatistic();
         payOrderStatistic();
         studyTaskCountStatistic()
-
         //事件
         registerSwitchEvent();
-
         //提醒教师
         remindTeachersEvent();
-
         //热门搜索
         cloudHotSearch();
-
+        //ajax 获取数据
+        loadAjaxData();
+        //云广告
+        showCloudAd();
+        //升级新后台
+        upgradeAdminV2();
     };
 
     var loadAjaxData = function () {
@@ -83,7 +77,7 @@ define(function (require, exports, module) {
                     data: postData,
                     type: 'post'
                 }).done(function (data) {
-                    $('.upgrade-status').html('<span class="label label-warning">' + Translator.trans('升级受理中') + '</span>');
+                    $('.upgrade-status').html('<span class="label label-warning">' + Translator.trans('admin.index.upgrade_acceptance_hint') + '</span>');
                 }).fail(function (xhr, textStatus) {
                     Notify.danger(xhr.responseJSON.error.message);
                 }).always(function (xhr, textStatus) {
@@ -115,7 +109,7 @@ define(function (require, exports, module) {
                     trigger: 'axis'
                 },
                 legend: {
-                    data: ['新增注册', '活跃用户', '流失用户']
+                    data: [Translator.trans('admin.index.register_count'), Translator.trans('admin.index.active_user_count'), Translator.trans('admin.index.lost_user_count')]
                 },
                 grid: {
                     left: '3%',
@@ -138,17 +132,17 @@ define(function (require, exports, module) {
                 },
                 series: [
                     {
-                        name: '新增注册',
+                        name: Translator.trans('admin.index.register_count'),
                         type: 'line',
                         data: response.series.registerCount
                     },
                     {
-                        name: '活跃用户',
+                        name: Translator.trans('admin.index.active_user_count'),
                         type: 'line',
                         data: response.series.activeUserCount
                     },
                     {
-                        name: '流失用户',
+                        name: Translator.trans('admin.index.lost_user_count'),
                         type: 'line',
                         data: response.series.lostUserCount
                     }
@@ -171,7 +165,7 @@ define(function (require, exports, module) {
                     trigger: 'axis'
                 },
                 legend: {
-                    data: ['新增订单', '付费订单']
+                    data: [Translator.trans('admin.index.new_order_count'), Translator.trans('admin.index.new_paid_order_count')]
                 },
                 grid: {
                     left: '3%',
@@ -194,12 +188,12 @@ define(function (require, exports, module) {
                 },
                 series: [
                     {
-                        name: '新增订单',
+                        name: Translator.trans('admin.index.new_order_count'),
                         type: 'line',
                         data: datas.series.newOrderCount
                     },
                     {
-                        name: '付费订单',
+                        name: Translator.trans('admin.index.new_paid_order_count'),
                         type: 'line',
                         data: datas.series.newPaidOrderCount
                     }
@@ -228,7 +222,7 @@ define(function (require, exports, module) {
                     orient: 'vertical',
                     right: 'right',
                     top: 'center',
-                    data: ['课程订单', '班级订单', '会员订单']
+                    data: [Translator.trans('admin.index.course_order'), Translator.trans('admin.index.classroom_order'), Translator.trans('admin.index.vip_order')]
                 },
                 toolbox: {
                     feature: {
@@ -237,7 +231,7 @@ define(function (require, exports, module) {
                 },
                 series: [
                     {
-                        name: '订单量',
+                        name: Translator.trans('admin.index.order_count'),
                         type: 'pie',
                         radius: ['50%', '75%'],
                         center: ['40%', '50%'],
@@ -295,7 +289,7 @@ define(function (require, exports, module) {
 
                 series: [
                     {
-                        name: '学习任务数',
+                        name: Translator.trans('admin.index.finished_task_count'),
                         type: 'bar',
                         barWidth: '16',
                         data: response.series.finishedTaskCount
@@ -335,7 +329,7 @@ define(function (require, exports, module) {
     var remindTeachersEvent = function () {
         $('.js-course-question-list').on('click', '.js-remind-teachers', function () {
             $.post($(this).data('url'), function (response) {
-                Notify.success(Translator.trans('提醒教师的通知，发送成功！'));
+                Notify.success(Translator.trans('admin.index.notify_teacher_success'));
             });
         });
     }
@@ -413,5 +407,27 @@ define(function (require, exports, module) {
 
         $cloudAd.find('a').attr('href',res.urlOfImage).append($img).css({'margin-top': marginTop});
         $cloudAd.modal('show');
+    }
+
+    var upgradeAdminV2 = function () {
+
+        var $upgradeBtn = $('.js-upgrade-admin-v2');
+        $upgradeBtn.on('click',function () {
+            if (!confirm(Translator.trans('admin.switch_new_version.confirm_message'))) {
+                return ;
+            }
+            $upgradeBtn.button('loading');
+            $.post($upgradeBtn.data('url'),function(res){
+                if(res.status == 'error'){
+                    Notify.danger(Translator.trans(res.message));
+                }else if(res.status == 'success' && res.url){
+                    window.location.href = res.url;
+                }
+            });
+        });
+
+        $('.js-no-permission-btn').on('click',function () {
+            Notify.danger(Translator.trans('admin.switch_old_version.permission_error'));
+        })
     }
 });

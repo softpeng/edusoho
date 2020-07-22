@@ -2,6 +2,8 @@
 
 namespace Biz\Article\Service;
 
+use Biz\System\Annotation\Log;
+
 interface CategoryService
 {
     public function getCategory($id);
@@ -26,12 +28,31 @@ interface CategoryService
 
     public function findCategoryBreadcrumbs($categoryId);
 
-    public function isCategoryCodeAvaliable($code, $exclude = null);
+    public function isCategoryCodeAvailable($code, $exclude = null);
 
+    /**
+     * @param $category
+     *
+     * @return mixed
+     * @Log(module="category",action="create")
+     */
     public function createCategory(array $category);
 
+    /**
+     * @param $id
+     * @param array $fields
+     *
+     * @return mixed
+     * @Log(module="category",action="update")
+     */
     public function updateCategory($id, array $fields);
 
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="category",action="delete")
+     */
     public function deleteCategory($id);
 
     public function findCategoriesCountByParentId($parentId);

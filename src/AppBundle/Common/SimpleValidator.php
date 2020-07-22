@@ -68,12 +68,12 @@ class SimpleValidator
 
     public static function bankCardId($value)
     {
-        return (bool) preg_match('/^(\d{16}|\d{19})$/', $value);
+        return (bool) preg_match('/^(\d{16,19})$/', $value);
     }
 
     public static function mobile($value)
     {
-        return (bool) preg_match('/^1\d{10}$/', $value);
+        return (bool) ((11 == strlen($value)) && preg_match('/^1\d{10}$/', $value));
     }
 
     public static function numbers($value)
@@ -94,6 +94,11 @@ class SimpleValidator
     public static function qq($value)
     {
         return (bool) preg_match('/^[1-9]\d{4,}$/', $value);
+    }
+
+    public static function weixin($value)
+    {
+        return (bool) preg_match('/^[-_a-zA-Z0-9]{6,20}$/', $value);
     }
 
     public static function integer($value)

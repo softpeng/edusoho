@@ -2,12 +2,16 @@
 
 namespace Topxia\Api\Resource\Course;
 
+use AppBundle\Common\SettingToolkit;
+use AppBundle\Component\MediaParser\ParserProxy;
 use Biz\Accessor\AccessorInterface;
 use Biz\Course\Service\CourseService;
+use Codeages\Biz\ItemBank\Answer\Service\AnswerRecordService;
+use Codeages\Biz\ItemBank\Answer\Service\AnswerSceneService;
+use Codeages\Biz\ItemBank\Assessment\Service\AssessmentService;
 use Silex\Application;
-use AppBundle\Common\SettingToolkit;
-use Topxia\Api\Resource\BaseResource;
 use Symfony\Component\HttpFoundation\Request;
+use Topxia\Api\Resource\BaseResource;
 
 class Lesson extends BaseResource
 {
@@ -16,23 +20,23 @@ class Lesson extends BaseResource
         $task = $this->getTaskService()->getTask($id);
 
         if (empty($task)) {
-            return $this->error('not_courseId', "ID为#{$id}的课时不存在");
+            return $this->error('4041202', "ID为#{$id}的课时不存在");
         }
 
         $access = $this->getCourseService()->canLearnTask($task['id']);
 
         $isTrail = false;
-        if (!($access['code'] == AccessorInterface::SUCCESS || $isTrail = $access['code'] == 'allow_trial')) {
+        if (!(AccessorInterface::SUCCESS == $access['code'] || $isTrail = 'allow_trial' == $access['code'])) {
             return $this->error($access['code'], $access['msg']);
         }
 
         $course = $this->getCourseService()->getCourse($task['courseId']);
 
-        $lesson = $this->getCourseService()->convertTasks(array($task), $course);
+        $lesson = $this->getCourseService()->convertTasks([$task], $course);
         $lesson = array_shift($lesson);
 
         //直播回放
-        if ($lesson['type'] == 'live' && $lesson['replayStatus'] == 'videoGenerated') {
+        if ('live' == $lesson['type'] && 'videoGenerated' == $lesson['replayStatus']) {
             $lesson['type'] = 'video';
         }
 
@@ -56,7 +60,7 @@ class Lesson extends BaseResource
 
         $lesson = $this->filter($this->convertLessonContent($lesson, $ssl, $isTrail));
 
-        $hasRemainTime = $this->hasRemainTime($lesson);
+        $hasRemainTime = $this->hasRemainTime($lesson, $task['type']);
         if ($hasRemainTime && $currentUser->isLogin()) {
             $remainTime = $this->getRemainTime($currentUser, $lesson);
             $lesson['remainTime'] = $remainTime;
@@ -85,7 +89,7 @@ class Lesson extends BaseResource
             case 'testpaper':
                 return $this->getTestpaperLesson($lesson);
             case 'document':
-                return $this->getDocumentLesson($lesson);
+                return $this->getDocumentLesson($lesson, $ssl);
             default:
                 return $this->getTextLesson($lesson);
         }
@@ -99,19 +103,19 @@ class Lesson extends BaseResource
             return $this->error('not_ppt', '文件不存在');
         }
 
-        if ($file['convertStatus'] == 'error') {
+        if ('error' == $file['convertStatus']) {
             return $this->error('not_ppt', 'PPT文档转换失败，请到课程文件管理中，重新转换');
         }
 
-        if ($file['convertStatus'] != 'success') {
+        if ('success' != $file['convertStatus']) {
             return $this->error('not_ppt', 'PPT文档还在转换中，还不能查看，请稍等');
         }
 
         $result = $this->getMaterialLibService()->player($file['globalId'], $ssl);
 
-        $lesson['content'] = array(
+        $lesson['content'] = [
             'resource' => $result['images'],
-        );
+        ];
 
         return $lesson;
     }
@@ -123,20 +127,22 @@ class Lesson extends BaseResource
             return $this->error('not_document', '文件不存在');
         }
 
-        if ($file['convertStatus'] == 'error') {
+        if ('error' == $file['convertStatus']) {
             return $this->error('not_document', '文档转换失败，请联系管理员');
         }
 
-        if ($file['convertStatus'] != 'success') {
+        if ('success' != $file['convertStatus']) {
             return $this->error('not_document', '文档还在转换中，还不能查看，请稍等');
         }
 
         $result = $this->getMaterialLibService()->player($file['globalId'], $ssl);
 
-        $lesson['content'] = array(
-            'previewUrl' => ($ssl ? 'https://' : 'http://').'service-cdn.qiqiuyun.net/js-sdk/document-player/v7/viewer.html#'.$result['pdf'],
-            'resource' => $result['pdf'],
-        );
+        $resourceUrl = ($ssl ? 'https://' : 'http://').$_SERVER['HTTP_HOST']."/global_file/{$file['globalId']}/player?token={$result['token']}";
+
+        $lesson['content'] = [
+            'resource' => $resourceUrl,
+            'previewUrl' => $resourceUrl,
+        ];
 
         return $lesson;
     }
@@ -145,11 +151,25 @@ class Lesson extends BaseResource
     {
         $file = $this->getUploadFileService()->getFullFile($lesson['mediaId']);
         if (empty($file)) {
-            return $this->error('not_audio', "文件不存在");
+            return $this->error('not_audio', '文件不存在');
         }
 
-        $result = $this->getMaterialLibService()->player($file['globalId'], $ssl);
-        $lesson['mediaUri'] = $result['url'];
+        if (empty($file['globalId'])) {
+            $token = $this->getTokenService()->makeToken('local.media', [
+                'data' => [
+                    'id' => $file['id'],
+                ],
+                'duration' => 3600,
+                'userId' => 0,
+            ]);
+            $lesson['mediaUri'] = $this->getHttpHost()."/player/{$file['id']}/file/{$token['token']}";
+        } else {
+            $result = $this->getMaterialLibService()->player($file['globalId'], $ssl);
+            $lesson['mediaUri'] = $result['url'];
+        }
+
+        $lesson['mediaText'] = $this->filterHtml($lesson['mediaText']);
+        $lesson['content'] = $this->filterHtml($lesson['content']);
 
         return $lesson;
     }
@@ -161,19 +181,22 @@ class Lesson extends BaseResource
         $activity = $this->getActivityService()->getActivity($lesson['activityId']);
         $testpaperActivity = $this->getTestpaperActivityService()->getActivity($activity['mediaId']);
 
-        $testpaper = $this->getTestpaperService()->getTestpaperByIdAndType($testpaperActivity['mediaId'], $activity['mediaType']);
-        if (empty($testpaper)) {
+        $assessment = $this->getAssessmentService()->getAssessment($testpaperActivity['mediaId']);
+        if (empty($assessment)) {
             return $this->error('error', '试卷不存在!');
         }
 
         $course = $this->getCourseService()->getCourse($lesson['courseId']);
 
-        $testResult = $this->getTestpaperService()->getUserLatelyResultByTestId($user['id'], $testpaper['id'], $lesson['courseId'], $lesson['activityId'], 'testpaper');
+        $testRecord = $this->getAnswerRecordService()->getLatestAnswerRecordByAnswerSceneIdAndUserId($testpaperActivity['answerSceneId'], $user['id']);
+        $scene = $this->getAnswerSceneService()->get($testpaperActivity['answerSceneId']);
+        $lesson['testMode'] = !empty($scene['start_time']) ? 'realTime' : 'normal';
+        $lesson['testStartTime'] = $scene['start_time'];
 
-        $lesson['content'] = array(
-            'status' => empty($testResult) ? 'nodo' : $testResult['status'],
-            'resultId' => empty($testResult) ? 0 : $testResult['id'],
-        );
+        $lesson['content'] = [
+            'status' => empty($testRecord) ? 'nodo' : $testRecord['status'],
+            'resultId' => empty($testRecord) ? 0 : $testRecord['id'],
+        ];
 
         return $lesson;
     }
@@ -181,9 +204,9 @@ class Lesson extends BaseResource
     private function getTextLesson($lesson)
     {
         $lesson['content'] = $this->filterHtml($lesson['content']);
-        $template = $this->render('course/lesson-text-content.html.twig', array(
+        $template = $this->render('course/lesson-text-content.html.twig', [
             'content' => $lesson['content'],
-        ));
+        ]);
         $lesson['content'] = $template;
 
         return $lesson;
@@ -203,62 +226,87 @@ class Lesson extends BaseResource
             $watchTimeLimit = $course['tryLookLength'] * 60;
         }
 
-        if ($mediaSource == 'self') {
+        if ('self' == $mediaSource) {
             $file = $this->getUploadFileService()->getFullFile($lesson['mediaId']);
 
             if (!empty($file)) {
                 $lesson['mediaStorage'] = $file['storage'];
-                if ($file['storage'] == 'cloud') {
+                if ('cloud' == $file['storage']) {
                     $lesson['mediaConvertStatus'] = $file['convertStatus'];
 
-                    if (!empty($file['metas2']) && !empty($file['metas2']['sd']['key'])) {
-                        if (isset($file['convertParams']['convertor']) && ($file['convertParams']['convertor'] == 'HLSEncryptedVideo')) {
+                    if (isset($file['processAudioStatus']) && 'ok' == $file['processAudioStatus']) {
+                        if (!empty($file['audioMetas2']) && !empty($file['audioMetas2']['sd']['key'])) {
+                            $data = [
+                                'id' => $file['id'],
+                                'fromApi' => !$hlsEncryption,
+                            ];
+
+                            $token = $this->getTokenService()->makeToken('hls.playlist', [
+                                'data' => $data,
+                                'times' => 2,
+                                'duration' => 3600,
+                            ]);
+
+                            $audioUrl = [
+                                'url' => $this->getHttpHost()."/hls/{$file['id']}/audio/playlist/{$token['token']}.m3u8?format=json&line=".$line,
+                            ];
+
+                            if (isset($audioUrl) && is_array($audioUrl) && !empty($audioUrl['url'])) {
+                                $lesson['audioUri'] = $audioUrl['url'];
+                            }
+                        }
+                    }
+
+                    if (!empty($file['metas2']) && $this->isNotEmptyMetas2Contents($file['metas2'])) {
+                        if (isset($file['convertParams']['convertor']) && ('HLSEncryptedVideo' == $file['convertParams']['convertor'])) {
                             $headLeaderInfo = $this->getHeadLeaderInfo();
 
                             if ($headLeaderInfo) {
-                                $token = $this->getTokenService()->makeToken('hls.playlist', array(
-                                    'data' => array(
+                                $token = $this->getTokenService()->makeToken('hls.playlist', [
+                                    'data' => [
                                         'id' => $headLeaderInfo['id'],
                                         'fromApi' => !$hlsEncryption,
-                                    ),
+                                    ],
                                     'times' => 2,
                                     'duration' => 3600,
-                                ));
+                                ]);
 
-                                $headUrl = array(
+                                $headUrl = [
                                     'url' => $this->getHttpHost()."/hls/{$headLeaderInfo['id']}/playlist/{$token['token']}.m3u8?format=json&line=".$line,
-                                );
+                                ];
 
                                 $lesson['headUrl'] = $headUrl['url'];
+                                $lesson['headLength'] = $headLeaderInfo['length'];
                             }
 
-                            $data = array(
+                            $data = [
                                 'id' => $file['id'],
                                 'fromApi' => !$hlsEncryption,
-                            );
+                            ];
                             if ($watchTimeLimit) {
                                 $data['watchTimeLimit'] = $watchTimeLimit;
                             }
 
-                            $token = $this->getTokenService()->makeToken('hls.playlist', array(
+                            $token = $this->getTokenService()->makeToken('hls.playlist', [
                                 'data' => $data,
                                 'times' => 2,
                                 'duration' => 3600,
-                            ));
+                            ]);
 
-                            $url = array(
+                            $url = [
                                 'url' => $this->getHttpHost()."/hls/{$file['id']}/playlist/{$token['token']}.m3u8?format=json&line=".$line,
-                            );
+                            ];
                         } else {
                             return $this->error('404', '当前视频格式不能被播放！');
                         }
 
                         $lesson['mediaUri'] = (isset($url) && is_array($url) && !empty($url['url'])) ? $url['url'] : '';
+                        $lesson = $this->getSubtitleService()->setSubtitlesUrls($lesson, $this->isSsl());
                     } else {
                         if (!empty($file['metas']) && !empty($file['metas']['hd']['key'])) {
                             $key = $file['metas']['hd']['key'];
                         } else {
-                            if ($file['type'] == 'video') {
+                            if ('video' == $file['type']) {
                                 $key = null;
                             } else {
                                 $key = $file['hashId'];
@@ -272,36 +320,21 @@ class Lesson extends BaseResource
                         }
                     }
                 } else {
-                    $token = $this->getTokenService()->makeToken('local.media', array(
-                        'data' => array(
+                    $token = $this->getTokenService()->makeToken('local.media', [
+                        'data' => [
                             'id' => $file['id'],
-                        ),
+                        ],
                         'duration' => 3600,
                         'userId' => 0,
-                    ));
+                    ]);
                     $lesson['mediaUri'] = $this->getHttpHost()."/player/{$file['id']}/file/{$token['token']}";
                 }
             } else {
                 $lesson['mediaUri'] = '';
             }
-        } elseif ($mediaSource == 'youku') {
-            $matched = preg_match('/\/sid\/(.*?)\/v\.swf/s', $lesson['mediaUri'], $matches);
-
-            if ($matched) {
-                $lesson['mediaUri'] = "http://player.youku.com/embed/{$matches[1]}";
-            } else {
-                $lesson['mediaUri'] = '';
-            }
-        } elseif ($mediaSource == 'tudou') {
-            $matched = preg_match('/\/v\/(.*?)\/v\.swf/s', $lesson['mediaUri'], $matches);
-
-            if ($matched) {
-                $lesson['mediaUri'] = "http://www.tudou.com/programs/view/html5embed.action?code={$matches[1]}";
-            } else {
-                $lesson['mediaUri'] = '';
-            }
         } else {
-            $lesson['mediaUri'] = $mediaUri;
+            $proxy = new ParserProxy();
+            $lesson = $proxy->prepareMediaUriForMobile($lesson, $this->getSchema());
         }
 
         return $lesson;
@@ -320,9 +353,27 @@ class Lesson extends BaseResource
         return false;
     }
 
+    /**
+     * @param $metas = array('sd' => array('key' => ''), 'hd' => array('key' => ''), 'shd' => array('key' => ''))
+     *
+     * metas里面只要有任意清晰度则返回true
+     *
+     * @return true or false
+     */
+    protected function isNotEmptyMetas2Contents($metas)
+    {
+        foreach ($metas as $meta) {
+            if (!empty($meta['key'])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     protected function simplify($res)
     {
-        $lesson = array();
+        $lesson = [];
         $lesson['id'] = $res['id'];
         $lesson['courseId'] = $res['courseId'];
         $lesson['courseSetId'] = $res['fromCourseSetId'];
@@ -352,9 +403,9 @@ class Lesson extends BaseResource
         return $this->createService('Task:TaskService');
     }
 
-    protected function hasRemainTime($task)
+    protected function hasRemainTime($task, $taskType)
     {
-        if ('video' != $task['type']) {
+        if ('video' != $task['type'] || 'live' == $taskType) {
             return false;
         }
 
@@ -377,6 +428,7 @@ class Lesson extends BaseResource
 
         $course = $this->getCourseService()->getCourse($lesson['courseId']);
         $remainTime = ($course['watchLimit'] * $lesson['length']) - $taskResult['watchTime'];
+
         return $remainTime;
     }
 
@@ -391,11 +443,6 @@ class Lesson extends BaseResource
     protected function getUploadFileService()
     {
         return $this->createService('File:UploadFileService');
-    }
-
-    protected function getTestpaperService()
-    {
-        return $this->createService('Testpaper:TestpaperService');
     }
 
     protected function getSettingService()
@@ -431,5 +478,34 @@ class Lesson extends BaseResource
     protected function getTaskResultService()
     {
         return $this->createService('Task:TaskResultService');
+    }
+
+    protected function getSubtitleService()
+    {
+        return $this->createService('Subtitle:SubtitleService');
+    }
+
+    /**
+     * @return AssessmentService
+     */
+    protected function getAssessmentService()
+    {
+        return $this->createService('ItemBank:Assessment:AssessmentService');
+    }
+
+    /**
+     * @return AnswerRecordService
+     */
+    protected function getAnswerRecordService()
+    {
+        return $this->createService('ItemBank:Answer:AnswerRecordService');
+    }
+
+    /**
+     * @return AnswerSceneService
+     */
+    protected function getAnswerSceneService()
+    {
+        return $this->createService('ItemBank:Answer:AnswerSceneService');
     }
 }

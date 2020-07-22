@@ -8,6 +8,8 @@ interface TaskDao extends AdvancedDaoInterface
 {
     public function deleteByCategoryId($categoryId);
 
+    public function deleteByCourseId($courseId);
+
     public function findByCourseId($courseId);
 
     public function findByCourseIds($courseIds);
@@ -42,14 +44,9 @@ interface TaskDao extends AdvancedDaoInterface
 
     public function getByCourseIdAndSeq($courseId, $sql);
 
-    /**
-     * 统计当前时间以后每天的直播次数.
-     *
-     * @param  $limit
-     *
-     * @return array <string, int|string>
-     */
-    public function findFutureLiveDates($limit);
+    public function getByCopyId($copyId);
+
+    public function getByCourseIdAndCopyId($courseId, $copyId);
 
     /**
      * 返回过去直播过的课程ID.
@@ -60,7 +57,18 @@ interface TaskDao extends AdvancedDaoInterface
 
     public function getTaskByCourseIdAndActivityId($courseId, $activityId);
 
-    public function sumCourseSetLearnedTimeByCourseSetId($courseSetId);
+    public function countLessonsWithMultipleTasks($courseId);
 
     public function analysisTaskDataByTime($startTime, $endTime);
+
+    public function countByChpaterId($chapterId);
+
+    /**
+     * @param $userId
+     * @param $startTime 'timestamp ，秒'
+     * @param $endBeforeTimeRange 'time_range 秒'
+     *
+     * @return mixed
+     */
+    public function getUserCurrentPublishedLiveTaskByTimeRange($userId, $startTime, $endBeforeTimeRange);
 }

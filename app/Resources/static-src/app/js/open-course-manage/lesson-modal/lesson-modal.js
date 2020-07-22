@@ -1,5 +1,4 @@
 import loadAnimation from 'common/load-animation';
-import notify from 'common/notify';
 import FileChooser from 'app/js/file-chooser/file-choose';
 import SubtitleDialog from 'app/js/activity-manage/video/subtitle/dialog';
 
@@ -40,7 +39,7 @@ class LessonModal {
         'mediaSource': Translator.trans('activity.video_manage.media_error_hint'),
       },
       submitSuccess(res) {
-        notify('success', Translator.trans('open_course.lesson.create_success'));
+        cd.message({ type: 'success', message: Translator.trans('open_course.lesson.create_success')});
         document.location.reload();
       },
       submitError(res) {
@@ -49,9 +48,9 @@ class LessonModal {
         if (errorRes.error && errorRes.error.message) {
           msg = errorRes.error.message;
         }
-        notify('warning', Translator.trans('open_course.lesson.create_error') + ':' + msg);
+        cd.message({ type: 'warning', message: Translator.trans('open_course.lesson.create_error') + ':' + msg });
       }
-    })
+    });
 
     $('#form-submit').click((event) => {
       if(validator.form()) {
@@ -59,11 +58,11 @@ class LessonModal {
       }
     });
 
-    $(".js-length").blur(function () {
+    $('.js-length').blur(function () {
       if (validator && validator.form()) {
         const minute = parseInt($('#minute').val()) | 0;
         const second = parseInt($('#second').val()) | 0;
-        $("#length").val(minute * 60 + second);
+        $('#length').val(minute * 60 + second);
       }
     });
   }
@@ -77,19 +76,19 @@ class LessonModal {
       if (file.length && file.length > 0) {
         let minute = parseInt(file.length / 60);
         let second = Math.round(file.length % 60);
-        $("#minute").val(minute);
-        $("#second").val(second);
-        $("#length").val(minute * 60 + second);
+        $('#minute').val(minute);
+        $('#second').val(second);
+        $('#length').val(minute * 60 + second);
       }
       $('#mediaSource').val(file.source);
       if (file.source == 'self') {
-        $("#mediaId").val(file.id);
-        $("#mediaUri").val('');
-        $("#mediaName").val(file.name);
+        $('#mediaId').val(file.id);
+        $('#mediaUri').val('');
+        $('#mediaName').val(file.name);
       } else {
-        $("#mediaUri").val(file.uri);
-        $("#mediaId").val(0);
-        $("#mediaName").val(file.name);
+        $('#mediaUri').val(file.uri);
+        $('#mediaId').val(0);
+        $('#mediaName').val(file.name);
       }
       //渲染字幕
       subtitleDialog.render(file);

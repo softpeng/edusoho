@@ -3,6 +3,7 @@
 namespace AppBundle\Controller\Admin;
 
 use AppBundle\Common\ArrayToolkit;
+use Biz\CloudPlatform\CloudAPIFactory;
 use Symfony\Component\HttpFoundation\Request;
 
 class AppPackageUpdateController extends BaseController
@@ -20,7 +21,11 @@ class AppPackageUpdateController extends BaseController
     {
         $settings = $this->getSettingService()->get('storage', array());
 
-        if (empty($settings['cloud_key_applied']) || empty($settings['cloud_access_key']) || empty($settings['cloud_secret_key'])) {
+        $api = CloudAPIFactory::create('root');
+        // 当网校key不可用(被封禁)时，返回为{"error" => "xxx"}
+        $info = $api->get('/me');
+
+        if (empty($info['accessKey']) || empty($settings['cloud_access_key']) || empty($settings['cloud_secret_key'])) {
             $errors = array(sprintf('您尚未申请云平台授权码，<a href="%s">请先申请授权码</a>。', $this->generateUrl('admin_setting_cloud_key_update')));
         } else {
             $errors = $this->getAppService()->checkEnvironmentForPackageUpdate($id);
@@ -129,6 +134,16 @@ class AppPackageUpdateController extends BaseController
                 'isUpgrade' => true,
                 'packageId' => $apps[$code]['package']['id'],
                 'toVersion' => $apps[$code]['package']['toVersion'],
+                'urls' => array(
+                    'checkDependsUrl' => $this->generateUrl('admin_app_package_update_check_depends', array('id' => $apps[$code]['package']['id'])),
+                    'backupFileUrl' => $this->generateUrl('admin_app_package_update_backup_file', array('id' => $apps[$code]['package']['id'])),
+                    'backupDbUrl' => $this->generateUrl('admin_app_package_update_backup_db', array('id' => $apps[$code]['package']['id'])),
+                    'checkDownloadExtractUrl' => $this->generateUrl('admin_app_package_update_check_download_and_extract', array('id' => $apps[$code]['package']['id'])),
+                    'downloadExtractUrl' => $this->generateUrl('admin_app_package_update_download_and_extract', array('id' => $apps[$code]['package']['id'])),
+                    'beginUpgradeUrl' => $this->generateUrl('admin_app_package_update_begin_upgrade', array('id' => $apps[$code]['package']['id'], 'type' => 'upgrade')),
+                    'checkNewestUrl' => $this->generateUrl('admin_app_package_update_check_newest', array('code' => $code)),
+                    'checkEnvironmentUrl' => $this->generateUrl('admin_app_package_update_check_environment', array('id' => $apps[$code]['package']['id'])),
+                ),
             );
         } catch (\Exception $e) {
             $result = array('isUpgrade' => false);

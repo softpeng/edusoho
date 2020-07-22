@@ -2,6 +2,7 @@
 
 namespace AppBundle\Controller\Admin;
 
+use Biz\Taxonomy\CategoryException;
 use Symfony\Component\HttpFoundation\Request;
 
 class CategoryController extends BaseController
@@ -10,7 +11,7 @@ class CategoryController extends BaseController
     {
         $group = $this->getCategoryService()->getGroupByCode($group);
         if (empty($group)) {
-            throw $this->createNotFoundException();
+            $this->createNewException(CategoryException::NOTFOUND_GROUP());
         }
 
         $categories = $this->getCategoryService()->getCategoryStructureTree($group['id']);
@@ -25,7 +26,7 @@ class CategoryController extends BaseController
 
     public function createAction(Request $request)
     {
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $category = $this->getCategoryService()->createCategory($request->request->all());
 
             return $this->renderTbody($category['groupId']);
@@ -52,10 +53,10 @@ class CategoryController extends BaseController
         $category = $this->getCategoryService()->getCategory($id);
 
         if (empty($category)) {
-            throw $this->createNotFoundException();
+            $this->createNewException(CategoryException::NOTFOUND_CATEGORY());
         }
 
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $category = $this->getCategoryService()->updateCategory($id, $request->request->all());
 
             return $this->renderTbody($category['groupId']);
@@ -71,7 +72,7 @@ class CategoryController extends BaseController
         $category = $this->getCategoryService()->getCategory($id);
 
         if (empty($category)) {
-            throw $this->createNotFoundException();
+            $this->createNewException(CategoryException::NOTFOUND_CATEGORY());
         }
 
         $this->getCategoryService()->deleteCategory($id);
@@ -95,9 +96,9 @@ class CategoryController extends BaseController
         $code = $request->query->get('value');
         $exclude = $request->query->get('exclude');
 
-        $avaliable = $this->getCategoryService()->isCategoryCodeAvaliable($code, $exclude);
+        $available = $this->getCategoryService()->isCategoryCodeAvailable($code, $exclude);
 
-        if ($avaliable) {
+        if ($available) {
             $response = array('success' => true, 'message' => '');
         } else {
             $response = array('success' => false, 'message' => '编码已被占用，请换一个。');

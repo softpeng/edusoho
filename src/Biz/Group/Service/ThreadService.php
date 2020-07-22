@@ -2,7 +2,8 @@
 
 namespace Biz\Group\Service;
 
-// TODO refactor. use Thread.
+use Biz\System\Annotation\Log;
+
 interface ThreadService
 {
     public function getThread($id);
@@ -11,29 +12,52 @@ interface ThreadService
 
     public function countThreads($conditions);
 
-    public function searchThreadCollects($conditions, $orderBy, $start, $limit);
-
-    public function countThreadCollects($conditions);
-
     public function searchPostsThreadIds($conditions, $orderBy, $start, $limit);
 
     public function countPostsThreadIds($conditions);
 
-    public function isCollected($userId, $threadId);
-
-    public function threadCollect($userId, $threadId);
-
-    public function unThreadCollect($userId, $threadId);
-
     public function getThreadsByIds($ids);
 
+    /**
+     * @param $thread
+     *
+     * @return mixed
+     * @Log(module="group",action="create_thread")
+     */
     public function addThread($thread);
 
+    /**
+     * @param $id
+     * @param $fields
+     *
+     * @return mixed
+     * @Log(module="group",action="update_thread",param="id")
+     */
     public function updateThread($id, $fields);
 
+    /**
+     * @param $threadId
+     *
+     * @return mixed
+     * @Log(module="group",action="close_thread",funcName="getThread")
+     */
     public function closeThread($threadId);
 
+    /**
+     * @param $threadId
+     *
+     * @return mixed
+     * @Log(module="group",action="open_thread",funcName="getThread")
+     */
     public function openThread($threadId);
+
+    /**
+     * @param $threadId
+     *
+     * @return mixed
+     * @Log(module="group",action="delete_thread")
+     */
+    public function deleteThread($threadId);
 
     public function getPost($id);
 
@@ -60,8 +84,6 @@ interface ThreadService
     public function getGoods($attachId);
 
     public function waveHitNum($threadId);
-
-    public function waveGoodsHitNum($goodsId);
 
     public function sumGoodsCoinsByThreadId($id);
 

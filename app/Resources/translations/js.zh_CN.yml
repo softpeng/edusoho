@@ -1,4 +1,4 @@
-site.flash_not_install_hint: 您的浏览器未装Flash播放器或版本太低，请先安装Flash播放器。<a target="_blank" href="http://www.adobe.com/go/getflashplayer">点击安装</a>
+site.flash_not_install_hint: 您的浏览器可能存在未安装flash播放器，未开启flash播放器，flash低于11版本的情况，请先确认flash播放器能够正常使用。<a target="_blank" href="http://www.adobe.com/go/getflashplayer">flash设置与安装</a>
 site.date_format_dhis: %days%天%hours%小时%minutes%分钟%seconds%秒
 site.date_format_his: %hours%小时%minutes%分钟%seconds%秒
 site.date_format_is: %minutes%分钟%seconds%秒
@@ -9,6 +9,7 @@ site.delete_fail_hint: 删除失败
 site.upload_success_hint: 上传成功
 site.upload_fail_retry_hint: 上传失败,请重试
 site.save_success_hint: 保存成功
+site.save_error_hint: 保存失败
 site.searching_hint: 搜索中...
 site.search_hint: 搜索
 site.choose_gender_hint: 请选择性别
@@ -17,7 +18,8 @@ site.data.create: 添加
 site.data.not_found: 未找到...
 site.data.delete_name_hint: 真的要删除该%name%吗？
 site.data.uncheck_name_hint: 未选中任何%name%
-site.data.delete_check_name_hint: 确定要删除选中的条%name%吗？
+site.data.delete_check_name_hint: 确定要删除选中的%name%吗？
+site.data.delete_title_hint: 删除%name%
 site.data.delete_submiting_hint: 正在删除...
 site.date.year: 年
 site.date.month: 月
@@ -27,18 +29,41 @@ site.date.second: 秒
 site.data.get_sms_code_btn: 获取短信验证码
 site.data.get_sms_code_again_btn: 秒后重新获取
 site.data.get_sms_code_success_hint: 发送短信成功
+site.data.get_sms_code_allowance_success_hint: 发送短信成功,还有%allowance%次发送机会
 site.data.get_sms_code_failure_hint: 发送短信失败，请联系管理员
 site.data.expand: 展开
 site.data.collapse: 收起
 site.data.already_exists: 已经存在
 video.quality.switcher.name: "%videoQuality%画质/%audioQuality%音质"
 site.video.quality.quota: 画质
-site.video.quality.low: 流畅 
+site.video.quality.low: 流畅
 site.video.quality.normal: 标准
 site.video.quality.high: 精细
+site.cancel: 取消
+site.confirm: 确定
+site.yes: 是
+site.no: 否
+site.close: 关闭
+site.delete: 删除
+site.time: 时间
+site.capacity: 容量(G)
+site.step_two: 步骤2
+site.step_one: 步骤1
+site.information: 信息
+site.tips: 提示
+site.unknow_server_error: 发生未知错误
+
+site.incorrect.password: 密码错误
+user.settings.security.mobile_bind.success: 手机绑定成功
+user.settings.security.mobile_bind.fail: 手机绑定失败
+
+site.modify.success: 修改成功
+user.settings.security.password_modify.incorrect_password: 当前密码不正确，请重试！
+
+
 
 site.audio.quality.quota: 音质
-site.audio.quality.low: 流畅 
+site.audio.quality.low: 流畅
 site.audio.quality.normal: 标准
 site.audio.quality.high: 精细
 
@@ -47,6 +72,13 @@ site.browser_useless_play_video_hint: 您的浏览器不能播放当前视频。
 site.choose_hint: 请选择
 site.service_error_hint: 服务器错误!
 site.form.submit_error: 表单提交失败
+site.response_error: 请求出错
+
+site.loading: 加载中...
+site.loading_error: 加载出错...
+site.collect_cuccess_hint: 收藏成功
+site.uncollect_cuccess_hint: 取消收藏成功
+
 
 admin.site.cloude_sms_enable_hint: 请先开启云短信
 
@@ -54,8 +86,39 @@ user.userinfo.mobile_hint: 请输入有效手机号(仅支持中国大陆手机�
 
 user.follow_success_hint: 关注成功
 user.unfollow_success_hint: 取消关注成功
-user.settings.security.security_questions.type_duplicate_hint: 问题类型不能重复
+
 user.card_load_hint: 名片加载中
+
+
+user.settings.security.security_questions.type_duplicate_hint: 问题类型不能重复
+
+user.settings.security.questions.set.incorrect_password: 您的登录密码错误，不能设置安全问题
+user.settings.security.questions.set.not_modify_aligin_hint: 您已经设置过安全问题，不可再次修改
+
+user.settings.security.questions.set.success: 安全问题设置成功
+
+user.settings.security.pay_password_set.incorrect_pay_password: 支付密码不正确
+user.settings.security.pay_password_set.reset_success: 重置支付密码成功
+
+user.settings.security.pay_password_set.success: 新支付密码设置成功
+user.settings.security.pay_password_set.incorrect_login_password: 当前用户登录密码不正确
+
+user.settings.email.new_email_same_old: 新邮箱，不能跟当前邮箱一样
+user.settings.email.new_email_not_unique: 新邮箱已经被注册，请换一个试试
+user.settings.email.send_error: 邮箱验证邮件发送失败，请联系管理员
+user.settings.email.send_success: 请到邮箱%email%中接收确认邮件，并点击确认邮件中的链接完成修改
+
+user.settings.basic_info.illegal_nickname: 用户名中含有敏感词
+user.settings.basic_info.nickname_change_successfully: 用户名修改成功
+user.settings.basic_info.nickname_change_fail: 用户名修改失败
+
+user.settings.login_password_success: 设置登录密码成功
+user.settings.login_password_fail: 设置登录密码失败
+
+material.share.teacher_nickname_label: 请输入老师的名称
+user.settings.unbind_success: 取消绑定成功
+user.settings.unbind_title: 取消绑定
+user.settings.unbind_content: 确定要取消绑定吗？
 
 material.share.teacher_nickname_label: 老师的名称
 material.cancel_share.tips: 已取消分享
@@ -65,6 +128,7 @@ uploader.error_hint: 上传失败，请重试！
 uploader.error.bad_file.hint: 你的源文件可能已损坏，请检查后重新上传
 uploader.num_limit_hint: 添加的文件数量过多！
 uploader.size_limit_hint: 文件过大，请上传较小的文件！
+uploader.size_2m_limit_hint: 文件过大，请上传小于2M的文件！
 uploader.type_denied_limit_hint: 文件类型错误！
 uploader.btn.batch_paused: 全部暂停
 uploader.btn.batch_continue: 全部继续
@@ -87,6 +151,27 @@ uploader.filelist.head.status: 状态
 uploader.filelist.head.operation: 操作
 uploader.select_one_file: 请至少选择一个文件上传
 uploader.file.exist: 这个文件已经被添加过了
+
+
+importer.import_verify_tips_start: 校验成功！一共包含
+importer.import_verify_tips_end: 条数据
+importer.import_back_btn: 返回
+importer.import_reselect_btn: 重新导入
+importer.import_confirm_btn: 确定导入
+importer.import_error: 导入出错
+importer.import_progress_data: 已经导入%number%条数据
+importer.import_finish_data: 导入成功, 总共导入%number%条数据
+importer.batch_import_title: 批量导入
+importer.importing_finish_hint: 正在完成导入, 请稍等...
+importer.importing_finished: 完成导入
+importer.importing_loading_hint: 正在导入, 请勿关闭当前窗口...
+importer.import_file_pick_hint: 选择要导入的文件
+importer.import_file_view: 浏览...
+importer.download_sample_file: 点击下载示例说明文件
+importer.import_tip: 支持从Excel文件导入
+importer.start_verifying_data_tip: 开始校验数据
+importer.imported_data: "已经导入: "
+importer.imported_success_data: "导入成功, 总共导入:"
 
 subtitle.delete_success_hint: 删除字幕成功
 subtitle.no_subtitle_hint: 当前无字幕
@@ -118,19 +203,33 @@ activity.live.ended_notice: 直播已经结束
 activity.live.content_title: 直播说明
 activity.live.entry_live_room: 进入直播教室
 activity.live.count_down_title: 倒计时
-activity.liva.not_created_notice: 直播教室尚未创建
+activity.live.not_created_notice: 直播教室尚未创建
+activity.live.overlap_time_notice: 所选时间已经有直播了，请换个时间
+activity.live.day: 天
+activity.live.hour: 时
+activity.live.minute: 分
+activity.live.second: 秒
+activity.live.started_tip: 直播已经开始
+activity.live.started_or_ended_notice: 直播已经开始或者结束,无法编辑
+
 
 activity.audio_manage.length_required_error_hint: 请输入时长
 activity.audio_manage.length_unsigned_integer_error_hint: 时长必须大于0
 activity.audio_manage.second_range_error_hint: 秒只能在0-59之间
 activity.audio_manage.media_error_hint: 请上传或选择音频文件
 
-activity.audio_manage.media_error_hint: 请上传或选择文档
+activity.document_manage.media_error_hint: 请上传或选择文档
 activity.audio_manage.finish_detail_required_error_hint: 请输入完成条件
 activity.audio_manage.finish_detail_digits_error_hint: 完成条件必须为数字
 
 activity.download_manage.link_error_hint: 链接地址不正确
 activity.download_manage.materials_error_hint: 请上传或选择资料
+activity.download_manage.materials_or_link_error_hint: 请先上传文件或添加资料网络链接
+activity.download_manage.materials_or_link_fail: 资料添加失败，请重试
+activity.download_manage.materials_or_link_success: 资料添加成功
+activity.download_manage.materials_or_link_delete: 资料已删除
+activity.download_manage.materials_or_link_confirm_delete: 真的要删除该资料吗？
+
 activity.download_manage.materials_exist_error_hint: 该文件已添加，请重新选择
 activity.download_manage.materials_delete_btn: 删除
 activity.download_manage.materials_add_success_hint: 添加成功，可继续选择资料添加或点击下一步
@@ -168,6 +267,7 @@ activity.homework_manage.pass_objective_question_hint: >
 activity.ppt_manage.media_error_hint: 请上传或选择PPT
 activity.ppt_manage.finish_detail_required_error_hint: 请输入至少观看多少分钟
 
+activity.testpaper_manage.media_required: 请选择试卷
 activity.testpaper_manage.arithmetic_float_error_hint: 必须为正数，保留一位小数
 activity.testpaper_manage.positive_integer_error_hint: 必须为正整数
 activity.testpaper_manage.media_error_hint: 请选择试卷
@@ -178,10 +278,12 @@ activity.testpaper_manage.input_description_hint: 请输入试卷描述
 activity.testpaper_manage.generate_mode_hint: 请选择生成方式
 activity.testpaper_manage.max_error_hint: 最大值不能超过1000000000
 activity.testpaper_manage.pass_score_hint: 达标分数：%passScore%分
+activity.testpaper_manage.qualified_score_hint: %passScore%分
 activity.testpaper_manage.setting_pass_score_error_hint: 及格分数（%passedScore%）不能高于总分（%totalScore%）。
+activity.testpaper_manage.pass_score_error_hint: 及格分数必须大于0且小于1000，最多保留一位小数
 activity.testpaper_manage.question_required_error_hint: 请选择题目
 activity.testpaper_manage.question_score_empty_hint: 题目分值不能为0
-activity.testpaper_manage.question_score_error_hint: 题目分值只能填写数字，并且在3位数以内，保留一位小数
+activity.testpaper_manage.question_score_error_hint: 题目分值只能填写数字，大于0且小于1000，最多保留一位小数
 activity.testpaper_manage.marking_validate_error_hint: 分数只能是<=题目分数、且>=0的整数或者1位小数
 activity.testpaper_manage.question_total_score: 总计
 activity.testpaper_manage.simple_percentage: 简单%simplePercentage%%
@@ -189,6 +291,7 @@ activity.testpaper_manage.normal_percentage: 一般%normalPercentage%%
 activity.testpaper_manage.difficulty_percentage: 困难%difficultyPercentage%%
 activity.testpaper_manage.required_error_hint: 请输入分数
 activity.testpaper_manage.question_options: 选项
+activity.testpaper_manage.questions_length_hint: 题目数量最多为2000
 
 activity.text_manage.save_draft_hint: (草稿已于%createdTime%保存)
 activity.text_manage.finish_detail_required_error_hint: 请输入至少观看多少分钟
@@ -233,11 +336,12 @@ auth.register.email_required_error_hint: 请输入邮箱
 auth.register.mobile_required_error_hint: 请输入手机
 auth.register.email_or_mobile_required_error_hint: 请输入手机/邮箱
 auth.register.number_validate_error_hint: 不允许以1开头的11位纯数字
+auth.register.drag_captcha_tips: 请拖动左边滑块完成上方拼图
 
 auth.mobile_captcha_required_error_hint: 请输入验证码
 auth.mobile_captcha_error_hint: 验证码错误
 
-card.card_receive_success_hint: 学习卡已使用，充值%coin%虚拟币成功，可前往【账户中心】-【我的账户】查看充值情况。
+card.card_receive_success_hint: 学习卡已使用，充值%coinAmount%%coinName%成功，可前往【账户中心】-【我的账户】查看充值情况。
 card.card_receive_failed_hint: 失败!
 
 classroom.cancel_refund_hint: 真的要取消退款吗？
@@ -249,10 +353,12 @@ classroom_manage.student_expiryday_set_failed_hint: 修改失败
 classroom_manage.student_create_field_required_error_hint: 请输入学员邮箱/手机号/用户名
 classroom_manage.student_create_add_success_hint: 添加成功!
 classroom_manage.student_create_add_failed_hint: 添加失败!
+classroom_manage.student_create.price_max_error_hint: 购买价格不能大于班级原价!
 
 classroom_manage.student_manage_remove_hint: 您真的要移除该%username%吗？
 classroom_manage.student_manage_remove_success_hint: 移除%username%成功！
 classroom_manage.student_manage_remove_failed_hint: 移除%username%失败，请重试！
+classroom_manage.student_manage_remove_assistant_hint: '%username%是班级的助教，请先取消Ta的助教权限'
 
 classroom.member_signed: 已签到
 classroom.sign_keep_days: 连续%keepDays%天
@@ -260,10 +366,15 @@ classroom.sign_rank_hint: 于%time%签到,第%rank%个签到.
 
 coin.invite_code_required_error_hint: 请输入邀请码
 coin.invite_code_validate_error_hint: 邀请码必须是5位数字、英文字母组成
-coin.invite_url_copy_success_hint: 链接复制成功
+coin.invite_url_copy_success_hint: 已复制邀请链接到剪切板，快去分享吧！
 
 course.buy.discount_hint: 已优惠
 course.buy.price_free_hint: 去学习
+
+course.chapter: '第%number%%chapter_name%%colon% %title%'
+course.unit: '第%number%%part_name%%colon% %title%'
+course.lesson: '%part_name% %number% : %title%'
+course.catalogue.task_status.task: %taskName%%taskNumber%： %taskTitle%
 
 course.thread_replay_failed_hint: 发表回复失败，请重试
 course.thread_delete_hint: 您真的要删除该回帖吗？
@@ -271,7 +382,7 @@ course.thread_delete_hint: 您真的要删除该回帖吗？
 course_manage.course_dashboard.student_num: 学员数
 course_manage.course_dashboard.finish_num: 完课人数
 course_manage.course_dashboard.finish_rate: 完课率
-
+course.manage.teacher.manage.repeat_tip: 不能重复添加
 
 course_manage.course_overview.person_unit: 人数
 
@@ -285,14 +396,18 @@ course_manage.lesson_dashboard.task_learning: 学习中
 course_manage.course_overview.student_increase_num: 新增学员
 course_manage.course_overview.try_view_increase_num: 免费试看数
 
-course_manage.student_expiryday_extend_success_hint: 增加%name%有效期操作成功!
-course_manage.student_expiryday_extend_failed_hint: 增加%name%有效期操作失败!
+course_manage.student_expiryday_extend_success_hint: 修改%name%有效期操作成功!
+course_manage.student_expiryday_extend_failed_hint: 修改%name%有效期操作失败!
+course_manage.student_expiryday_extend_error_hint_day: 减少天数超出最大可减少数
+course_manage.student_expiryday_extend_error_hint_date: 日期不得早于当前时间或任何一个学员的有效期截止日
 
 course_manage.student_remark_validate_error_hint: 备注字数不超过80
 course_manage.student_remark_success_hint: 备注%username%成功
 course_manage.student_remark_failed_hint: 备注%username%失败，请重试！
 
 course_manage.student_create.field_required_error_hint: 请输入学员邮箱/手机号/用户名
+course_manage.student_create.price_min_error_hint: 采购的课程购买价格不能为0!
+course_manage.student_create.price_max_error_hint: 购买价格不能大于课程原价!
 
 course_set.show.count_down_format_hint: 剩余 <span>%D</span>天 <span>%H</span>时 <span>%M</span>分 <span>%S</span>秒
 course_set.show.time_finish_hint: 活动时间到，正在刷新网页，请稍等...
@@ -304,6 +419,7 @@ course_set.title_required_error_hint: 请输入标题
 course_set.learn_progress: 学习进度
 course_set.manage.tag_required_hint: 请输入标签
 course_set.manage.publish_hint: 是否确定发布该课程？
+course_set.manage.publish_title: 发布课程
 course_set.manage.publish_success_hint: 课程发布成功
 course_set.manage.publish_fail_hint: 课程发布失败
 course_set.manage.next_label: 继续了解
@@ -314,6 +430,16 @@ course_set.manage.activity_link_hint:  >
   <p class="title">任务环节</p>在设计学习任务时，您可以按照课时去设置预习、学习、练习、作业、课外这几个环节，每个环节都可以通过各种教学手段来实现。
 course_set.manage.upgrade_hint:  >
   <p class="title">功能升级</p>课程管理功能现已全新升级。
+course_set.manage.img: >
+  <div class="course-manage-spread"></div>
+course_set.manage.couseset_tab: >
+  <p class="title cd-dark-major cd-mb32">使用指南</p><div class="cd-dark-minor cd-text-md">课程信息、文件管理为共用功能，支持任意计划来进行引用。</div>
+course_set.manage.single_plan: >
+  <p class="title cd-dark-major cd-mb32">使用指南</p><div class="cd-dark-minor cd-text-md">请进入默认计划设置，对首个计划的价格等内容进行设置。</div>
+course_set.manage.all_plan: >
+  <p class="title cd-dark-major cd-mb32">使用指南</p><div class="cd-dark-minor cd-text-md">若需要创建更多计划，请通过全部计划进行设置。</div>
+course_set.manage.publish_courseset: >
+  <p class="title cd-dark-major cd-mb32">使用指南</p><div class="cd-dark-minor cd-text-md">点击发布课程，即可以将课程发布在前台，允许学员进行购买和学习。</div>
 course_set.manage.all_tutorial:  >
   <div class="btn-content"><p><a class='btn btn-success js-reset-intro %introBtnClassName%'>查看引导</a></p><a class='btn btn-info'>完整教程</a><div>
 course_set.manage.hint:  >
@@ -326,8 +452,11 @@ course_set.manage.upgrade_step3_hint:  >
   <p class="title">添加任务</p>您可以在这里选择各种不同的教学手段，然后上传文件/设置内容/设置学习完成条件。
 course_set.manage.upgrade_step5_hint:  >
   <p class="title">任务环节</p>在设计学习任务时，您可以按照课时去设置预习、学习、练习、作业、课外这几个环节，每个环节都可以通过各种教学手段来实现。
+course_set.manage.operation_hint: 操作提醒
+course_set.manage.courseset_summary_operation_hint: 课程简介编辑后保存，将会统一覆盖前台所有计划的简介内容，请确认是否保存修改。
 
-course.manage.title_required_error_hint: 请输入教学.计划课程标题
+course.manage.title_maxlength_error_hint: 教学计划标题长度不能超过{0}字符
+course.manage.title_required_error_hint: 请输入教学计划标题
 course.manage.expiry_end_date_error_hint: 请输入结束日期
 course.manage.expiry_start_date_error_hint: 请输入开始日期
 course.manage.expiry_days_error_hint: 请输入有效期天数
@@ -337,28 +466,61 @@ course.manage.deadline_end_date_error_hint: 请输入学习有效期
 course.manage.expiry_days_error_hint: 开始日期应早于结束日期
 course.manage.expiry_start_date_error_hint: 结束日期应晚于开始日期
 course.manage.expiry_end_date_error_hint: 开始日期应早于结束日期
-course.manage.max_year_error_hint: 有效期最大值不能超过99,999天
+course.manage.max_year_error_hint: 请输入不大于 7300（20年）的数值
 course.manage.max_capacity_hint: 网校可支持最多%capacity%人同时参加直播，您可以设置一个更大的数值，但届时有可能会导致满额后其他学员无法进入直播。
 course.manage.publish_hint: 是否确定发布该教学计划？
+course.manage.publish_title: 发布教学计划
 course.manage.publish_success_hint: 教学计划发布成功
 course.manage.publish_fail_hint: 教学计划发布失败
 course.manage.close_hint: 是否确定关闭该教学计划？
 course.manage.close_success_hint: 关闭成功
 course.manage.close_fail_hint: 关闭失败
+course.manage.copy_title: 复制计划
+course.manage.max_course_number_tip: 支持创建10个计划，若需新增，请对原有计划删除后添加。
 course.manage.delete_hint: 是否确定删除该教学计划？
-course.manage.task_delete_hint: 是否确定删除该任务吗？
-course.manage.chapter_delete_hint: 是否确定删除该章节吗？
+course.manage.task_delete_hint: 是否确定删除该%taskName%吗？
+course.manage.chapter_delete_hint: 是否确定删除该%name%吗？
 course.manage.task_publish_success_hint: 发布成功
 course.manage.task_publish_fail_hint: 发布失败
 course.manage.task_unpublish_success_hint: 取消发布成功
 course.manage.task_unpublish_fail_hint: 取消发布失败
 course.manage.live_replay_generate_success: 生成录制回放成功
+course.manage.live_replay_generate_error: 未开启直播回放或视频正在转码中，请稍后再试
 course.manage.live_replay_upload_error_hint: 请上传录像文件
 course.manage.buy_expiry_time_required_error_hint: 请输入加入截止日期
 course.manage.buy_expiry_time_error_hint: 请选择有效的加入截止日期
-course.manage.student_delete_hint: 是否确定删除该学员？
+course.manage.student_delete_hint: 是否确定移除该学员？
+course.manage.students_delete_hint: 是否移除这些学员？
 course.manage.min_teacher_num_error_hint: 教学计划至少需要一位教师
 course.manage.teacher_display_label: 显示
+course.manage.sort_cancel: 取消当前排序
+course.manage.student.add_expiry_day.select_tips: 请至少选中一项后进行修改
+course.manage.student.batch_remove.select_tips: 请至少选中一项后移除
+course.manage.reward_point_required_hint: 请输入教学计划奖励积分
+course.manage.task_reward_point_required_hint: 请输入计划任务奖励积分
+course.manage.max_point_error_hint: 请输入0-100000的整数
+course.manage.student_expiry_day_hint: 只有按天数设置的学习有效期，才可手动增加有效期。
+member.delete_success_hint: 移除成功
+member.delete_fail_hint: 移除失败
+
+material_lib.content_title: 教学资料库
+material_lib.detail.content_title: 资源详情
+material_lib.have_no_permission_hint: 抱歉，您无权操作此文件
+meterial_lib.select_resource_delete_hint: 请先选择你要删除的资源
+meterial_lib.confirm_share_resource_hint: 请确认将此资料共享到公共资源库?
+meterial_lib.confirm_share_resource_hint_single: 请确认将此资料共享到公共资源库?
+meterial_lib.confirm_unshare_resource_hint: 确定要取消分享这个资源吗？
+meterial_lib.select_resource_operate_hint: 请先选择你要操作的资源
+meterial_lib.select_share_resource_hint: 请先选择你要分享的资源
+meterial_lib.unshare_resource_success_hint: 取消分享资源成功
+meterial_lib.share_resource_success_hint: 分享资源成功
+meterial_lib.share_resource_erroe_hint: 分享资源失败
+meterial_lib.delete_resource_success_hint: 删除资源成功
+meterial_lib.generate_screenshots_success_hint: 生成截图成功
+meterial_lib.generate_screenshots_error_hint: 生成截图失败
+meterial_lib.batch_manage: 批量管理
+meterial_lib.complete_manage: 完成管理
+
 
 course.marking_hint: 请打分
 course.marking_one_star: 很差
@@ -378,17 +540,36 @@ course.question.create.choose_min_num_hint: 选项最少%minNum%个!
 course.question.create_hint: 新增选项
 course.question.right_answer_hint: 正确答案
 course.question.right_answer_content_hint: 请输入选项内容
+course.question.type.single_choice: 单选题
+course.question.type.uncertain_choice: 不定项
+course.question.type.choice: 多选题
+course.question.type.determine: 判断题
+course.question.type.essay: 问答题
+course.question.type.fill: 填空题
+course.question.type.material: 材料题
+course.question.type.unknown: 未知题型
+course.question.is_updating_hint: 题目正在修改中,请稍侯
 
 course.notebook.delete_hint: 真的要删除该笔记吗？
+course.notebook.empty_note_content_notice: 请输入笔记内容！
 
+course.question_marker.selection_rate: 选择率
+course.question_marker.correct_rate: 正确率
+course.question_marker.gap_filling: 填空
+course.question_marker.view_analysis: 查看解析
+course.question_marker.back_to_questions: 返回题目
 
 classroom.manage.tag_required_hint: 请输入标签
 classroom.manage.delete_course_hint: 是否要从班级移除该课程？
+classroom.manage.delete_course_hint_title: 移除课程
 classroom.manage.delete_course_success_hint: 课程移除成功
 classroom.manage.delete_course_fail_hint: 课程移除失败
 classroom.manage.expiry_mode_days_error_hint: 请输入有效期天数
 classroom.manage.expiry_mode_date_error_hint: 请输入截至日期
 classroom.manage.coin_price_hint: 相当于%coinPrice%%coinName%
+classroom.live_room.entry_error_hint: 进入直播教室错误，请联系管理员，<a href="javascript:document.location.reload()">重试</a>或<a href="javascript:window.close();">关闭</a>
+classroom.live_room.retry_or_close: <a href="javascript:document.location.reload()">重试</a>或<a href="javascript:window.close();">关闭</a>
+classroom.manage.admin_delete_course_set_hint: 同时删除此班级课程（不会影响源课程以及其他班级）
 
 thread.post.reply: 回复
 thread.post.reply_error_hint: 发表回复失败，请重试
@@ -400,6 +581,7 @@ thread.post.like_error_hint: 点赞失败，请重试！
 group.manage.delete_member_hint: 真的要删除该成员？
 group.manage.delete_required_error_hint: 请选择要删除的成员
 group.manage.member_exit_hint: 真的要退出该小组？您在该小组的信息将删除
+group.manage.member_exit: 退出小组
 group.manage.choose_setting_member_hint: 请选择要设置的成员
 group.manage.setting_member_permission_hint: 确认要设置该成员的权限？
 group.manage.cancel_member_permission: 确认要取消该成员的权限？
@@ -410,11 +592,16 @@ group.post.reply_fail_hint: 发表回复失败，请重试
 cny: 元
 pay.security.password.save_fail_hint: 支付密码设置失败
 
+user.account.refund_cancel_title: 取消退款
 user.account.refund_cancel_hint: 真的要取消退款吗？
-user.account.cancel_order_hint: 真的要取消订单吗？
+user.account.cancel_order_title: 取消订单
+user.account.cancel_order_hint: 确定要取消订单吗？
 user.account.refund_cancel_success_hint: 退款申请已取消成功！
 user.account.cancel_order_fail_hint: 订单取消失败！
 user.account.cancel_order_success_hint: 订单已取消成功！
+
+user.fields.idcard_front_placeholder: 请上传身份证正面照
+user.fields.idcard_back_placeholder: 请上传身份证反面照
 
 open_course.lesson.create_error:  课时创建失败
 open_course.lesson.create_success: 课时创建成功
@@ -423,7 +610,7 @@ open_course.load_search_hint: 搜索中...
 open_course.tag_required_hint: 请输入标签
 open_course.publish_hint: 您真的要发布该课程吗？
 open_course.picture_upload_success_hint: 上传成功！
-open_course.lesson_delete_hint: 删除课时的同时会删除课时的资料、测验。您真的要删除该课时吗?
+open_course.lesson_delete_hint: 删除课时的同时会删除课时的资料。您真的要删除该课时吗?
 open_course.chapter_delete_hint: 您真的要删除该（%chapterName%）(%partName%）吗?
 open_course_chapter_delete_success_hint: 已删除
 open_course.add_replay_hint: 您真的要录制回放吗?
@@ -431,7 +618,7 @@ open_course.add_replay_failed_where_live: 录制失败，直播时您没有进�
 open_course.add_replay_failed_hint: 录制失败!
 open_course.add_replay_success_hint: 课时已录制!
 open_course.publish_lesson_hint: 课时发布成功!
-open_course.unpublish_hint: (未发布)
+open_course.unpublish_hint: 未发布
 open_course.exercise_delete_hint: 您真的要删除该课时练习吗?
 open_course.exercise_delete_success_hint: 练习已删除!
 open_course.homework_delete_hint: 您真的要删除该课时作业吗?
@@ -440,9 +627,16 @@ open_course.add_lesson_hint: 公开课当前仅支持添加一个课时!
 open_course.file_format_conversion_hint: (正在文件格式转换)
 open_course.file_format_conversion_failed_hint: (文件格式转换失败)
 open_course.unpublish_success_hint: 课时已取消发布!
+open_course.live_time_can_not_edit_bint: 直播已经开始或者结束,无法编辑!
 
 open_course.lesson_delete_success_hint: 课时已删除!
 
+open_course.collect: 收藏
+open_course.collected: 已收藏
+
+order.create.minus: 抵扣
+order.create.discount.minus: 打折活动抵扣
+order.create.coupon_deduction: 优惠券抵扣
 order.create.useless_hint: 优惠券不可用
 order.create.use_discount_coupon_hint: 优惠券可用，您当前使用的是打%rate%折的优惠券
 order.create.use_price_coupon_hint: 优惠券可用，您当前使用的是抵价%rate%元的优惠券
@@ -478,8 +672,16 @@ testpaper.widget.save_success_hint: 已保存
 
 testpaper_manage.save_error_hint: 操作失败
 testpaper_manage.save_success_hint: 操作成功
+testpaper_manage.result_graph.score_distribution: 分数区间
+testpaper_manage.result_graph.person_num: 人数
+testpaper_manage.result_graph.first_score_num: 首次成绩得分人数
+testpaper_manage.result_graph.max_score_num: 最优成绩得分人数
 
-intro.confirm_hint: 我知道了
+homework_manage.result_graph.status_distribution: 结果区间
+homework_manage.result_graph.first_status_num: 首次成绩结果人数
+homework_manage.result_graph.max_status_num: 最优成绩结果人数
+
+intro.confirm_hint: 完成
 
 
 validate.required.message: 请输入%display%
@@ -492,6 +694,7 @@ validate.valid_digits_input.message: 只能输入整数
 validate.valid_creditcard_input.message: 请输入有效的信用卡号码
 validate.valid_equal_to_input.message: 你的输入不相同
 validate.valid_extension_input.message: 请输入有效的后缀
+validate.valid_policy_input.message: 请先同意相关条款
 validate.max_length.message: 最多只能输入 {0} 个字符
 validate.min_length.message: 最少需要输入 {0} 个字符
 validate.range_length.message: 请输入长度在 {0} 到 {1} 之间的字符串
@@ -519,6 +722,7 @@ validate.before.message: 开始日期应早于结束日期
 validate.after.message: 结束日期应晚于开始日期
 validate.feature.message: 购买截止时间需在当前时间之后
 validate.valid_qq_input.message: 请输入正确的QQ号
+validate.valid_weixin_input.message: 请输入正确的微信号
 validate.valid_mobile_input.message: 请输入正确的手机号
 validate.valid_chinese_input.message: 必须是中文字
 validate.chinese_limit.message: 长度必须小于等于 {0} 字符,一个中文为2个字符
@@ -530,6 +734,7 @@ validate.alphanumeric.message: 必须是英文字母、数字及下划线组成
 validate.raty_star.message: 请打分
 validate.reg_invite_code.message: 必须是5位数字、英文字母组成
 validate.phone.message: 请输入有效手机号码
+validate.mobile_or_telephone.message: 请输入有效手机号码或者电话号码(区号-电话号码)
 validate.nickname.message: 不允许以1开头的11位纯数字
 validate.password_check.message: 密码错误
 validate.sms_code_input.message: 请输入短信验证码
@@ -538,13 +743,26 @@ validate.es_remote.message: 验证错误
 validate.reg_invite_code.message: 必须是5位数字、英文字母组成
 validate.byte_minlength.message: 字符长度必须大于等于%min%，一个中文字算2个字符
 validate.byte_maxlength.message: 字符长度必须小于等于%max%，一个中文字算2个字符
-
+validate.character_maxlength: 字数不能超过%max%字！
 validate.choose_item.message: 请选择%display%
-
+validate.tag_required_hint: 请输入标签
+validate.tag_required_not_found_hint: 未搜索到标签，请网校管理员通过【管理后台】-【课程】-【标签管理】进行设置。
+validate.title_required_hint: 请输入标题，不能为空。
 validate.email_or_mobile_check.message: 不允许以1开头的11位纯数字
 validate.phone_and_email_input.message: 请输入手机/邮箱
 validate.user_terms.message: 勾选同意此服务协议，才能继续注册
 validate.visible_character.message: 不允许输入不可见字符，如空格等
+validate.valid_score_input.message: 请输入正确的分数格式，最多保留一位小数
+validate.mobile_or_email_message: 请输入正确的手机／邮箱
+validate.modify_date: 请输入修改日期
+validate.modify_days: 请输入修改天数
+validate.modify_day_number: 请输入不大于 7300（20年）的数值
+validate.success: 验证成功
+validate.fail: 验证失败
+validate.expiry_days_required_hint: 请输入有效期
+validate.empty_content_hint: 请输入内容!
+validate.no_number_first_hint: URL路径只能包含字母和数字,请以字母开头!长度大于2位
+validate.have_spaces: 密码不能有空格哦
 
 alert.file_convert_error.message: 文件转换提交失败，请重试！
 notify.file_not_select.message: 未选中任何文件记录
@@ -557,9 +775,13 @@ page.video_sd.message: 标清
 page.video_shd.message: 超清
 page.video_hd.message: 高清
 
+confirm.oper.tip: 操作确认
+confirm.lesson.hidden.tip.off: 关闭该功能后，未发布的课时将在学员前台进行展示。请确认是否关闭此项功能。
+confirm.lesson.hidden.tip.on: 开启该功能后，未发布的课时将不在学员前台进行展示，课时序号排列将不包含这部分未发布课时。请确认是否开启此项功能。
 confirm.private_message_delete.message: 真的要删除该私信吗？
 notify.private_message_maxlength.message: 不好意思，私信内容长度不能超过500!
 confirm.last_private_message_delete.message: 本条信息为最后一条，真的要删除该私信吗？
+private_message.send_success: 私信发送成功
 confirm.delete_lesson.message: 删除课时的同时会删除课时的资料、测验。您真的要删除该课时吗？
 notify.lesson_deleted.message: 课时已删除！
 confirm.delete_chapter.message: 您真的要删除该%chapter_name%%part_name%吗？
@@ -582,6 +804,11 @@ notify.pay_failed.message: 支付失败
 notify.share_success.message: 分享成功
 notify.share_fail.message: 分享失败
 notify.reward_point: 积分
+notify.sms_send_success.message: 短信发送成功
+notify.password_reset_email_send_success.message: 重置密码邮件已发送
+notify.password_reset_success.message: 重置密码成功
+notify.message_send_success: 私信发送成功
+notify.danger_operation_message: 这是警告消息<a href="http://demo.edusoho.com" class="notify-action">操作</a>
 
 json_response.nickname_can_use.message: 该昵称可以使用
 json_response.verification_code_error.message: 验证码错误
@@ -594,16 +821,19 @@ json_response.join_group_failed.message: 加入小组失败!
 json_response.user_not_found.message: 该用户不存在
 json_response.homework_has_submitted_cannot_change.message: 作业已提交，不能再修改答案！
 json_response.must_choose_question.message: 请先选择题目
+json_response.no_multi_question_bank.message: 只能从一个题库中选题
 json_response.cannot_send_message_self.message: 不能给自己发私信哦！
 json_response.receiver_not_exist.message: 该收件人不存在
+json_response.receiver_not_allowed.message: 不支持向该用户发送私信
 
+validate_old.positive_currency.message: 请输入大于等于0的有效价格，最多两位小数，整数位不超过8位！
 validate_old.required.message: 请输入{{display}}
 validate_old.valid_email_input.message: %display%的格式不正确
 validate_old.valid_url_input.message: %display%的格式不正确
 validate_pld.valid_number_input.message: %display%的格式不正确
 validate_old.valid_date_input.message: %display%的格式不正确
-validate_pld.max.message: %display%必须大于或者等于%max%
-validate_old.min.message: %display%必须小于或者等于%min%
+validate_old.max.message: %display%必须小于或者等于%max%
+validate_old.min.message: %display%必须大于或者等于%min%
 validate_old.max_length.message: %display%的长度必须小于或等于%max%
 validate_old.min_length.message: %display%的长度必须大于或等于%min%
 validate_old.mobile.message: 手机号码格式有误
@@ -615,6 +845,8 @@ validate_old.date_and_time_check.message: 结束时间不能早于或等于开�
 validate_old.date_and_time.message: 请输入正确的日期和时间,格式如XXXX-MM-DD hh:mm:ss
 validate_old.date_check.message: 开始时间必须小于或等于结束时间
 validate_old.not_all_digital.message: %display%不能全为数字
+validate_old.right_time_tip: 请输入正确的时间格式
+validate_old.es_version.message: 请输入正确的%display%，正确格式是XX.XX.XX
 validate_old.visible_character.message: %display%请输入可见性字符
 validate_old.chinese_limit.message: %display%的长度必须小于等于%max%字符,一个中文为2个字符
 validate_old.chinese.message: %display%必须是中文字
@@ -625,7 +857,7 @@ validate_old.reg_invite_code.message: %display%必须是5位数字、英文字�
 validate_old.alphanumeric.message: %display%必须是英文字母、数字及下划线组成
 validate_old.alphabet_underline.message: %display%必须以英文字母或下划线开头
 validate_old.byte_minlength.message: %display%的长度必须大于等于%min%，一个中文字算2个字符
-validate_old.date_check.message: 请输入合法的%display%,如:200, 221.99, 0.99, 0等
+validate_old.currency_check.message: 请输入合法的%display%,如:200, 221.99, 0.99, 0等
 validate_old.currency.message: %display%的长度必须小于等于%max%，一个中文字算2个字符
 validate_old.idcard.message: %display%格式不正确
 validate_old.password.message: %display%只能由4-20个字符组成
@@ -633,7 +865,7 @@ validate_old.second_range.message: 秒数只能在0-59之间
 validate_old.date.message: 请输入正确的日期,格式如XXXX-MM-DD
 validate_old.qq.message: %display%格式不正确
 validate_old.integer.message: %display%必须为整数
-validate_old.date_check.message: 请输入正确的小数,只保留到两位小数
+validate_old.float_check.message: 请输入正确的小数,只保留到两位小数
 validate_old.float.message: 请输入正确的小数,只保留到一位小数
 validate_old.int.message: %display%必须为整数,最大到9位整数
 validate_old.positive_integer.message: %display%必须为正整数
@@ -641,6 +873,10 @@ validate_old.unsigned_integer.message: %display%必须为非负整数
 validate_old.arithmetic_number.message: %display%必须为正数
 validate_old.percent_number.message: 必须在0~100之间
 validate_old.maxsize_image.message: %display%必须小于2M
+validate_old.server_upload_attachment_limit.message: 当前服务器附件大小上限为2048MB
+validate_old.chinese_english.message: %display%必须是中文字、英文字母组成
+validate_old.alpha_numeric.message: %display%必须是英文字母、数字组成
+validate_old.html_tag.message: %display%应该为HTML meta标签
 
 export.not_allowed: 你无权导出该文件
 export.empty: 没有可导出的数据
@@ -650,3 +886,615 @@ notify.course_set_clone_start.message: 开始复制课程，复制成功后请�
 notify.job_redo_warning.hint: 此课程已经在复制了，请不要重复复制
 notify.course_set_copy_error.hint: 复制课程发生了错误
 progress.copy_course_set.message: 复制完成!
+
+confirm.warn: 警告
+confirm.exit.tip: 您确定要退出学习吗？
+
+cashier.wechat_pay: 微信支付
+cashier.wechat_pay.scan_qcode_pay_tips: 请使用微信扫描二维码支付
+cashier.confirm.fail_message: 支付未成功，请检查或重新支付
+cashier.pay.error_message: 支付发生异常，请联系管理员
+cashier.confirm.title: 订单支付中
+cashier.confirm.success: 支付完成
+cashier.confirm.pick_again: 重选支付方式
+cashier.confirm.desc: |
+  请在新开页面中完成订单支付。<br>
+  如在支付过程中遇到问题，请联系网站客服解决。<br>
+
+oauth.send.validate_message: 发送验证
+oauth.send.error_message_tip: 请求发送次数过多，请稍后尝试
+oauth.send.sms_code_error_tip: 您输入的短信验证码不正确
+oauth.refresh.captcha_code_tip: 图形验证码已失效，请重新输入图形验证码
+oauth.refresh.captcha_code_required_tip: 请输入图形验证码
+oauth.captcha_code_length_tip: 图形码为5位数
+oauth.captcha_code_expired_tip: 图形验证码已过期
+oauth.captcha_code_error_tip: 图形验证码错误
+oauth.register.time_limit: 由于您注册次数过多，请稍后尝试
+oauth.register.error_message: 注册出现异常，请联系管理员
+
+
+## 用户数据统计
+admin.user.statistics.data.learn_total_time: 学习总时长
+admin.user.statistics.data.learn_time: 学习时长/分钟
+admin.user.statistics.data.time: 时长
+
+course.audio.enable.biz.user: 听课模式需要先申请为商业用户!
+
+admin.data.lab.setting.error: 发生异常了，请重试！
+## 资讯管理
+admin.article.save.success: 保存文章成功！
+admin.article.choose_column_tip: 请选择所属栏目
+admin.article_setting.choose_category: --选择所属栏目--
+
+lesson_count_no_more_than_300: 课时总数不能超过300个
+lesson_tasks_no_more_than_5: 课时下的任务数量不能超过5个
+
+Bad credentials.: 用户名或密码错误
+User account is locked.: 帐号被封禁
+
+cloud_search.network.error_message: 网络不给力，为您切换极简搜索模式
+message.send.not_allowed: 不允许发送私信
+
+admin.index.register_count: 新增注册
+admin.index.active_user_count: 活跃用户
+admin.index.lost_user_count: 流失用户
+
+admin.index.new_order_count: 新增订单
+admin.index.new_paid_order_count: 付费订单
+
+admin.index.course_order: 课程订单
+admin.index.classroom_order: 班级订单
+admin.index.vip_order: 会员订单
+admin.index.order_count: 订单量
+admin.index.finished_task_count: 学习任务数
+admin.index.notify_teacher_success: 提醒教师的通知，发送成功！
+admin.index.upgrade_acceptance_hint: 升级受理中
+admin.user.cloude_sms_enable_hint: 请先到【管理后台】-【教育云】-【云短信设置】中开启云短信哦~
+
+admin.account_center.cash_income: 现金收入
+admin.account_center.coin_income: 虚拟币收入
+admin.analysis.classroom_income: 班级营收额
+admin.analysis.course_income: 课程营收额
+admin.analysis.course_total: 课程总数
+admin.analysis.program_total: 教学计划总数
+admin.analysis.add_course_total: 新增课程数
+admin.analysis.exit_learning_total: 退出学习数
+admin.analysis.finished_lesson_total: 完成课时学习数
+admin.analysis.income: 营收额
+admin.analysis.join_lesson_total: 加入学习数
+admin.analysis.add_lesson_num: 新增课时数
+admin.analysis.login_num: 登录人数
+admin.analysis.paid_classroom_num: 购买班级数
+admin.analysis.paid_lesson_num: 购买课程数
+admin.analysis.register_num: 注册人数
+admin.analysis.user_total_num: 用户总数
+admin.analysis.view_num: 观看数
+admin.analysis.vip_income: 会员营收额
+admin.announcement.save_error_hint: 操作失败
+admin.announcement.delete_hint: 确定删除此公告吗？
+admin.app.uninstall_hint: 真的要卸载此应用？
+admin.app.upgrade_success_hint: 应用安装/升级成功！
+admin.app.upgrade_hint: 是否确认升级，升级过程中网站将进入维护状态
+admin.app.upgrade_roll_back_hint: 上次安装升级应用系统需回滚，继续安装可能会发生不可预料的错误，您确定继续吗？
+admin.app.upgrade_exec_hint: 正在%title%
+admin.app.upgrade_exec_failed_hint: "%title%失败："
+admin.app.upgrade_exec_finished_hint: "%title%完成"
+admin.app.upgrade_exec_error_hint: "%title%时，发生了未知错误。"
+admin.app.upgrade_finish: 完成
+admin.app.upgrade_check_env_hint: 检查系统环境
+admin.app.upgrade_check_dependency_hint: 检查依赖
+admin.app.upgrade_backup_system_file_hint: 备份系统文件
+admin.app.upgrade_backup_database_hint: 备份数据库
+admin.app.upgrade_check_download_permission: 检查下载权限
+admin.app.upgrade_download_installer: 下载安装升级程序
+admin.app.upgrade_exec_install_hint: 执行安装升级程序
+admin.app.upgrade_check_app_version_hint: 检查系统版本
+admin.article.category.save_success_hint: 保存栏目成功！
+admin.article.category.save_fail_hint: 添加栏目失败，请重试！
+admin.article.category.delete_hint: 真的要删除该栏目吗？
+admin.article.category.delete_failed_hint: 删除栏目失败，请重试！%error%
+admin.article.delete_hint: 真的要永久删除该内容吗？
+admin.article.picture_upload_success_hint: 上传成功！
+admin.attachment.delete_hint: 确定要删除附件吗?
+admin.attachment.delete_success_hint: 附件已删除
+admin.attachment.delete_failed_hint: 附件删除失败,请稍后再试
+admin.batch_notification.send_hint: 发送后不可修改，确认发送？
+admin.batch_notification.delete_hint: 真的要删除该内容吗？
+admin.batch_notification.publish_success_hint: 发布成功！
+admin.batch_notification.save_success_hint: 保存成功！
+admin.block.history_recover_hint: 已经恢复了编辑区的内容，请保存 !
+admin.block.delete_hint: 确认要删除此编辑区模板吗？
+admin.block.delete_success_hint: 删除编辑区模板成功!
+admin.block.create_success_hint: 创建编辑区模板成功!
+admin.block.edit_success_hint: 更新编辑区模板成功!
+admin.block.upload_failed_hint: 上传图片失败，请重试！
+admin.block.upload_success_hint: 上传图片成功！
+admin.block.delete_picture_success_hint: 删除图片成功！
+admin.block.edit_success_hint: 更新成功！
+admin.block.submit_success_hint: 提交成功!
+admin.block.select_picture_hint: 请先选择要上传的图片
+admin.block.upload_picture_success_hint: 插入图片成功！
+admin.block.not_saved_data_hint: 还有没有保存的数据,是否要离开此页面?
+admin.block.add_max_num_hint: 最多只能添加%panelGroup%个!
+admin.block.delete_tip: 你确定要删除吗?
+admin.block.delete_min_num_hint: 必须要有一个!
+admin.block.uploading_hint: 正在上传，请稍等！
+admin.block.upload_success_hint: 上传成功！
+admin.block.upload_failed_hint: 上传失败，请重试！
+admin.block.poster: 海报(%index%)
+admin.category.icon_delete_hint: 确认要删除图标吗？
+admin.category.icon_delete_success_hint: 删除分类图标成功！
+admin.category.icon_delete_fail_hint: 删除分类图标失败！
+admin.category.save_success_hint: 保存分类成功！
+admin.category.save_fail_hint: 添加分类失败，请重试！
+admin.category.delete_hint: 真的要删除该分类及其子分类吗？
+admin.category.delete_fail: 分类删除失败
+admin.classroom.choose_success_hint: 指定班级成功
+admin.classroom.operation_success_hint: 成功！
+admin.classroom.operation_fail_hint: 失败
+admin.classroom.operation_hint: 吗？
+admin.classroom.delete_hint: 真的要删除该班级吗？
+admin.classroom.delete_success_hint: 删除成功！
+admin.classroom.cancel_recommend_hint: "%title%吗？"
+admin.classroom.cancel_recommend_success_hint: "%title%成功！"
+admin.classroom.cancel_recommend_fail_hint: "%title%失败!"
+admin.classroom.recommend_success_hint: 设置推荐班级操作成功!
+admin.classroom.recommend_fail_hint: 设置推荐班级操作失败!
+admin.cloud_file.tag_required_hint: 标签
+admin.cloud_file.detail_show_error_hint: Opps,出错了
+admin.cloud_file.re_transcode_success_hint: 重新转码成功!
+admin.cloud_file.re_transcode_fail_hint: 重新转码失败!
+admin.cloud_file.detail_loading_hints: 正在加载，请等待......
+admin.cloud_file.select_course_placeholder: 选择课程
+admin.cloud_file.select_user_placeholder: 选择用户
+admin.coin.edit_success_hint: 操作成功
+admin.coin.edit_fail_hint: 操作失败
+admin.coin.give_success_hint: 操作成功
+admin.coin.give_fail_hint: 操作失败
+admin.coin.picture_upload_fail_hint: 图片格式或大小不正确，上传图片失败，请检查后重试！
+admin.coin.picture_upload_success_hint: 上传虚拟币图片成功！
+admin.coin.picture_delete_hint: 确认要删除吗？
+admin.coin.picture_delete_success_hint: 删除虚拟币图片成功！
+admin.coin.picture_delete_fail_hint: 删除虚拟币图片失败！
+admin.comment.delete_hint: 确定要删除评论吗?
+admin.comment.delete_success_hint: 删除成功!
+admin.comment.delete_fail_hint: 删除失败:%response%
+admin.content.upload_hint: 正在上传附图，请等待附图上传成功后，再保存！
+admin.content.delete_hint: 真的要永久删除该内容吗？
+admin.course.add_student_success_hint: 添加学员操作成功!
+admin.course.add_student_fail_hint: 添加学员操作失败!
+admin.course.choose_success_hint: 指定课程成功
+admin.course.copy_success_hint: 复制课程成功
+admin.course.copy_fail_hint: 复制课程失败
+admin.course.delete_success_hint: 删除课程成功
+admin.course.delete_failed_hint: 删除课程失败
+admin.course.delete_course.check_password_fail_hint: 验证密码错误
+admin.course.validate_old.password_required_hint: 密码
+admin.course.cancel_recommend_success_hint: 课程推荐已取消！
+admin.course.close_course_hint: 您确认要关闭此课程吗？课程关闭后，仍然还在有效期内的学员将可以继续学习。
+admin.course.close_success_hint: 课程关闭成功！
+admin.course.publish_hint: 您确认要发布此课程吗？
+admin.course.publish_success_hint: 课程发布成功！
+admin.course.unknow_error_hint: 未知错误
+admin.course.delete_hint: 删除课程，将删除课程的章节、课时、学员等信息。真的要删除该课程吗？
+admin.course.remove_hint: 移除课程将删除所有的学员信息以及学员数据，移除后无法恢复！ 确定移除该课程吗？
+admin.course.remind_teacher_success_hint: 提醒教师的通知，发送成功！
+admin.course.cancel_recommend_hint: 真的要取消该课程推荐吗？
+admin.course.recommend_success_hint: 设置推荐课程操作成功!
+admin.course.recommend_fail_hint: 设置推荐课程操作失败!
+admin.course.week_excellent_courses.setting_hint: 每周精品栏目只能设置三门课程！
+admin.course.week_excellent_courses.setting_error_hint: 每周精品栏目中已经存在此门课程！
+admin.course.copying_hint: 正在复制课程
+admin.course.copying_progress_hint: 进度：
+admin.dictionary.delete_hint: 确定要删除该分类展示吗？
+admin.dictionary.delete_success_hint: 删除成功!
+admin.dictionary.service_error_hint: 服务器错误!
+admin.dictionary.update_success_hint: 更新栏目成功！
+admin.dictionary.create_success_hint: 添加栏目成功！
+admin.dictionary.update_fail_hint: 更新栏目成功失败，请重试！
+admin.dictionary.create_fail_hint: 添加栏目成功失败，请重试！
+admin.edu_cloud.validate_old.title.message: 网校名称最多不能超过8个汉字
+admin.edu_cloud.sms_send_num: 发送量(条)
+admin.edu_cloud.close_sms_fail_hint: 您启用了手机注册模式，不可关闭短信功能！
+admin.file.delete_hint: 真的要删除该文件吗？
+admin.group.operating_hint: %trigger%吗？
+admin.group.operating_success_hint: %trigger%成功！
+admin.group.operating_fail_hint: %trigger%失败
+admin.group.thread_delete_hint: 确定要删除话题吗？
+admin.group.thread_delete_pick_hint: 确定要删除话题吗？
+admin.keyword.delete_hint: 确定删除此关键字吗？
+admin.material_lib.video: 视频
+admin.material_lib.audio: 音频
+admin.material_lib.picture: 图片
+admin.material_lib.document: 文档
+admin.material_lib.other: 其他
+admin.material_lib.space_pie_chart_title: 存储空间使用分布
+admin.material_lib.flow_pie_chart_title: 流量使用分布
+admin.material_lib.total_line_chart_title: 空间/流量详情
+admin.material_lib.video_line_chart_title: 视频详情
+admin.material_lib.audio_line_chart_title: 音频详情
+admin.material_lib.document_line_chart_title: 文档详情
+admin.navigation.save_success_hint: 保存导航成功！
+admin.open_course.member_delete_title: 删除成员
+admin.open_course.recommend_delete_title: 删除相关推荐课程
+admin.open_course.material_delete_title: 删除课时资料
+admin.open_course.lesson_delete_title: 删除课时
+admin.open_course.course_delete_title: 删除课程
+admin.open_course.delete_finish: 完成
+admin.open_course.delete_unknow_error_hint: %title%时，发生了未知错误。
+admin.open_course.delete_exec_hint: 正在%title%
+admin.open_course_analysis.chart_title: 访问来源
+admin.open_course_analysis.watch.chart_title: 观看统计
+admin.open_course_analysis.watch.chart_data_title: 观看数
+admin.operation.upload_carousel_one_success_hint: 上传轮播图1成功！
+admin.operation.delete_hint: 确认要删除吗？
+admin.operation.delete_carousel_one_success_hint: 删除轮播图1成功！
+admin.operation.delete_carousel_one_fail_hint: 删除轮播图1失败！
+admin.operation.upload_carousel_two_success_hint: 上传轮播图2成功！
+admin.operation.delete_carousel_two_success_hint: 删除轮播图2成功！
+admin.operation.delete_carousel_two_fail_hint: 删除轮播图2失败！
+admin.operation.upload_carousel_three_success_hint: 上传轮播图3成功！
+admin.operation.delete_carousel_three_success_hint: 删除轮播图3成功！
+admin.operation.delete_carousel_three_fail_hint: 删除轮播图3失败！
+admin.operation.upload_carousel_four_success_hint: 上传轮播图4成功！
+admin.operation.delete_carousel_four_success_hint: 删除轮播图4成功！
+admin.operation.delete_carousel_four_fail_hint: 删除轮播图4失败！
+admin.operation.upload_carousel_five_success_hint: 上传轮播图5成功！
+admin.operation.delete_carousel_five_success_hint: 删除轮播图5成功！
+admin.operation.delete_carousel_five_fail_hint: 删除轮播图5失败！
+admin.optimize.check_optimize_file: 检查优化文件
+admin.optimize.optimize_file_success_hint: 优化文件成功
+admin.optimize.optimizing_file_hint: 正在%title%
+admin.optimize.optimize_file_fail_message: %title%失败：
+admin.optimize.optimize_file_success_message: %title%完成
+admin.optimize.optimize_file_error_message: %title%时，发生了未知错误。
+admin.optimize.remove_cache_success_hint: 刷新缓存成功！
+admin.optimize.remove_cache_fail_hint: 刷新缓存失败！
+admin.optimize.remove_tmp_success_hint: 优化磁盘空间成功！
+admin.optimize.remove_tmp_fail_hint: 优化磁盘空间失败！
+admin.optimize.remove_backup_hint: 确认要清空系统备份数据吗？
+admin.optimize.remove_backup_success_hint: 清空系统备份数据成功！
+admin.optimize.remove_backup_fail_hint: 清空系统备份数据失败！
+admin.optimize.backup_database_success_hint: 备份数据库成功，请下载数据库，并及时优化磁盘空间！
+admin.optimize.backup_database_fail_hint: 备份数据库失败！
+admin.order.validate_old.adjust_price.display: 优惠价格
+admin.order.validate_old.valid_price_input.message: 请输入正确的价格,最多保留两位小数
+admin.order.validate_old.discount.display: 折扣
+admin.order.validate_old.valid_discount_input.message: 请输入正确的折扣,最多保留两位小数
+admin.order.validate_old.result_input.message: 请选择审核结果
+admin.order.refund_cancel_hint: 真的要取消退款吗？
+admin.order.refund_cancel_success_hint: 退款申请已取消成功！
+admin.org.batch_select_check_hint: 请先选择数据
+admin.org.update_success_hint: 更新组织机构成功
+admin.org.update_fail_hint: 操作失败
+admin.org_manage.save_success_hint: 保存组织机构成功！
+admin.org_manage.add_org_fail_hint: 添加组织机构失败，请重试！
+admin.org_manage.delete_hint: 真的要删除该组织机构及其辖下组织机构吗？
+admin.org_manage.delete_success_hint: 组织机构已删除
+admin.org_manage.contains_data.delete_fail_hint: 该组织机构下含有数据
+admin.org_manage.contains_data_num: 条
+admin.org_manage.contains_data.delete_hint: 请先转移到其他组织机构再进行删除!
+admin.role.update_success_hint: 角色修改成功!
+admin.role.add_success_hint: 角色添加成功!
+admin.role.delete_hint: 确认删除该角色吗?
+admin.role.delete_success_hint: 删除角色成功
+admin.role.delete_fail_hint: 删除该角色失败
+admin.setting.operation_fail_hint: 操作失败！
+admin.setting.operation_success_hint: 操作成功！
+admin.setting.auth.email_verified_hint: 开启前,请先验证您的邮箱
+admin.setting.cloud_key.bind_hint: 授权域名一旦绑定就无法变更，您真的要绑定该授权域名吗？
+admin.setting.cloud.upload_cloud_video_watermark_error_hint: 上传云视频播放器水印失败，请重试！
+admin.setting.cloud.upload_cloud_video_watermark_success_hint: 上传云视频播放器水印成功！
+admin.setting.cloud.delete_cloud_video_watermark_hint: 确认要删除云视频播放器水印吗？
+admin.setting.cloud.delete_cloud_video_watermark_success_hint: 删除云视频播放器水印成功！
+admin.setting.cloud.delete_cloud_video_watermark_fail_hint: 删除云视频播放器水印失败！
+admin.setting.cloud.upload_cloud_video_embed_watermark_success_hint: 上传云视频内嵌水印成功！
+admin.setting.cloud.upload_cloud_video_embed_watermark_fail_hint: 上传云视频内嵌水印失败，请重试！
+admin.setting.cloud.delete_cloud_video_embed_watermark_hint: 确认要删除云视频水印吗？
+admin.setting.cloud.delete_cloud_video_embed_watermark_success_hint: 删除云视频内嵌水印成功！
+admin.setting.cloud.delete_cloud_video_embed_watermark_fail_hint: 删除云视频内嵌水印失败！
+admin.setting.cloud.validate_old.video_fingerprint_time.display: 云视频指纹显示时间
+admin.setting.cloud.validate_old.video_fingerprint_opacity.display: 云视频指纹不透明度
+admin.setting.consult_setting.upload_qrcode_success_hint: 上传微信二维码成功！
+admin.setting.consult_setting.setting_max_num_hint: 最多设置10个..
+admin.setting.consult_setting.delete_hint: 确认要删除吗？
+admin.setting.course_avatar.select_default_pic.message: 请选择要上传的默认课程图片文件
+admin.setting.course.upload_live_course_logo_success_hint: 上传直播课程的LOGO成功！
+admin.setting.course.live_course_logo_delete_hint: 确认要删除吗？
+admin.setting.course.live_course_logo_delete_success_hint: 删除直播课程LOGO成功！
+admin.setting.course.upload_live_course_logo_fail_hint: 删除直播课程LOGO失败！
+admin.setting.course.upload_default_pic_success_hint: 上传成功！
+admin.setting.default_user_avatar.upload_success_hint: 上传成功！
+admin.setting.upload_live_logo_success_hint: 上传LOGO成功！
+admin.setting.upload_live_logo_fail_hint: 上传LOGO失败！
+admin.setting.mobile_iap_delete_hint: 确认要删除吗？
+admin.setting.mobile_iap_delete_success_hint: 删除成功
+admin.setting.mobile_iap_delete_fail_hint: 删除失败
+admin.setting.mobile.startup_diagram_delete_hint: 确认要删除吗？
+admin.setting.mobile.upload_startup_diagram_figure_1_success_hint: 上传网校启动图1成功！
+admin.setting.mobile.delete_startup_diagram_figure_1_success_hint: 删除网校启动图1成功！
+admin.setting.mobile.delete_startup_diagram_figure_1_fail_hint: 删除网校启动图1失败！
+admin.setting.mobile.upload_startup_diagram_figure_2_success_hint: 上传网校启动图2成功！
+admin.setting.mobile.delete_startup_diagram_figure_2_success_hint: 删除网校启动图2成功！
+admin.setting.mobile.delete_startup_diagram_figure_2_fail_hint: 删除网校启动图2失败！
+admin.setting.mobile.upload_startup_diagram_figure_3_success_hint: 上传网校启动图3成功！
+admin.setting.mobile.delete_startup_diagram_figure_3_success_hint: 删除网校启动图3成功！
+admin.setting.mobile.delete_startup_diagram_figure_3_fail_hint: 删除网校启动图3失败！
+admin.setting.mobile.upload_startup_diagram_figure_4_success_hint: 上传网校启动图4成功！
+admin.setting.mobile.delete_startup_diagram_figure_4_success_hint: 删除网校启动图4成功！
+admin.setting.mobile.delete_startup_diagram_figure_4_fail_hint: 删除网校启动图4失败！
+admin.setting.mobile.upload_startup_diagram_figure_5_success_hint: 上传网校启动图5成功！
+admin.setting.mobile.delete_startup_diagram_figure_5_success_hint: 删除网校启动图5成功！
+admin.setting.mobile.delete_startup_diagram_figure_5_fail_hint: 删除网校启动图5失败！
+admin.setting.mobile.bundle_id: 套装 ID
+admin.setting.mobile.upload_logo_success_hint: 上传网校LOGO成功！
+admin.setting.mobile.delete_logo_success_hint: 删除网校LOGO成功！
+admin.setting.mobile.delete_logo_fail_hint: 删除网校LOGO失败！
+admin.setting.mobile.upload_app_icon_success_hint: 上传app图标成功！
+admin.setting.mobile.delete_app_icon_success_hint: 删除网校app图标成功！
+admin.setting.mobile.delete_app_icon_fail_hint: 删除网校app图标失败！
+admin.setting.mobile.upload_app_cover_success_hint: 上传app封面成功！
+admin.setting.mobile.delete_app_cover_success_hint: 删除app封面成功！
+admin.setting.mobile.delete_app_cover_fail_hint: 删除app封面失败！
+admin.site.upload_logo_success_hint: 上传网站LOGO成功！
+admin.site.delete_logo_success_hint: 删除网站LOGO成功！
+admin.site.delete_logo_fail_hint: 删除网站LOGO失败！
+admin.site.upload_favicon_success_hint: 上传网站浏览器图标成功！
+admin.site.delete_favicon_success_hint: 删除网站浏览器图标成功！
+admin.site.delete_favicon_fail_hint: 删除网站浏览器图标失败！
+admin.site.delete_hint: 确认要删除吗？
+admin.setting.theme.upgrade_error_hint: 该主题暂不适配当前ES版本，请先升级
+admin.setting.theme.use_hint: 真的要使用该主题吗？
+admin.sms.send_success_hint: 发送成功！
+admin.sms.sending_hint: 正在发送
+admin.sms.send_fail_hint: 失败：
+admin.sms.finished: 完成
+admin.sms.send_finished: 发送完成
+admin.sms.send_error_hint: 发送发生了未知错误。
+admin.system.mailer.mail_sent_hint: 邮件已发送, 请注意查收
+admin.system.mailer.mail_send_fail_hint: 邮件发送失败，请检查邮箱服务器配置
+admin.system.mailer.sender_name_input.message: 请输入发信人名称
+admin.system.mailer.smtp_server_host_input.message: 请输入SMTP服务器地址
+admin.system.mailer.smtp_server_port_input.message: 请输入SMTP端口号
+admin.system.mailer.smtp_server_username_input.message: 请输入SMTP用户名
+admin.system.mailer.smtp_server_password_input.message: 请输入SMTP密码
+admin.system.mailer.sender_address_input.message: 请输入发信人地址
+admin.system.mailer.close_email_verify_hint: 您开启了用户注册模式下的邮箱验证登录，请先关闭<a href="%emailSetUrl%">邮箱验证登录</a>功能！
+admin.system.mailer.verify_hint: 验证
+admin.system.mailer.in_verify_hint: 验证中..
+admin.system.payment.alipay_secret_input.message: 请输入Key
+admin.system.payment.alipay_key_input.message: 请输入PID
+admin.system.payment.wxpay_appid_input.message: 请输入AppID
+admin.system.payment.wxpay_secret_input.message: 请输入AppSecret
+admin.system.payment.wxpay_mp_secret_input.message: 请输入MP文件验证码
+admin.system.payment.wxpay_account_input.message: 请输入商户号
+admin.system.payment.wxpay_key_input.message: 请输入商户平台Key
+admin.system.payment.llpay_key_input.message: 请输入商户帐号
+admin.system.payment.llpay_accessKey_input.message: 请输入公钥
+admin.system.payment.llpay_secretKey_input.message: 请输入密钥
+admin.system.wechat.notification_open: 请先开启“网页扫码登录”和“微信内授权登录”。
+admin.system.user_fields.truename: 真实姓名
+admin.system.user_fields.mobile: 手机号码
+admin.system.user_fields.company: 所在公司
+admin.system.user_fields.idcard: 身份证号码
+admin.system.user_fields.gender: 性别
+admin.system.user_fields.career: 职业
+admin.system.user_fields.weibo: 微博
+admin.system.user_fields.wechat: 微信
+admin.system.user_fields.add_field_title_error_hint: 请勿添加与默认字段相同的自定义字段！
+admin.system.user_fields.field_type_input.message: 请选择字段类型
+admin.tag.delete_hint: 确认要删除标签吗？
+admin.tag.delete_success_hint: 删除成功
+admin.tag.delete_fail_hint: 服务器错误!
+admin.tag.update_tag_success_hint: 标签更新成功！
+admin.tag.add_tag_success_hint: 标签添加成功!
+admin.tag.single_delete_hint: 真的要删除该标签吗？
+admin.tag_group.select_tag_empty_hint: 标签组内标签不能为空
+admin.tag_group.update_success_hint: 标签组更新成功！
+admin.tag_group.add_success_hint: 标签组添加成功!
+admin.tag_group.delete_hint: 真的要删除该标签组吗？
+admin.tag_group.tag_input_placeholder: 请输入标签
+admin.teacher.cancel_promote_hint: 真的要取消该教师推荐吗？
+admin.teacher.cancel_recommend_success_hint: 教师推荐已取消！
+admin.teacher.set_recommend_success_hint: 设置推荐老师操作成功!
+admin.teacher.set_recommend_fail_hint: 设置推荐老师操作失败!
+admin.user.approve_fail_confirm_hint: 是否确认审核失败?
+admin.user.approve_success_confirm_hint: 是否确认审核通过?
+admin.user.rejection_reason_empty_hint: 请输入驳回原因！
+admin.user.valid_remark_length_hint: 不好意思，备注太长，请限制在100个字以内!
+admin.user.approve_submiting_hint: 提交中...
+admin.user.cancel_approval_hint: 确定要撤销这条认证成功的实名认证吗？
+admin.user.update_avatar_success_hint: 头像更新成功！
+admin.user.upload_avatar_success_hint: 上传成功！
+admin.user.password_modify_success_hint: 密码修改成功
+admin.user.password_modify_error_hint: 操作失败
+admin.user.create_new_user_success_hint: 新用户添加成功
+admin.user.create_new_user_fail_hint: 新用户添加失败
+admin.user.edit_user_profile_success_hint: 用户信息保存成功
+admin.user.edit_user_profile_error_hint: 操作失败
+admin.user.valid_weibo_address_input.message: 网站地址不正确，须以http://weibo.com开头。
+admin.user.valid_site_address_input.message: 网站地址不正确，须以http://或https://开头。
+admin.user.import_finish_hint: 导入完成！
+admin.user.import_progress_hint: 已经导入：%progressNum%
+admin.user.import_fail_hint: %title%失败：
+admin.user.import_completed_hint: %title%完成
+admin.user.import_error_hint: %title%时，发生了未知错误。
+admin.user.lock_operational_hint: 真的要%title%吗？
+admin.user.lock_operational_success_hint: %title%成功！
+admin.user.lock_operational_fail_hint: %title%失败
+admin.user.sending_passwordreset_email_hint: 正在发送密码重置验证邮件，请稍等。
+admin.user.password_reset_email_send_success_hint: 密码重置验证邮件，发送成功！
+admin.user.password_reset_email_send_fail_hint: 密码重置验证邮件，发送失败
+admin.user.sending_email_verify_email_hint: 正在发送Email验证邮件，请稍等。
+admin.user.email_verify_email_send_success_hint: Email验证邮件，发送成功！
+admin.user.email_verify_email_send_fail_hint: Email验证邮件，发送失败
+admin.user.change_user_role_fail_hint: 用户必须拥有%user%角色
+admin.user.cancel_user_teacher_role_hint: 取消该用户的教师角色，同时将收回该用户所有教授的课程的教师权限。您真的要这么做吗？
+admin.user.change_roles_success_hint: 用户组保存成功
+admin.user.change_roles_fail_hint: 操作失败
+admin.user.update_org_success_hint: 修改用户所属机构成功
+admin.user.update_org_fail_hint: 操作失败
+admin.wechat_app.mp_name_input.message: 请填写10个字以内的小程序标题
+admin.wechat_app.mp_description_input.message: 请填写小程序介绍
+admin.wechat_app.contact_name_input.message: 请填写联系人姓名
+admin.wechat_app.contact_phone_input.message: 请填写正确的电话号码
+admin.wechat_app.contact_qq_input.message: 请填写正确的 QQ 号
+admin.util.batch_delete.checked_empty_hint: 未选中任何%name%
+admin.util.batch_delete.delete_hint: 确定要删除选中的%ids%条%name%吗？
+admin.util.batch_delete.deleting_hint: 正在删除%name%，请稍等。
+admin.util.item_delete.delete_hint: 真的要删除该%name%吗？
+admin.util.item_delete.delete_success_hint: 删除%name%成功
+admin.shortcut_add_success_hint: 已添加当前页面为常用链接！
+admin.shortcut_delete_success_hint: 删除常用链接成功！
+
+task_show.user_login_protect_tip: 该账号未登录或已被踢
+
+admin.course_manage.manage.tags_select.placeholder: 输入标签名称关键字
+
+exception.common_frequent_operation: 操作过于频繁，请稍后重试
+material.common_table.file_name: 文件名称
+material.common_table.transcoding: 转码状态
+material.common_table.transcoding_intro: 转码状态介绍
+material.common_table.transcoding_more: 详情
+material.common_table.error_reason: 错误原因
+material.common_table.fail_not_support: 文件不支持
+material.common_table.fail_error_tip: 文件转码失败，请提供文件信息，联系运营人员处理。
+material.common_table.not_support_error_tip: 上传的文件格式不支持转码，请点击高亮的“文件不支持”，会显示解决方案。
+material.common_table.solution_way: 解决方案
+
+course.stick.success: 置顶成功！
+course.cancel.stick.success: 取消置顶成功！
+
+#微信通知
+wechat.notification.wechat_bind_hover: >
+  <div class="wechat-intro-title cd-text-warning"><i class="es-icon es-icon-xinxi cd-mr8"></i>提示</div>
+    <div class="wechat-intro-content">
+      <div>为享受更好的服务，建议您开启微信课程通知。</div>
+      <div>点这里绑定微信，并关注服务号即可开启课程通知。</div>
+    </div>
+wechat.notification.homepage.open_tip: <span class="%messageClass%">“微信通知”可在“个人设置-第三方登录”开启。</span>
+wechat.notification.homepage.open_tip_title: <span class="%messageClass%">前往开启</span>
+wechat.notification.cloud_open_tip: 请先开启教育云
+admin.wechat_notification.send_days: 发送日
+
+#试卷导入引导
+document.import.intro_hover: >
+  <div class="document-import-intro-title cd-text-warning"><i class="es-icon es-icon-xinxi cd-mr8"></i>提示</div>
+  <div class="document-import-intro-content">
+    <div align="center">全新导入功能，快来试试吧。</div>
+  </div>
+document.import.skip_btn: 知道了
+subject.testpaper_title_empty_hint: 试卷名称不能为空
+subject.testpaper_title_too_long_hint: 最多输入50个字符
+subject.delete.title: 确认删除
+subject.delete.content: 确定要删除这道题目吗?
+subject.save_success: 保存成功！
+subject.select_question_hint: 请选择题目
+subject.question_unit: 道
+subject.comma: ，
+subject.period: 。
+subject.miss_score_no_more_than_score: 漏选分值不得超过题目分值
+subject.score_update_success: 分数修改成功
+subject.difficulty_update_success: 难度修改成功
+subject.category_update_success: 分类修改成功
+subject.question_count: 共%count%道题
+subject.total_score: 总分%totalScore%分
+subject.is_editing_warning: 请先完成第%seq%题的编辑
+subject.sub_is_editing_warning: 请先完成材料题%parentNum%的第%seq%道子题的编辑
+
+subject.question_score_unit: 分
+subject.stem_required: 请输入题干
+subject.choice_option_least_two: 选项最少2个
+subject.choice_option_most_ten: 选项最多10个
+subject.validate.stem_required: 题干内容不得为空
+subject.validate.option_required: 选项内容不得为空
+subject.choice_answer_least_two: 至少选择2个答案
+subject.choice_require_answer: 请选择正确答案
+subject.essay_require_answer: 请填写答案
+subject.symbol.picture: 图片
+subject.question_error_tip: 第%seqs%题有违规
+subject.material_nosub_tip: 第%seq%题材料题缺少子题，请先添加子题
+subject.question_delete_tip: 请至少保留一道题目
+
+user.account.order_pay_course_close_title: 该课程已关闭
+user.account.order_pay_course_close_hint: 该订单的课程已关闭，确定还要支付？
+user.account.order_pay_classroom_close_title: 该班级已关闭
+user.account.order_pay_classroom_close_hint: 该订单的班级已关闭，确定还要支付？
+user.account.order_pay_vip_close_title: 该会员等级已关闭
+user.account.order_pay_vip_close_hint: 该订单的会员等级已关闭，确定还要支付？
+user.account.order_pay: 继续
+user.account.order_not_pay: 不支付
+
+#coupon
+notify.copy_link_success: 链接复制成功
+confirm.remove_coupon: 确认要删除此批次优惠券？
+notify.remove_coupon_success: 删除优惠券成功!
+notify.remove_coupon_fail: 删除优惠券失败!
+notify.channel_select: 至少选择一个发放渠道
+
+coupon.fixed_day: 有效期
+coupon.fixed_day.message: 请输入领取后有效天数
+admin.coupon.setting.confirm_message:  关闭优惠券开关将影响到所有正在发放优惠券的营销活动，将导致使用优惠券的营销活动无法正常进行。已经发放的优惠券也将无法继续使用，学员侧将屏蔽「我的优惠券」模块，订单页面也将无法继续选取优惠券下单。是否继续？
+admin.coupon.setting.success_message: 优惠券状态已保存
+coupon.target_type.multi_course: 部分课程
+coupon.target_type.multi_classroom: 部分班级
+admin.wechat.live_open_scenes_error.hint: 请至少勾选一个选项。
+course.question_manage.manage.delete_tips: 删除题目，可能会影响课时的练习，请谨慎操作！
+course.question_manage.upgrade_tips: 为了更好的使用体验，请先升级插件。<br />路径：【后台】 - 【云市场】- 【营销应用】 - 【题库增强插件】。
+admin.setting.invite.coupon.empty.tips: 请设置优惠券批次
+
+course.plan_task.activity_ppt_animation_img: 切换图片模式
+course.plan_task.activity_ppt_animation_slide: 切换动画模式
+
+admin.mobile_manage.discovery_upgrade_madal.notice_successed: '升级成功'
+admin.mobile_manage.discovery_upgrade_madal.notice_failed: '升级失败'
+admin.mobile_manage.discovery_upgrade_madal.notice_upgraded: '无法重复升级'
+course.plan_task.lessons_publish_status: 已发布课时数：%publishedNum%<br/>未发布课时数：%unpublishedNum%
+
+admin.question_bank.choose_category: 请选择所属分类
+admin.question_bank.save_success: 保存题库成功
+admin.question_bank.save_fail: 保存题库失败
+admin.question_bank.delete_hint: 确定要删除此题库吗
+admin.question_bank.fail_not_delete: 此题库内含有%testpaperNum%份试卷，%questionNum%道题目，无法删除
+admin.question_bank.no_category: 无题库分类
+
+question_bank.question_category.name_max_message: 名称的长度必须小于等于30
+question_bank.question_category.name_chinese_alphanumeric_message: 名称支持中文字、英文字母、数字及_ . ·
+question_bank.question_category.create_success: 创建分类成功
+question_bank.question_category.update_success: 更新分类成功
+question_bank.question_category.delete_confirm_title: 删除确认
+question_bank.question_category.delete_confirm_hint: 此分类及其子分类下共包含%count%道题，删除后，这些题目都将变为未分类题目。您确定要删除此分类吗？
+question_bank.question_category.not_set: 无
+
+question.marker_question.select_question_category: --选择分类--
+queston_bank.testpaper.no_open_tips: 如果找不到试卷，请先确定该试卷已经发布
+queston_bank.testpaper.empty_tips: 此题库还没有试卷
+
+#新后台
+admin_v2.user.cloude_sms_enable_hint: 请先到【管理后台】-【云市场】-【云服务】-【云短信】中开启云短信哦~
+admin_v2.homepage.quick_entrance.hint: 最多设置7个快捷入口位
+admin_v2.homepage.mini_program.title: 扫码打开小程序
+admin.switch_old_version.permission_error: 请联系超级管理员或管理员操作
+admin.switch_old_version.title: 切换后台
+admin.switch_old_version.confirm_message: '切换到老后台后，所有管理员将切换至老后台，确认切换？'
+admin.switch_new_version.confirm_message: '升级到新后台后，所有管理员将切换至新后台，但权限功能不会改变， 确认切换？'
+admin.can_not_link_data: 无法连接到数据
+
+group.thread.reply.max_length.notice: 回复内容不得超过3000字
+
+course_manage.live_statistics.empty_tips: 数据同步中，请稍后重试
+course_manage.live_statistics.live_not_end: 直播数据未生成
+course_manage.live_statistics.checkin_not_support: 当前直播课暂不支持点名功能
+course_manage.live_statistics.data_not_valid: 数据异常，直播间数据返回错误
+
+admin_v2.user.nickname_modify_success_hint: 用户名修改成功
+admin_v2.user.nickname_modify_error_hint: 操作失败
+
+admin_v2.developer.plumber_operate_hint: 正在操作中，可能需要一段时间，请稍后……
+admin_v2.developer.plumber_operate_error_hint: 操作失败
+admin_v2.developer.plumber_operate_success_hint: 操作成功
+
+course_manage.positive_currency.message: 请输入大于0的有效价格，最多两位小数，整数位不超过8位！
+
+merchant.resource.product_version.update_success_hint: 更新成功
+merchant.resource.product_version.update_failed_hint: 更新失败

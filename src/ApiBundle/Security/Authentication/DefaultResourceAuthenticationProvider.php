@@ -4,6 +4,7 @@ namespace ApiBundle\Security\Authentication;
 
 use ApiBundle\Api\Exception\ErrorCode;
 use ApiBundle\Api\Resource\ResourceProxy;
+use Biz\User\UserException;
 use Doctrine\Common\Annotations\CachedReader;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
@@ -37,6 +38,17 @@ class DefaultResourceAuthenticationProvider implements ResourceAuthenticationInt
 
         if ($annotation && !$annotation->getIsRequiredAuth()) {
             return;
+        }
+
+        $accessAnnotation = $this->annotationReader->getMethodAnnotation(
+            new \ReflectionMethod(get_class($resourceProxy->getResource()), $method),
+            'ApiBundle\Api\Annotation\Access'
+        );
+
+        $biz = $this->container->get('biz');
+        $currentUser = $biz['user'];
+        if ($accessAnnotation && !$accessAnnotation->canAccess($currentUser->getRoles())) {
+            throw UserException::PERMISSION_DENIED();
         }
 
         $token = $this->tokenStorage->getToken();

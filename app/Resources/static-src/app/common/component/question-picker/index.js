@@ -42,7 +42,7 @@ export default class QuestionPicker {
     let questionId = $target.data('questionId');
     let questionIds = [];
     questionIds.push(questionId);
-    
+    $target.attr('disabled',true);
     this.pickItemPost($target.data('url'),questionIds,replace);
   }
 
@@ -54,20 +54,22 @@ export default class QuestionPicker {
         this.$questionAppendForm.find('tr[data-parent-id="'+replace+'"]').remove();
       } else {
         let $tbody = this.$questionAppendForm.find('tbody:visible');
-         //fix Firefox
+        //fix Firefox
         if($tbody.length <= 0  ) {
           $tbody = this.$questionAppendForm.find('tbody');
         }
         $tbody.append(html).removeClass('hide');
+        $tbody.trigger('lengthChange');
       }
       this._refreshSeqs();
       questionSubjectiveRemask(this.$questionAppendForm);
       this.$questionPickerModal.modal('hide');
+      $('.js-close-modal').trigger('click');
     });
   }
 
   questionPreview(event) {
-    window.open($(event.currentTarget).data('url'), '_blank',"directories=0,height=580,width=820,scrollbars=1,toolbar=0,status=0,menubar=0,location=0");
+    window.open($(event.currentTarget).data('url'), '_blank','directories=0,height=580,width=820,scrollbars=1,toolbar=0,status=0,menubar=0,location=0');
   }
 
   batchSelectSave(event) {
@@ -84,8 +86,8 @@ export default class QuestionPicker {
     this.$questionPickerBody.find('[data-role="batch-item"]:checked').each(function(index,item){
       let questionId = $(this).data('questionId');
       questionIds.push(questionId);
-    })
-
+    });
+    $target.attr('disabled',true);
     this.pickItemPost(url, questionIds,null);
   }
 
@@ -96,7 +98,7 @@ export default class QuestionPicker {
       
       if (!$tr.hasClass('have-sub-questions')) { 
         $tr.find('td.seq').html(seq);
-          seq ++;
+        seq ++;
       }
     });
     this.$questionAppendForm.find('[name="questionLength"]').val((seq - 1) > 0 ? (seq - 1) : null );

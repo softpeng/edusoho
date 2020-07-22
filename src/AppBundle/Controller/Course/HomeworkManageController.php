@@ -2,28 +2,25 @@
 
 namespace AppBundle\Controller\Course;
 
-use AppBundle\Common\ArrayToolkit;
-use Biz\Course\Service\CourseService;
 use AppBundle\Controller\BaseController;
-use Biz\Course\Service\CourseSetService;
 use Biz\Activity\Service\ActivityService;
-use Biz\Testpaper\Service\TestpaperService;
+use Biz\Course\Service\CourseService;
+use Biz\Course\Service\CourseSetService;
 use Symfony\Component\HttpFoundation\Request;
-use Biz\Activity\Service\TestpaperActivityService;
 
 class HomeworkManageController extends BaseController
 {
-    public function checkAction(Request $request, $id, $resultId)
+    public function checkAction(Request $request, $id, $answerRecordId)
     {
         $course = $this->getCourseService()->getCourse($id);
         $course = $this->getCourseService()->tryManageCourse($course['id'], $course['courseSetId']);
 
-        return $this->forward('AppBundle:HomeworkManage:check', array(
+        return $this->forward('AppBundle:HomeworkManage:check', [
             'request' => $request,
-            'resultId' => $resultId,
+            'answerRecordId' => $answerRecordId,
             'source' => 'course',
             'targetId' => $course['id'],
-        ));
+        ]);
     }
 
     public function checkListAction(Request $request, $id)
@@ -34,14 +31,11 @@ class HomeworkManageController extends BaseController
         $user = $this->getUser();
         $isTeacher = $this->getCourseMemberService()->isCourseTeacher($course['id'], $user['id']) || $user->isSuperAdmin();
 
-        $activities = $this->getActivityService()->findActivitiesByCourseIdAndType($course['id'], 'homework');
-
-        return $this->render('course-manage/homework-check/check-list.html.twig', array(
+        return $this->render('course-manage/homework-check/check-list.html.twig', [
             'courseSet' => $courseSet,
             'course' => $course,
             'isTeacher' => $isTeacher,
-            'homeworkIds' => ArrayToolkit::column($activities, 'mediaId'),
-        ));
+        ]);
     }
 
     /**
@@ -66,22 +60,6 @@ class HomeworkManageController extends BaseController
     protected function getActivityService()
     {
         return $this->createService('Activity:ActivityService');
-    }
-
-    /**
-     * @return TestpaperActivityService
-     */
-    protected function getTestpaperActivityService()
-    {
-        return $this->createService('Activity:TestpaperActivityService');
-    }
-
-    /**
-     * @return TestpaperService
-     */
-    protected function getTestpaperService()
-    {
-        return $this->createService('Testpaper:TestpaperService');
     }
 
     protected function getCourseMemberService()

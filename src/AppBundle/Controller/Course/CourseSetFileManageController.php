@@ -5,6 +5,9 @@ namespace AppBundle\Controller\Course;
 use AppBundle\Common\Paginator;
 use AppBundle\Common\FileToolkit;
 use AppBundle\Common\ArrayToolkit;
+use Biz\Common\CommonException;
+use Biz\Course\MaterialException;
+use Biz\File\UploadFileException;
 use Biz\System\Service\SettingService;
 use Biz\Course\Service\MaterialService;
 use Biz\File\Service\UploadFileService;
@@ -31,10 +34,6 @@ class CourseSetFileManageController extends BaseController
             'courseSetId' => $courseSet['id'],
             'type' => 'course',
         );
-        // XXX
-        // if ($courseSet['parentId'] > 0 && $courseSet['locked'] == 1) {
-        //     $conditions['courseSetId'] = $courseSet['parentId'];
-        // }
 
         $paginator = new Paginator(
             $request,
@@ -62,6 +61,10 @@ class CourseSetFileManageController extends BaseController
         $filesQuote = $this->getMaterialService()->findUsedCourseSetMaterials($fileIds, $id);
 
         $users = $this->getUserService()->findUsersByIds(ArrayToolkit::column($files, 'updatedUserId'));
+        $subtitles = $this->getSubtitleService()->findSubtitlesByMediaIds($fileIds);
+        if (!empty($subtitles)) {
+            $subtitles = ArrayToolkit::index($subtitles, 'mediaId');
+        }
 
         return $this->render('courseset-manage/file/index.html.twig', array(
             'courseSet' => $courseSet,
@@ -70,7 +73,54 @@ class CourseSetFileManageController extends BaseController
             'paginator' => $paginator,
             'now' => time(),
             'filesQuote' => $filesQuote,
+            'subtitles' => $subtitles,
         ));
+    }
+
+    public function detailAction(Request $request, $courseSetId, $fileId)
+    {
+        $this->getCourseSetService()->tryManageCourseSet($courseSetId);
+
+        $currentUser = $this->getCurrentUser();
+        $materialCount = $this->getMaterialService()->countMaterials(
+            array(
+                'courseSetId' => $courseSetId,
+                'fileId' => $fileId,
+            )
+        );
+
+        if (!$materialCount) {
+            $this->createNewException(MaterialException::NOTFOUND_MATERIAL());
+        }
+
+        $file = $this->getUploadFileService()->getFullFile($fileId);
+
+        if ('local' == $file['storage'] || $currentUser['id'] != $file['createdUserId']) {
+            $fileTags = $this->getUploadFileTagService()->findByFileId($fileId);
+            $tags = $this->getTagService()->findTagsByIds(ArrayToolkit::column($fileTags, 'tagId'));
+            $file['tags'] = ArrayToolkit::column($tags, 'name');
+
+            return $this->render('material-lib/web/static-detail.html.twig', array(
+                'material' => $file,
+                'thumbnails' => '',
+                'editUrl' => $this->generateUrl('material_edit', array('fileId' => $file['id'])),
+            ));
+        } else {
+            try {
+                if ('video' == $file['type']) {
+                    $thumbnails = $this->getCloudFileService()->getDefaultHumbnails($file['globalId']);
+                }
+            } catch (\RuntimeException $e) {
+                $thumbnails = array();
+            }
+
+            return $this->render('admin/cloud-file/detail.html.twig', array(
+                'material' => $file,
+                'thumbnails' => empty($thumbnails) ? '' : $thumbnails,
+                'params' => $request->query->all(),
+                'editUrl' => $this->generateUrl('material_edit', array('fileId' => $file['id'])),
+            ));
+        }
     }
 
     public function fileStatusAction(Request $request)
@@ -104,13 +154,13 @@ class CourseSetFileManageController extends BaseController
         );
 
         if (!$materialCount) {
-            throw $this->createNotFoundException('Materials Not Found');
+            $this->createNewException(MaterialException::NOTFOUND_MATERIAL());
         }
 
         $file = $this->getUploadFileService()->getFile($fileId);
 
         if (empty($file)) {
-            throw $this->createNotFoundException('File Not Found');
+            $this->createNewException(UploadFileException::NOTFOUND_FILE());
         }
 
         return $this->forward('AppBundle:UploadFile:download', array('fileId' => $file['id']));
@@ -123,7 +173,7 @@ class CourseSetFileManageController extends BaseController
         $file = $this->getUploadFileService()->getFile($fileId);
 
         if (empty($file)) {
-            throw $this->createNotFoundException('File Not Found');
+            $this->createNewException(UploadFileException::NOTFOUND_FILE());
         }
 
         $convertHash = $this->getUploadFileService()->reconvertFile($file['id']);
@@ -135,18 +185,30 @@ class CourseSetFileManageController extends BaseController
         return $this->createJsonResponse(array('status' => 'ok'));
     }
 
-    public function uploadCourseFilesAction($id, $targetType)
+    public function retryTranscodeAction($id, $fileId)
     {
-        $courseSet = $this->getCourseSetService()->tryManageCourseSet($id);
+        $this->getCourseSetService()->tryManageCourseSet($id);
 
-        $storageSetting = $this->getSettingService()->get('storage', array());
+        $file = $this->getUploadFileService()->getFile($fileId);
 
-        return $this->render('courseset-manage/file/modal-upload-course-files.html.twig', array(
-            'courseSet' => $courseSet,
-            'storageSetting' => $storageSetting,
-            'targetType' => $targetType,
-            'targetId' => $id,
-        ));
+        if (empty($file)) {
+            $this->createNewException(UploadFileException::NOTFOUND_FILE());
+        }
+
+        if (in_array($file['audioConvertStatus'], array('none', 'error'))) {
+            $convertStatus = $this->getUploadFileService()->retryTranscode(array($file['globalId']));
+            if (empty($convertStatus)) {
+                return $this->createJsonResponse(array('status' => 'error', 'message' => '文件转换请求失败，请重试！'));
+            }
+            if (isset($convertStatus['error'])) {
+                return $this->createJsonResponse(array('status' => 'error', 'message' => $convertStatus['error']));
+            }
+            if (isset($convertStatus['status']) && 'ok' == $convertStatus['status']) {
+                $this->getUploadFileService()->setAudioConvertStatus($fileId, 'doing');
+            }
+        }
+
+        return $this->createJsonResponse(array('status' => 'ok'));
     }
 
     public function deleteMaterialsAction(Request $request, $id)
@@ -170,13 +232,22 @@ class CourseSetFileManageController extends BaseController
     {
         $this->getCourseSetService()->tryManageCourseSet($id);
 
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $formData = $request->request->all();
 
-            $this->getMaterialService()->deleteMaterials($id, $formData['ids']);
+            if (empty($formData['ids'])) {
+                $this->createNewException(CommonException::ERROR_PARAMETER());
+            }
 
-            if (isset($formData['isDeleteFile']) && $formData['isDeleteFile']) {
-                foreach ($formData['ids'] as $key => $fileId) {
+            $deletedMaterials = $this->getMaterialService()->deleteMaterials($id, $formData['ids']);
+
+            if (empty($deletedMaterials)) {
+                return $this->createJsonResponse(true);
+            }
+
+            if (!empty($formData['isDeleteFile'])) {
+                $fileIds = array_unique(ArrayToolkit::column($deletedMaterials, 'fileId'));
+                foreach ($fileIds as $fileId) {
                     if ($this->getUploadFileService()->canManageFile($fileId)) {
                         $this->getUploadFileService()->deleteFile($fileId);
                     }
@@ -185,7 +256,24 @@ class CourseSetFileManageController extends BaseController
 
             return $this->createJsonResponse(true);
         }
-        throw $this->createAccessDeniedException('Method Not Allowed');
+        $this->createNewException(CommonException::NOT_ALLOWED_METHOD());
+    }
+
+    public function batchTagAddAction(Request $request, $id)
+    {
+        $this->getCourseSetService()->tryManageCourseSet($id);
+
+        $data = $request->request->all();
+        $fileIds = preg_split('/,/', $data['fileIds']);
+
+        $this->getMaterialLibService()->batchTagEdit($fileIds, $data['tags']);
+
+        return $this->redirect($this->generateUrl('course_set_manage_files', array('id' => $id)));
+    }
+
+    protected function getMaterialLibService()
+    {
+        return $this->createService('MaterialLib:MaterialLibService');
     }
 
     /**
@@ -218,6 +306,29 @@ class CourseSetFileManageController extends BaseController
     protected function getMaterialService()
     {
         return $this->getBiz()->service('Course:MaterialService');
+    }
+
+    protected function getSubtitleService()
+    {
+        return $this->getBiz()->service('Subtitle:SubtitleService');
+    }
+
+    protected function getUploadFileTagService()
+    {
+        return $this->createService('File:UploadFileTagService');
+    }
+
+    /**
+     * @return TagService
+     */
+    protected function getTagService()
+    {
+        return $this->createService('Taxonomy:TagService');
+    }
+
+    protected function getCloudFileService()
+    {
+        return $this->createService('CloudFile:CloudFileService');
     }
 
     protected function createPrivateFileDownloadResponse(Request $request, $file)

@@ -16,8 +16,7 @@
   <tr>
     <th>Email</th>
     <td>
-      {% set emailArr = user.email|split('@') %}
-      {% if emailArr[1] != 'edusoho.net' %}
+      {% if not is_system_generated_email(user.email) %}
         {{ user.email }}
       {% else %}
         {{'admin.user.fields.empty'|trans}}
@@ -57,7 +56,7 @@
     <td>
       {{ user.createdTime|date('Y-n-d H:i:s') }}
       /
-      {{ user.createdIp }} {{convertIP(user.createdIp)}}
+      {{ user.createdIp }} {{convert_ip(user.createdIp)}}
     </td>
   </tr>
 
@@ -70,7 +69,7 @@
           {{ user.loginTime|date('Y-n-d H:i:s') }}
       {% endif %}
       {% if user.loginIp|default is not empty %}
-           / {{ user.loginIp }} {{convertIP(user.loginIp)}}
+           / {{ user.loginIp }} {{convert_ip(user.loginIp)}}
       {% endif %}
      </td>
   </tr>
@@ -206,7 +205,7 @@
     <td>
     {% if profile.about %}
       <div class="editor-text">
-        {{ profile.about | raw }}
+        {{ profile.about|cdn|raw }}
       </div>
       {% else %}
         {{'admin.user.fields.empty'|trans}}

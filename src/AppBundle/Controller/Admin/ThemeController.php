@@ -2,10 +2,10 @@
 
 namespace AppBundle\Controller\Admin;
 
-use AppBundle\System;
 use Biz\Theme\Service\ThemeService;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class ThemeController extends BaseController
 {
@@ -27,51 +27,16 @@ class ThemeController extends BaseController
     public function changeAction(Request $request)
     {
         $themeUri = $request->query->get('uri');
-
         $theme = $this->getTheme($themeUri);
+        $result = $this->getThemeService()->changeTheme($theme);
 
-        if (empty($theme)) {
-            return $this->createJsonResponse(false);
-        }
-
-        if (!$this->isThemeSupportEs($theme)) {
-            return $this->createJsonResponse(false);
-        }
-
-        $this->get('kernel')->getPluginConfigurationManager()->setActiveThemeName($themeUri)->save();
-
-        $this->getSettingService()->set('theme', $theme);
-
-        return $this->createJsonResponse(true);
+        return $this->createJsonResponse($result);
     }
 
-    private function isThemeSupportEs($theme)
-    {
-        $supportVersion = explode('.', $theme['support_version']);
-        $EsVerson = explode('.', System::VERSION);
-
-        if ($theme['protocol'] < 3 || version_compare(array_shift($supportVersion), array_shift($EsVerson), '<')) {
-            return false;
-        }
-
-        return true;
-    }
-
-    public function saveConfigAction(Request $request, $uri)
+    public function saveConfigAction(Request $request)
     {
         $config = $request->request->get('config');
-        $currentData = $request->request->get('currentData');
         $this->getThemeService()->saveCurrentThemeConfig($config);
-
-        if ($currentData) {
-            return $this->render(
-                'admin/theme/theme-edit-config-li.html.twig',
-                array(
-                    'pendant' => $currentData,
-                    'uri' => $uri,
-                )
-            );
-        }
 
         return $this->createJsonResponse(true);
     }
@@ -80,7 +45,7 @@ class ThemeController extends BaseController
     {
         $this->getThemeService()->saveConfirmConfig();
 
-        return $this->redirect($this->generateUrl('admin_setting_theme', array(), true));
+        return $this->redirect($this->generateUrl('admin_setting_theme', array(), UrlGeneratorInterface::ABSOLUTE_URL));
     }
 
     public function manageIndexAction(Request $request, $uri)
@@ -121,24 +86,18 @@ class ThemeController extends BaseController
         );
     }
 
-    public function showAction(Request $request, $uri)
+    public function showAction(Request $request)
     {
-        $friendlyLinks = $this->getNavigationService()->getOpenedNavigationsTreeByType('friendlyLink');
+        $request->request->set('themeEditing', 1);
 
-        return $this->render(
-            'default/index.html.twig',
-            array(
-                'isEditColor' => true,
-                'friendlyLinks' => $friendlyLinks,
-            )
-        );
+        return $this->forward('AppBundle:Default:index', array(
+            'request' => $request,
+        ));
     }
 
-    public function themeConfigEditAction(Request $request, $uri)
+    public function themeConfigEditAction(Request $request)
     {
         $config = $request->query->get('config');
-
-        //$code = "edit".$this->fiterCode($config['code']);
 
         return $this->edit($config['code'], $config);
     }
@@ -200,8 +159,15 @@ class ThemeController extends BaseController
 
     private function edit($code, $config)
     {
+        if (!empty($config['isPlugin']) && $this->getWebExtension()->isPluginInstalled($config[
+            'pluginName'])) {
+            $template = $config['edit'];
+        } elseif (empty($config['isPlugin'])) {
+            $template = 'admin/theme/edit-modal/edit-'.$code.'-modal.html.twig';
+        }
+
         return $this->render(
-            'admin/theme/edit-'.$code.'-modal.html.twig',
+            $template,
             array(
                 'config' => $config,
             )
@@ -224,5 +190,10 @@ class ThemeController extends BaseController
     protected function getNavigationService()
     {
         return $this->createService('Content:NavigationService');
+    }
+
+    protected function getWebExtension()
+    {
+        return $this->get('web.twig.extension');
     }
 }

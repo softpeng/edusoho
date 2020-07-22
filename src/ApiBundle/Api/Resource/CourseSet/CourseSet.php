@@ -3,12 +3,11 @@
 namespace ApiBundle\Api\Resource\CourseSet;
 
 use ApiBundle\Api\ApiRequest;
-use ApiBundle\Api\Exception\ErrorCode;
 use ApiBundle\Api\Resource\AbstractResource;
 use ApiBundle\Api\Annotation\ApiConf;
+use Biz\Course\CourseSetException;
 use Biz\Course\Service\CourseService;
 use Biz\Course\Service\CourseSetService;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class CourseSet extends AbstractResource
 {
@@ -20,7 +19,7 @@ class CourseSet extends AbstractResource
         $courseSet = $this->getCourseSetService()->getCourseSet($courseSetId);
 
         if (empty($courseSet)) {
-            throw new NotFoundHttpException('课程不存在', null, ErrorCode::RESOURCE_NOT_FOUND);
+            throw CourseSetException::NOTFOUND_COURSESET();
         }
 
         $this->getOCUtil()->single($courseSet, array('creator', 'teacherIds'));
@@ -39,6 +38,11 @@ class CourseSet extends AbstractResource
         $conditions['status'] = 'published';
         $conditions['showable'] = 1;
         $conditions['parentId'] = 0;
+        //过滤约排课
+        $conditions['excludeTypes'] = array('reservation');
+        if (isset($conditions['type']) && 'all' == $conditions['type']) {
+            unset($conditions['type']);
+        }
 
         list($offset, $limit) = $this->getOffsetAndLimit($request);
         $sort = $this->getSort($request);
@@ -53,7 +57,6 @@ class CourseSet extends AbstractResource
                 $limit
             );
         }
-
 
         $this->getOCUtil()->multiple($courseSets, array('creator', 'teacherIds'));
 
@@ -115,7 +118,7 @@ class CourseSet extends AbstractResource
         $maxOriginPrice = 0;
         $minOriginPrice = 0;
         foreach ($courses as $course) {
-            if ($course['status'] != 'published') {
+            if ('published' != $course['status']) {
                 continue;
             }
 
@@ -149,6 +152,6 @@ class CourseSet extends AbstractResource
      */
     private function getCourseSetService()
     {
-       return $this->service('Course:CourseSetService');
+        return $this->service('Course:CourseSetService');
     }
 }

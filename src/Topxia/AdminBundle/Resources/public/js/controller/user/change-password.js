@@ -21,18 +21,23 @@ define(function(require, exports, module) {
 
                     $.post($form.attr('action'), $form.serialize(), function(html) {
                         $modal.modal('hide');
-                        Notify.success(Translator.trans('密码修改成功'));
+                        Notify.success(Translator.trans('admin.user.password_modify_success_hint'));
                     }).error(function(){
-                        Notify.danger(Translator.trans('操作失败'));
+                        Notify.danger(Translator.trans('admin.user.password_modify_error_hint'));
                     });
                 });
             }
         });
 
+        Validator.addRule("spaceNoSupport", function(options) {
+            var value = $(options.element).val();
+            return value.indexOf(' ') < 0;
+        }, Translator.trans('validate.have_spaces'));
+
         validator.addItem({
             element: '[name="newPassword"]',
             required: true,
-            rule: 'minlength{min:5} maxlength{max:20}'
+            rule: 'minlength{min:5} maxlength{max:20} spaceNoSupport'
         });
 
         validator.addItem({

@@ -5,6 +5,7 @@ namespace Biz\Course\Copy\Entry;
 use Biz\Course\Dao\CourseSetDao;
 use Biz\Course\Service\CourseService;
 use Biz\Classroom\Service\ClassroomService;
+use Biz\Course\Service\CourseSetService;
 use Biz\Taxonomy\Dao\TagOwnerDao;
 use Biz\Course\Copy\Chain\CourseSetCopy;
 
@@ -34,7 +35,7 @@ class ClassroomCourseCopy extends CourseCopy
         $newCourse = $this->filterFields($course);
 
         $newCourse = $this->extendConfigFromClassroom($newCourse, $config['classroomId']);
-        $newCourse['isDefault'] = $course['isDefault'];
+        $newCourse['isDefault'] = 1;
         $modeChange = false;
         $newCourse['parentId'] = $course['id'];
         $newCourse['locked'] = 1; //默认锁定
@@ -42,10 +43,17 @@ class ClassroomCourseCopy extends CourseCopy
         $newCourse['creator'] = $user['id'];
         $newCourse['status'] = 'published';
         $newCourse['teacherIds'] = array($user['id']);
+        $newCourse['isHideUnpublish'] = $course['isHideUnpublish'];
+        $newCourse['lessonNum'] = $course['lessonNum'];
+        $newCourse['publishLessonNum'] = $course['publishLessonNum'];
+        $newCourse['taskNum'] = $course['taskNum'];
+        $newCourse['compulsoryTaskNum'] = $course['compulsoryTaskNum'];
 
         $newCourse = $this->getCourseDao()->create($newCourse);
 
         $this->getCourseSetDao()->update($newCourseSet['id'], array('defaultCourseId' => $newCourse['id']));
+
+        $this->getCourseSetService()->updateCourseSetMinAndMaxPublishedCoursePrice($courseSetId);
 
         $this->processChainsDoCopy(
             $course, array(
@@ -139,5 +147,13 @@ class ClassroomCourseCopy extends CourseCopy
     private function getClassroomService()
     {
         return $this->biz->service('Classroom:ClassroomService');
+    }
+
+    /**
+     * @return CourseSetService
+     */
+    private function getCourseSetService()
+    {
+        return $this->biz->service('Course:CourseSetService');
     }
 }

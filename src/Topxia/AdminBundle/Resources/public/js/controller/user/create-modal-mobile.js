@@ -18,14 +18,20 @@ define(function(require, exports, module) {
 
                 $.post($form.attr('action'), $form.serialize(), function(html) {
                     $modal.modal('hide');
-                    Notify.success(Translator.trans('新用户添加成功'));
+                    Notify.success(Translator.trans('admin.user.create_new_user_success_hint'));
                     window.location.reload();
                 }).error(function(){
-                    Notify.danger(Translator.trans('新用户添加失败'));
+                    Notify.danger(Translator.trans('admin.user.create_new_user_fail_hint'));
                 });
 
             }
         });
+
+        Validator.addRule("spaceNoSupport", function(options) {
+            var value = $(options.element).val();
+            return value.indexOf(' ') < 0;
+        }, Translator.trans('validate.have_spaces'));
+
         validator.addItem({
             element: '[name="emailOrMobile"]',
             required: true,
@@ -40,7 +46,7 @@ define(function(require, exports, module) {
         validator.addItem({
             element: '[name="password"]',
             required: true,
-            rule: 'minlength{min:5} maxlength{max:20}'
+            rule: 'minlength{min:5} maxlength{max:20} spaceNoSupport'
         });
 
         validator.addItem({

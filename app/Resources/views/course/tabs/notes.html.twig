@@ -14,7 +14,7 @@
       <button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-expanded="false">
         {% set task = tasks[selectedTaskId]|default(null) %}
         {% if task is empty %}
-          {{ 'course.note.all_task'|trans }}
+          {{ 'course.note.all_task'|trans({'%taskName%':setting('course.task_name')|default('admin.setting_course.task'|trans)}) }}
         {% else %}
           {{ task.title }}
         {% endif %}
@@ -22,6 +22,11 @@
       </button>
       {% if tasks %}
         <ul class="dropdown-menu" role="menu">
+          <li class="{% if selectedTaskId == 0  %}active{% endif %}">
+            <a href="{{ path(currentRoute, {id: course.id, tab: 'notes', sort: sort, task: 0, selectedCourse: selectedCourseId }) }}#notes">
+              {{ 'course.note.all_task'|trans({'%taskName%':setting('course.task_name')|default('admin.setting_course.task'|trans)}) }}
+            </a>
+          </li>
           {% for task in tasks %}
             <li class="{% if task.id == selectedTaskId %} active {% endif %}">
               <a href="{{ path(currentRoute, {id: course.id, tab: 'notes', sort: sort, task: task.id, selectedCourse: selectedCourseId }) }}#notes" title="{{ task.title }}">
@@ -67,7 +72,7 @@
       {% set task = tasks[note.taskId]|default(null) %}
       <div class="media note-item">
         <div class="media-left">
-          <a class=" js-user-card" href="{{ path('user_show', {'id': author.id }) }}"
+          <a class="{% if not author.destroyed|default(0) %}js-user-card{% endif %}" href="{{ path('user_show', {'id': author.id }) }}"
             data-card-url="{{ path('user_card_show', {'userId': author.id}) }}" data-user-id="{{ author.id }}">
             <img class="avatar-sm" src="{{ filepath(author.smallAvatar, 'avatar.png') }}">
           </a>
@@ -75,12 +80,19 @@
         <div class="media-body">
           <div class="content">
             <div class="editor-text">
-                {{ note.content|raw }}
+                {{ note.content|cdn|raw }}
             </div>
           </div>
-          <a href="javascript:;" class="more js-more-show">{{ 'course.note.expand_btn'|trans|raw }}</a>
+          <a href="javascript:;" class="more js-more-show">
+            <span class="js-change-btn">{{ 'course.note.expand_btn'|trans|raw }}</span>
+            <span class="js-change-btn" style="display: none;">{{ 'course.note.collapse_btn'|trans|raw }}</span>
+          </a>
           <div class="metas clearfix">
-            <a class="link-dark name" href="{{ path('user_show', {'id': author.id }) }}">{{ author.nickname }}</a>
+            {% if not author.destroyed|default(0) %}
+              <a class="link-dark name" href="{{ path('user_show', {'id': author.id }) }}">{{ author.nickname }}</a>
+            {% else %}
+              <a class="link-dark name">{{ 'user.user_had_destroyed'|trans }}</a>
+            {% endif %}
             · <span>{{ note.updatedTime|smart_time }}</span>
             {% if task %}
               · {% if member %}
@@ -94,7 +106,7 @@
               </a>
             {% endif %}
             {% else %}
-              {{ 'course.note.mission_delete_tips'|trans }}
+              {{ 'course.note.mission_delete_tips'|trans({'%taskName%':setting('course.task_name')|default('admin.setting_course.task'|trans)}) }}
             {% endif %}
             <span class="metas-sns">
               <span class="icon-favour">

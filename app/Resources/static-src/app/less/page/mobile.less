@@ -1,4 +1,4 @@
-.es-mobile {
+.mobile-page {
   .mobile-first {
     background: url("@{img-src}mobile/mobile_bg.jpg") top center no-repeat;
     .container {
@@ -56,19 +56,21 @@
       }
     }
     .title {
-      font-size: 80px;
+      font-size: 70px;
       opacity: 0;
       font-weight: bold;
       img {
-        display: inline-block;
-        margin-top: -15px;
-        width: 80px;
+        float: left;
+        width: 70px;
         @media(max-width: @screen-md-max) {
           width: 60px;
         }
         @media(max-width: @screen-xs-max) {
           width: 40px;
           margin-top: -5px;
+        }
+        @media(max-width: @screen-xs-min) {
+          float: none;
         }
       }
       @media(max-width: @screen-md-max) {
@@ -79,16 +81,31 @@
         font-size: 28px;
       }
     }
+    .title__text {
+      margin-left: 80px;
+      line-height: 1;
+      @media(max-width: @screen-md-max) {
+        line-height: 60px;
+      }
+      @media(max-width: @screen-xs-max) {
+        margin-left: 0;
+      }
+    }
     .subtitle {
       font-size: 24px;
-      margin-bottom: 40px;
+      margin-top: 32px;
+      margin-bottom: 32px;
       opacity: 0;
       letter-spacing: 3px;
+      line-height: 30px;
       @media(max-width: @screen-md-max) {
         font-size: 16px;
       }
       @media(max-width: @screen-xs-max) {
         margin-bottom: 20px;
+      }
+      @media(max-width: @screen-xs-min) {
+        text-align: left;
       }
     }
     .btn-mobile {
@@ -123,17 +140,20 @@
     }
     &.active {
       .img-one {
+        opacity: 1\9\0;
         .animation(fadeInLeft .5s .2s ease both);
       }
       .img-two {
+        opacity: 1\9\0;
         .animation(fadeInRight .5s .2s ease both);
       }
       .title {
+        opacity: 1\9\0;
         .animation(fadeInDown 0.5s .7s ease both);
       }
       .subtitle,
-      .label-mobile,
       .btn-mobile {
+        opacity: 1\9\0;
         .animation(fadeInUp 0.5s .7s ease both);
       }
     }
@@ -263,6 +283,7 @@
     }
     &.active {
       .thumb {
+        opacity: 1\9\0;
         .animation(fadeInUp 1s  ease both);
       }
     }

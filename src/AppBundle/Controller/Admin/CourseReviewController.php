@@ -2,8 +2,9 @@
 
 namespace AppBundle\Controller\Admin;
 
-use AppBundle\Common\Paginator;
 use AppBundle\Common\ArrayToolkit;
+use AppBundle\Common\Paginator;
+use Biz\Review\Service\ReviewService;
 use Symfony\Component\HttpFoundation\Request;
 
 class CourseReviewController extends BaseController
@@ -18,37 +19,46 @@ class CourseReviewController extends BaseController
 
         if (!empty($conditions['courseTitle'])) {
             $courseSets = $this->getCourseSetService()->findCourseSetsLikeTitle($conditions['courseTitle']);
-            $conditions['courseSetIds'] = ArrayToolkit::column($courseSets, 'id');
+            $courses = $this->getCourseService()->findCoursesByCourseSetIds(ArrayToolkit::column($courseSets, 'id'));
+
+            $conditions['targetIds'] = ArrayToolkit::column($courses, 'id');
             unset($conditions['courseTitle']);
-            $conditions['courseSetIds'] = $conditions['courseSetIds'] ?: array(-1);
+            $conditions['targetIds'] = $conditions['targetIds'] ?: [-1];
         }
+
+        if (!empty($conditions['author'])) {
+            $user = $this->getUserService()->getUserByNickname($conditions['author']);
+            unset($conditions['author']);
+            $conditions['userId'] = $user['id'] ? $user['id'] : -1;
+        }
+
+        $conditions['parentId'] = 0;
+        $conditions['targetType'] = 'course';
 
         $paginator = new Paginator(
             $request,
-            $this->getReviewService()->searchReviewsCount($conditions),
+            $this->getReviewService()->countReviews($conditions),
             20
         );
 
-        $conditions['parentId'] = 0;
-
         $reviews = $this->getReviewService()->searchReviews(
             $conditions,
-            'latest',
+            ['createdTime' => 'DESC'],
             $paginator->getOffsetCount(),
             $paginator->getPerPageCount()
         );
 
         $users = $this->getUserService()->findUsersByIds(ArrayToolkit::column($reviews, 'userId'));
-        $courseSets = $this->getCourseSetService()->findCourseSetsByIds(ArrayToolkit::column($reviews, 'courseSetId'));
-        $courses = $this->getCourseService()->findCoursesByIds(ArrayToolkit::column($reviews, 'courseId'));
+        $courses = $this->getCourseService()->findCoursesByIds(ArrayToolkit::column($reviews, 'targetId'));
+        $courseSets = $this->getCourseSetService()->findCourseSetsByIds(ArrayToolkit::column($courses, 'courseSetId'));
 
-        return $this->render('admin/course-review/index.html.twig', array(
+        return $this->render('admin/course-review/index.html.twig', [
             'reviews' => $reviews,
             'users' => $users,
             'courses' => $courses,
             'courseSets' => $courseSets,
             'paginator' => $paginator,
-        ));
+        ]);
     }
 
     public function deleteAction(Request $request, $id)
@@ -83,8 +93,11 @@ class CourseReviewController extends BaseController
         return $this->createService('User:UserService');
     }
 
+    /**
+     * @return ReviewService
+     */
     protected function getReviewService()
     {
-        return $this->createService('Course:ReviewService');
+        return $this->createService('Review:ReviewService');
     }
 }

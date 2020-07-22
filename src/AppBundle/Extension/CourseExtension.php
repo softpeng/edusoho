@@ -2,14 +2,47 @@
 
 namespace AppBundle\Extension;
 
+use Biz\System\Service\SettingService;
 use Pimple\Container;
 use Pimple\ServiceProviderInterface;
+use Biz\Course\Service\CourseSetService;
+use Biz\OpenCourse\Service\OpenCourseService;
 
 class CourseExtension extends Extension implements ServiceProviderInterface
 {
     public function register(Container $pimple)
     {
         // TODO: Implement register() method.
+    }
+
+    public function getCourseTypes()
+    {
+        return array(
+            CourseSetService::NORMAL_TYPE => array(
+                'template' => 'courseset-manage/normal/create-show.html.twig',
+                'saveAction' => 'AppBundle:Course/CourseSetManage:saveCourse',
+                'priority' => 30,
+                'visible' => 1,
+            ),
+            CourseSetService::LIVE_TYPE => array(
+                'template' => 'courseset-manage/live/create-show.html.twig',
+                'saveAction' => 'AppBundle:Course/CourseSetManage:saveCourse',
+                'priority' => 20,
+                'visible' => 1,
+            ),
+            OpenCourseService::OPEN_TYPE => array(
+                'template' => 'open-course-manage/open/create-show.html.twig',
+                'saveAction' => 'AppBundle:OpenCourseManage:saveCourse',
+                'priority' => 10,
+                'visible' => 1,
+            ),
+            OpenCourseService::LIVE_OPEN_TYPE => array(
+                'template' => 'open-course-manage/liveOpen/create-show.html.twig',
+                'saveAction' => 'AppBundle:OpenCourseManage:saveCourse',
+                'priority' => 0,
+                'visible' => 1,
+            ),
+        );
     }
 
     public function getCourseShowMetas()
@@ -35,7 +68,6 @@ class CourseExtension extends Extension implements ServiceProviderInterface
             //推荐班级
             'recommendClassroom' => array(
                 'uri' => 'course/widgets/recommend-classroom.html.twig',
-                // 'uri'        => 'default/recommend-classroom.html.twig',
                 'renderType' => 'include',
                 'showMode' => 'course', //普通课程才会显示
             ),
@@ -74,62 +106,85 @@ class CourseExtension extends Extension implements ServiceProviderInterface
         return array(
             'for_member' => array(
                 'header' => 'AppBundle:My/Course:headerForMember',
-                'tabs' => array(
-                    'tasks' => array(
-                        'name' => 'course.tab.tasks',
-                        'content' => 'AppBundle:Course/Course:tasks',
-                    ),
-                    'threads' => array(
-                        'name' => 'course.tab.threads',
-                        'number' => 'threadNum',
-                        'content' => 'AppBundle:Course/Thread:index',
-                    ),
-                    'notes' => array(
-                        'name' => 'course.tab.notes',
-                        'number' => 'noteNum',
-                        'content' => 'AppBundle:Course/Course:notes',
-                    ),
-                    'material' => array(
-                        'name' => 'course.tab.material',
-                        'number' => 'materialNum',
-                        'content' => 'AppBundle:Course/Material:index',
-                    ),
-                    'reviews' => array(
-                        'name' => 'course.tab.reviews',
-                        'number' => 'ratingNum',
-                        'content' => 'AppBundle:Course/Course:reviews',
-                    ),
-                    'summary' => array(
-                        'name' => 'course.tab.summary',
-                        'content' => 'AppBundle:Course/Course:summary',
-                    ),
-                ),
+                'tabs' => $this->getTabs('forMember'),
                 'widgets' => $forMemberWidgets,
             ),
             'for_guest' => array(
                 'header' => 'AppBundle:Course/Course:header',
-                'tabs' => array(
-                    'summary' => array(
-                        'name' => 'course.tab.summary',
-                        'content' => 'AppBundle:Course/Course:summary',
-                    ),
-                    'tasks' => array(
-                        'name' => 'course.tab.tasks',
-                        'content' => 'AppBundle:Course/Course:tasks',
-                    ),
-                    'notes' => array(
-                        'name' => 'course.tab.notes',
-                        'number' => 'noteNum',
-                        'content' => 'AppBundle:Course/Course:notes',
-                    ),
-                    'reviews' => array(
-                        'name' => 'course.tab.reviews',
-                        'number' => 'ratingNum',
-                        'content' => 'AppBundle:Course/Course:reviews',
-                    ),
-                ),
+                'tabs' => $this->getTabs('forGuest'),
                 'widgets' => $forGuestWidgets,
             ),
         );
+    }
+
+    protected function getTabs($for)
+    {
+        $courseSetting = $this->getSettingService()->get('course', array());
+
+        $tabs = array(
+            'tasks' => array(
+                'name' => 'course.tab.tasks',
+                'content' => 'forGuest' === $for ? 'AppBundle:Course/Course:tasks' : 'AppBundle:My/Course:tasks',
+            ),
+            'discussion' => array(
+                'name' => 'course.tab.discussions',
+                'number' => 'discussionNum',
+                'content' => 'AppBundle:Course/Thread:index',
+            ),
+            'question' => array(
+                'name' => 'course.tab.questions',
+                'number' => 'questionNum',
+                'content' => 'AppBundle:Course/Thread:index',
+            ),
+            'notes' => array(
+                'name' => 'course.tab.notes',
+                'number' => 'noteNum',
+                'content' => 'AppBundle:Course/Course:notes',
+            ),
+            'material' => array(
+                'name' => 'course.tab.material',
+                'number' => 'materialNum',
+                'content' => 'AppBundle:Course/Material:index',
+            ),
+            'reviews' => array(
+                'name' => 'course.tab.reviews',
+                'number' => 'ratingNum',
+                'content' => 'AppBundle:Course/Course:reviews',
+            ),
+            'summary' => array(
+                'name' => 'course.tab.summary',
+                'content' => 'AppBundle:Course/Course:summary',
+            ),
+        );
+
+        if ('forGuest' == $for) {
+            unset($tabs['material'], $tabs['discussion'], $tabs['question']);
+        }
+
+        if (isset($courseSetting['show_note']) && '0' == $courseSetting['show_note']) {
+            unset($tabs['notes']);
+        }
+
+        if (isset($courseSetting['show_question']) && '0' == $courseSetting['show_question']) {
+            unset($tabs['question']);
+        }
+
+        if (isset($courseSetting['show_discussion']) && '0' == $courseSetting['show_discussion']) {
+            unset($tabs['discussion']);
+        }
+
+        if (isset($courseSetting['show_review']) && '0' == $courseSetting['show_review']) {
+            unset($tabs['reviews']);
+        }
+
+        return $tabs;
+    }
+
+    /**
+     * @return SettingService
+     */
+    protected function getSettingService()
+    {
+        return $this->biz->service('System:SettingService');
     }
 }

@@ -2,9 +2,13 @@
 
 namespace Biz\Marker\Service\Impl;
 
-use Biz\BaseService;
 use AppBundle\Common\ArrayToolkit;
+use Biz\BaseService;
+use Biz\Marker\MarkerException;
 use Biz\Marker\Service\MarkerService;
+use Biz\System\SettingException;
+use Biz\User\UserException;
+use Codeages\Biz\ItemBank\Item\Service\ItemService;
 
 class MarkerServiceImpl extends BaseService implements MarkerService
 {
@@ -30,21 +34,39 @@ class MarkerServiceImpl extends BaseService implements MarkerService
         $markers = $this->findMarkersByMediaId($mediaId);
 
         if (empty($markers)) {
-            return array();
+            return [];
         }
 
         $markerIds = ArrayToolkit::column($markers, 'id');
 
-        $questionMarkers = $this->getQuestionMarkerService()->findQuestionMarkersByMarkerIds($markerIds);
-        $questionMarkerGroups = ArrayToolkit::group($questionMarkers, 'markerId');
+        $questionMarkers = $this->findQuestionMarkersWithItem($markerIds);
 
+        $questionMarkerGroups = ArrayToolkit::group($questionMarkers, 'markerId');
         foreach ($markers as $index => $marker) {
             if (!empty($questionMarkerGroups[$marker['id']])) {
                 $markers[$index]['questionMarkers'] = $questionMarkerGroups[$marker['id']];
+            } else {
+                unset($markers[$index]);
             }
         }
 
-        return $markers;
+        return array_values($markers);
+    }
+
+    protected function findQuestionMarkersWithItem($markerIds)
+    {
+        $questionMarkers = $this->getQuestionMarkerService()->findQuestionMarkersByMarkerIds($markerIds);
+        $items = $this->getItemService()->findItemsByIds(ArrayToolkit::column($questionMarkers, 'questionId'), true);
+        foreach ($questionMarkers as $key => &$questionMarker) {
+            if (!empty($items[$questionMarker['questionId']]['questions'])) {
+                $questionMarker['item'] = $items[$questionMarker['questionId']];
+                $questionMarker['question'] = current($items[$questionMarker['questionId']]['questions']);
+            } else {
+                unset($questionMarkers[$key]);
+            }
+        }
+
+        return $questionMarkers;
     }
 
     public function searchMarkers($conditions, $orderBy, $start, $limit)
@@ -57,10 +79,10 @@ class MarkerServiceImpl extends BaseService implements MarkerService
         $marker = $this->getMarker($id);
 
         if (empty($marker)) {
-            throw $this->createNotFoundException('Marker Not Found');
+            $this->createNewException(MarkerException::NOTFOUND_MARKER());
         }
         if (empty($fields['second'])) {
-            throw $this->createInvalidArgumentException('Field Second Required');
+            $this->createNewException(MarkerException::FIELD_SECOND_REQUIRED());
         }
 
         return $this->getMarkerDao()->update($id, $fields);
@@ -75,16 +97,15 @@ class MarkerServiceImpl extends BaseService implements MarkerService
             $this->getLogService()->error('marker', 'mediaId_notExist', '视频文件不存在！');
         }
 
-        if (!isset($fields['second']) || $fields['second'] == '') {
-            throw $this->createInvalidArgumentException('Field Second Required');
+        if (!isset($fields['second']) || '' == $fields['second']) {
+            $this->createNewException(MarkerException::FIELD_SECOND_REQUIRED());
         }
 
-        $marker = array(
+        $marker = [
             'mediaId' => $media['id'],
             'second' => $fields['second'],
-        );
+        ];
         $marker = $this->getMarkerDao()->create($marker);
-        $this->getLogService()->info('marker', 'create', "增加驻点#{$marker['id']}");
         $question = $this->getQuestionMarkerService()->addQuestionMarker($fields['questionId'], $marker['id'], 1);
 
         return $question;
@@ -95,11 +116,10 @@ class MarkerServiceImpl extends BaseService implements MarkerService
         $marker = $this->getMarker($id);
 
         if (empty($marker)) {
-            throw $this->createNotFoundException('Marker Not Found');
+            $this->createNewException(MarkerException::NOTFOUND_MARKER());
         }
 
         $this->getMarkerDao()->delete($id);
-        $this->getLogService()->info('marker', 'delete', "驻点#{$id}永久删除");
 
         return true;
     }
@@ -126,18 +146,18 @@ class MarkerServiceImpl extends BaseService implements MarkerService
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('Access Denied');
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         if ($user['id'] != $lessonUserId) {
-            throw $this->createAccessDeniedException('Access Denied');
+            $this->createNewException(UserException::PERMISSION_DENIED());
         }
 
         $uploadMode = $this->getSettingService()->get('storage');
 
-        if ($uploadMode['upload_mode'] == 'local') {
+        if ('local' == $uploadMode['upload_mode']) {
             //TODO 翻译？！！
-            throw $this->createAccessDeniedException('请到我的教育云开启云视频！');
+            $this->createNewException(SettingException::CLOUD_VIDEO_DISABLE());
         }
 
         return true;
@@ -174,5 +194,18 @@ class MarkerServiceImpl extends BaseService implements MarkerService
     protected function getLogService()
     {
         return $this->biz->service('System:LogService');
+    }
+
+    protected function getSettingService()
+    {
+        return $this->biz->service('System:SettingService');
+    }
+
+    /**
+     * @return ItemService
+     */
+    protected function getItemService()
+    {
+        return $this->createService('ItemBank:Item:ItemService');
     }
 }

@@ -50,7 +50,7 @@ class TaskResultDaoImpl extends GeneralDaoImpl implements TaskResultDao
     public function findByTaskIdsAndUserId($taskIds, $userId)
     {
         $marks = str_repeat('?,', count($taskIds) - 1).'?';
-        $sql = "SELECT * FROM {$this->table} WHERE courseTaskId IN ({$marks}) and userId = ? ;";
+        $sql = "SELECT * FROM {$this->table} WHERE courseTaskId IN ({$marks}) and userId = ? order by id desc;";
 
         $parameters = array_merge($taskIds, array($userId));
 
@@ -72,6 +72,11 @@ class TaskResultDaoImpl extends GeneralDaoImpl implements TaskResultDao
     public function deleteByTaskId($taskId)
     {
         return $this->db()->delete($this->table, array('courseTaskId' => $taskId));
+    }
+
+    public function deleteByCourseId($courseId)
+    {
+        return $this->db()->delete($this->table, array('courseId' => $courseId));
     }
 
     public function countLearnNumByTaskId($taskId)
@@ -139,6 +144,27 @@ class TaskResultDaoImpl extends GeneralDaoImpl implements TaskResultDao
         return $this->db()->fetchColumn($sql, array($userId, $courseId)) ?: 0;
     }
 
+    public function sumCourseSetLearnedTimeByTaskIds($taskIds)
+    {
+        if (empty($taskIds)) {
+            return array();
+        }
+
+        $marks = str_repeat('?,', count($taskIds) - 1).'?';
+        $sql = "select sum(`time`) from {$this->table()} where `courseTaskId` in ({$marks})";
+
+        return $this->db()->fetchColumn($sql, $taskIds);
+    }
+
+    public function countTaskNumGroupByUserId($conditions)
+    {
+        $builder = $this->createQueryBuilder($conditions)
+            ->select('count(id) as count, userId')
+            ->groupBy('userId');
+
+        return $builder->execute()->fetchAll();
+    }
+
     public function declares()
     {
         return array(
@@ -158,6 +184,7 @@ class TaskResultDaoImpl extends GeneralDaoImpl implements TaskResultDao
                 'courseTaskId = :courseTaskId',
                 'createdTime >= :createdTime_GE',
                 'createdTime <= :createdTime_LE',
+                'createdTime < :createdTime_LT',
                 'finishedTime >= :finishedTime_GE',
                 'finishedTime <= :finishedTime_LE',
                 'finishedTime < :finishedTime_LT',

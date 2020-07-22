@@ -2,11 +2,14 @@
 
 namespace Biz\User\Service;
 
+use Biz\System\Annotation\Log;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 interface UserService
 {
     public function getUser($id, $lock = false);
+
+    public function getUserAndProfile($id);
 
     public function initSystemUsers();
 
@@ -14,12 +17,16 @@ interface UserService
 
     public function getUserByNickname($nickname);
 
+    public function getUnDstroyedUserByNickname($nickname);
+
     public function getUserByType($type);
+
+    public function getUserByUUID($uuid);
 
     public function updateUserUpdatedTime($id);
 
     //根据用户名/邮箱/手机号精确查找用户
-    public function getUserByLoginField($keyword);
+    public function getUserByLoginField($keyword, $isFilterDestroyed = false);
 
     public function getUserByVerifiedMobile($mobile);
 
@@ -29,15 +36,17 @@ interface UserService
 
     public function findUsersHasMobile($start, $limit, $isVerified = false);
 
-    public function findUnlockedUserMobilesByUserIds($userIds, $needVerified = false);
+    public function findUnlockedUserMobilesByUserIds($userIds);
 
     public function getUserByEmail($email);
 
     public function findUsersByIds(array $id);
 
+    public function findUnDestroyedUsersByIds($ids);
+
     public function findUserProfilesByIds(array $ids);
 
-    public function searchUsers(array $conditions, array $orderBy, $start, $limit);
+    public function searchUsers(array $conditions, array $orderBy, $start, $limit, $columns = array());
 
     public function countUsers(array $conditions);
 
@@ -53,10 +62,31 @@ interface UserService
      */
     public function batchUpdateOrg($userIds, $orgCode);
 
+    /**
+     * @param $userId
+     * @param $nickname
+     *
+     * @return mixed
+     * @Log(module="user",action="nickname_change",funcName="getUser",param="userId")
+     */
     public function changeNickname($userId, $nickname);
 
+    /**
+     * @param $userId
+     * @param $email
+     *
+     * @return mixed
+     * @Log(module="user",action="email-changed",funcName="getUser",param="userId")
+     */
     public function changeEmail($userId, $email);
 
+    /**
+     * @param $userId
+     * @param $data
+     *
+     * @return mixed
+     * @Log(module="user",action="avatar-changed",funcName="getUser",param="userId")
+     */
     public function changeAvatar($userId, $data);
 
     public function isNicknameAvaliable($nickname);
@@ -69,18 +99,28 @@ interface UserService
 
     public function rememberLoginSessionId($id, $sessionId);
 
+    /**
+     * @param $userId
+     * @param $newPayPassword
+     *
+     * @return mixed
+     * @Log(module="user",action="pay-password-changed",funcName="getUser",param="userId")
+     */
     public function changePayPassword($userId, $newPayPassword);
 
     public function verifyPayPassword($id, $payPassword);
-
-    public function getUserSecureQuestionsByUserId($userId);
-
-    public function addUserSecureQuestionsWithUnHashedAnswers($userId, $fieldsWithQuestionTypesAndUnHashedAnswers);
 
     public function verifyInSaltOut($in, $salt, $out);
 
     public function isMobileUnique($mobile);
 
+    /**
+     * @param $id
+     * @param $mobile
+     *
+     * @return mixed
+     * @Log(module="user",action="verifiedMobile-changed",funcName="getUser",param="id")
+     */
     public function changeMobile($id, $mobile);
 
     /**
@@ -88,6 +128,7 @@ interface UserService
      *
      * @param [integer] $id       用户ID
      * @param [string]  $password 新密码
+     * @Log(module="user",action="password-changed",funcName="getUser",param="id")
      */
     public function changePassword($id, $password);
 
@@ -96,6 +137,7 @@ interface UserService
      *
      * @param [integer] $id          用户ID
      * @param [string]  $rawPassword 新原始密码
+     * @Log(module="user",action="raw-password-changed",funcName="getUser",param="id")
      */
     public function changeRawPassword($id, $rawPassword);
 
@@ -122,21 +164,26 @@ interface UserService
      */
     public function register($registration, $type = 'default');
 
-    public function setupAccount($userId);
-
-    public function markLoginInfo();
+    public function markLoginInfo($type = null);
 
     public function markLoginFailed($userId, $ip);
 
-    public function markLoginSuccess($userId, $ip);
+    public function refreshLoginSecurityFields($userId, $ip);
 
     public function checkLoginForbidden($userId, $ip);
 
+    /**
+     * @param $id
+     * @param $fields
+     *
+     * @return mixed
+     * @Log(module="user",action="update",funcName="getUserAndProfile",param="id")
+     */
     public function updateUserProfile($id, $fields);
 
     public function getUserProfile($id);
 
-    public function searchUserProfiles(array $conditions, array $orderBy, $start, $limit);
+    public function searchUserProfiles(array $conditions, array $orderBy, $start, $limit, $columns = array());
 
     public function searchUserProfileCount(array $conditions);
 
@@ -144,6 +191,13 @@ interface UserService
 
     public function searchApprovalsCount(array $conditions);
 
+    /**
+     * @param $id
+     * @param array $roles
+     *
+     * @return mixed
+     * @Log(module="user",action="change_role",funcName="getUser",param="id")
+     */
     public function changeUserRoles($id, array $roles);
 
     /**
@@ -166,8 +220,20 @@ interface UserService
      */
     public function deleteToken($type, $token);
 
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="user",action="lock",funcName="getUser",param="id")
+     */
     public function lockUser($id);
 
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="user",action="unlock",funcName="getUser",param="id")
+     */
     public function unlockUser($id);
 
     public function promoteUser($id, $number);
@@ -201,6 +267,12 @@ interface UserService
     public function getUserBindByTypeAndFromId($type, $fromId);
 
     public function getUserBindByTypeAndUserId($type, $toId);
+
+    public function findUserBindByTypeAndFromIds($type, $fromIds);
+
+    public function findUserBindByTypeAndToIds($type, $toIds);
+
+    public function findUserBindByTypeAndUserId($type, $toId);
 
     public function getUserBindByToken($token);
 
@@ -297,5 +369,43 @@ interface UserService
 
     public function changeAvatarFromImgUrl($userId, $imgUrl);
 
+    public function changeAvatarByFileId($userId, $fileId);
+
     public function generateNickname($registration, $maxLoop = 100);
+
+    public function getUserIdsByKeyword($word);
+
+    public function updateUserNewMessageNum($id, $num);
+
+    public function makeUUID();
+
+    public function generateUUID();
+
+    public function getSmsCommonCaptchaStatus($clientIp, $recount = false);
+
+    public function getSmsRegisterCaptchaStatus($clientIp, $updateCount = false);
+
+    public function updateSmsRegisterCaptchaStatus($clientIp);
+
+    /**
+     * 用户首次登录修改密码.
+     */
+    public function initPassword($id, $newPassword);
+
+    /**
+     * 人脸识别采集状态修改
+     */
+    public function setFaceRegistered($id);
+
+    /**
+     * 注销用户信息修改
+     *
+     * @param $userId
+     * @param $destroyedId (destroyed_account表对应id)
+     *
+     * @return array()
+     */
+    public function updateUserForDestroyedAccount($userId, $destroyedId);
+
+    public function deleteUserBindByUserId($userId);
 }

@@ -109,4 +109,38 @@
       margin-right: 5px!important;
     }
   }
+  @media (max-width: @screen-xs-max) {
+    .mobile-bind-modal {
+      .cd-form-group {
+        margin-bottom: 16px;
+      }
+    }
+    .mobile-bind-reasons {
+      margin-top: 20px;
+    }
+    .mobile-bind-reasons__contents {
+      height: 224px !important;
+    }
+  }
+  .mobile-bind-reasons__contents {
+    p {
+      line-height: 14px !important;
+    }
+  }
+
+  .course-list-new {
+    .course-item {
+      .tag-vip-free {
+        background: url("@{img-src}vipfreeEn@1x.png") no-repeat;
+        background-image: -webkit-image-set(url("@{img-src}vipfreeEn@1x.png") 1x,url("@{img-src}vipfreeEn@2x.png") 2x);
+      }
+    }
+  }
+
+  .class-item--tag {
+    .tag-vip-free {
+      background: url("@{img-src}vipfreeEn@1x.png") no-repeat;
+      background-image: -webkit-image-set(url("@{img-src}vipfreeEn@1x.png") 1x,url("@{img-src}vipfreeEn@2x.png") 2x);
+    }
+  }
 }

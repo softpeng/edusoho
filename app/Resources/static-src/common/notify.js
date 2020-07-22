@@ -4,20 +4,20 @@ const notify = (level, message, settings = {}, options = {}) => {
   $('[data-notify="container"]').remove();
   let iconFont = '';
   switch (level) {
-    case 'info':
-      iconFont = "es-icon es-icon-info color-info mrm";
-      break;
-    case 'success':
-      iconFont = "es-icon es-icon-iccheckcircleblack24px color-success mrm";
-      break;
-    case 'danger':
-      iconFont = "es-icon es-icon-icon_close_circle color-danger mrm";
-      break;
-    case 'warning':
-      iconFont = "es-icon es-icon-warning color-warning mrm";
-      break;
-    default:
-      break;
+  case 'info':
+    iconFont = 'cd-icon cd-icon-info-o color-info mrm';
+    break;
+  case 'success':
+    iconFont = 'cd-icon cd-icon-success-o color-success mrm';
+    break;
+  case 'danger':
+    iconFont = 'cd-icon cd-icon-danger-o color-danger mrm';
+    break;
+  case 'warning':
+    iconFont = 'cd-icon cd-icon-warning-o color-warning mrm';
+    break;
+  default:
+    break;
   }
 
   let defaultOptions = {
@@ -32,7 +32,11 @@ const notify = (level, message, settings = {}, options = {}) => {
       from: 'top',
       align: 'center'
     },
-    offset: 20,
+    animate: {
+      enter: 'animated fadeInDownSmall',
+      exit: 'animated fadeOutUp'
+    },
+    offset: 80,
     z_index: 1051,
     timer: 100,
     template: '<div data-notify="container" class="notify-content">' +

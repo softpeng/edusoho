@@ -1,18 +1,18 @@
-// var Validator = require('bootstrap.validator');
-// require('es-ckeditor');
-// Notify = require('common/bootstrap-notify');
-// require('./common').run();
+import notify from 'common/notify';
 
-var editor = CKEDITOR.replace('post_content', {
-  toolbar: 'Thread',
-  filebrowserImageUploadUrl: $('#post_content').data('imageUploadUrl')
-});
-editor.on('change', () => {
-  $('#post_content').val(editor.getData());
-});
-editor.on('blur', () => {
-  $('#post_content').val(editor.getData());
-});
+if ($('#post_content').length != 0) {
+  var editor = CKEDITOR.replace('post_content', {
+    toolbar: 'Thread',
+    fileSingleSizeLimit: app.fileSingleSizeLimit,
+    filebrowserImageUploadUrl: $('#post_content').data('imageUploadUrl')
+  });
+  editor.on('change', () => {
+    $('#post_content').val(editor.getData());
+  });
+  editor.on('blur', () => {
+    $('#post_content').val(editor.getData());
+  });
+}
 
 let $form = $('#thread-post-form');
 
@@ -24,11 +24,12 @@ let validator = $form.validate({
   }
 });
 
+
 $('.js-btn-thread-post-form-save').click(() => {
   if (validator.form()) {
     $('.js-btn-thread-post-form-save').button('loading');
     $('.thread-post-list').find('li.empty').remove();
-    var $form = $("#thread-post-form");
+    var $form = $('#thread-post-form');
     $.ajax({
       'url': $form.attr('action'),
       'type': 'post',
@@ -36,13 +37,13 @@ $('.js-btn-thread-post-form-save').click(() => {
       success: function (html) {
         $('.js-btn-thread-post-form-save').button('reset');
         console.log('success');
-        $("#thread-post-num").text(parseInt($("#thread-post-num").text()) + 1);
+        $('#thread-post-num').text(parseInt($('#thread-post-num').text()) + 1);
         var id = $(html).appendTo('.thread-post-list').attr('id');
         editor.setData('');
         //清除附件
         $('.js-attachment-list').empty();
-        $('.js-attachment-ids').val("");
-        $('.js-upload-file').removeClass('hidden');
+        $('.js-attachment-ids').val('');
+        $('.js-upload-file').show();
 
         $form.find('[type=submit]').removeAttr('disabled');
 
@@ -50,16 +51,10 @@ $('.js-btn-thread-post-form-save').click(() => {
       },
       error: function (data) {
         $('.js-btn-thread-post-form-save').button('reset');
-        data = $.parseJSON(data.responseText);
-        if (data.error) {
-          Notify.danger(data.error.message);
-        } else {
-          Notify.danger(Translator.trans('course.thread_replay_failed_hint'));
-        }
       }
     });
   }
-})
+});
 
 $('[data-role=confirm-btn]').click(function () {
   var $btn = $(this);
@@ -76,16 +71,13 @@ $('[data-role=confirm-btn]').click(function () {
   });
 });
 
-$('.thread-post-list').on('click', '.thread-post-action', function () {
-
-  var userName = $(this).data('user');
-
+$('.thread-post-list').on('click', '.js-call-username', function() {
+  const userName = $(this).parent().data('user');
   editor.focus();
   editor.insertHtml('@' + userName + '&nbsp;');
-
 });
 
-$(".thread-post-list").on('click', '[data-action=post-delete]', function () {
+$('.thread-post-list').on('click', '[data-action=post-delete]', function () {
   if (!confirm(Translator.trans('course.thread_delete_hint'))) {
     return false;
   }

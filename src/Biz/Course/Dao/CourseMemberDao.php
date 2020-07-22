@@ -30,6 +30,10 @@ interface CourseMemberDao extends GeneralDaoInterface
 
     public function findLearnedMembers($conditions, $start, $limit);
 
+    public function countUserLearnCourses($userId);
+
+    public function findUserLearnCourseIds($userId);
+
     public function findByIds($ids);
 
     public function findLearnedByCourseIdAndUserId($courseId, $userId);
@@ -45,6 +49,8 @@ interface CourseMemberDao extends GeneralDaoInterface
      * @return mixed
      */
     public function findByCourseIds($courseIds);
+
+    public function findLastLearnTimeRecordStudents($userIds);
 
     /**
      * @before findMembersByUserIdAndRole
@@ -68,17 +74,16 @@ interface CourseMemberDao extends GeneralDaoInterface
     public function findByConditionsGroupByUserId($conditions, $orderBy, $offset, $limit);
 
     /**
-     * @before findMembersByUserIdAndRole
-     *
-     * @param  $userId
-     * @param  $role
-     * @param  $start
-     * @param  $limit
+     * @param $userId
+     * @param $role
+     * @param $start
+     * @param $limit
      * @param bool $onlyPublished
+     * @param bool $filterReservation
      *
      * @return mixed
      */
-    public function findMembersNotInClassroomByUserIdAndRole($userId, $role, $start, $limit, $onlyPublished = true);
+    public function findMembersNotInClassroomByUserIdAndRole($userId, $role, $start, $limit, $onlyPublished = true, $filterReservation = false);
 
     public function findByCourseIdAndRole($courseId, $role);
 
@@ -110,13 +115,13 @@ interface CourseMemberDao extends GeneralDaoInterface
 
     public function countMemberNotInClassroomByUserIdAndCourseTypeAndIsLearned($userId, $role, $type, $isLearned);
 
-    public function countMemberNotInClassroomByUserIdAndRoleAndIsLearned($userId, $role, $isLearned);
+    public function countMemberNotInClassroomByUserIdAndRoleAndIsLearned($userId, $role, $isLearned, $filterReservation = false);
 
     public function countMemberNotInClassroomByUserIdAndRole($userId, $role, $onlyPublished = true);
 
     public function findMembersNotInClassroomByUserIdAndCourseTypeAndIsLearned($userId, $role, $type, $isLearned, $start, $limit);
 
-    public function findMembersNotInClassroomByUserIdAndRoleAndIsLearned($userId, $role, $isLearned, $start, $limit);
+    public function findMembersNotInClassroomByUserIdAndRoleAndIsLearned($userId, $role, $isLearned, $start, $limit, $filterReservation = false);
 
     public function countMemberByUserIdAndCourseTypeAndIsLearned($userId, $role, $type, $isLearned);
 

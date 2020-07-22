@@ -4,6 +4,7 @@ namespace Biz\User;
 
 use Biz\Role\Util\PermissionBuilder;
 use Symfony\Component\Security\Core\User\UserInterface;
+use AppBundle\Common\Exception\UnexpectedValueException;
 use Symfony\Component\Security\Core\User\EquatableInterface;
 use Symfony\Component\Security\Core\User\AdvancedUserInterface;
 
@@ -15,6 +16,8 @@ class CurrentUser implements AdvancedUserInterface, EquatableInterface, \ArrayAc
     protected $rootOrgId = 1;
 
     protected $rootOrgCode = '1.';
+
+    protected $context = array();
 
     public function serialize()
     {
@@ -38,7 +41,7 @@ class CurrentUser implements AdvancedUserInterface, EquatableInterface, \ArrayAc
         if (array_key_exists($name, $this->data)) {
             return $this->data[$name];
         }
-        throw new \RuntimeException("{$name} is not exist in CurrentUser.");
+        throw new UnexpectedValueException("{$name} is not exist in CurrentUser.");
     }
 
     public function __isset($name)
@@ -161,7 +164,7 @@ class CurrentUser implements AdvancedUserInterface, EquatableInterface, \ArrayAc
     {
         $permissions = $this->getPermissions();
 
-        return !empty($permissions) && array_key_exists('admin', $permissions);
+        return !empty($permissions) && (array_key_exists('admin', $permissions) || array_key_exists('admin_v2', $permissions));
     }
 
     public function isSuperAdmin()
@@ -257,6 +260,16 @@ class CurrentUser implements AdvancedUserInterface, EquatableInterface, \ArrayAc
     public function getPermissions()
     {
         return $this->permissions;
+    }
+
+    public function setContext($name, $value)
+    {
+        $this->context[$name] = $value;
+    }
+
+    public function getContext($name)
+    {
+        return isset($this->context[$name]) ? $this->context[$name] : null;
     }
 
     /**

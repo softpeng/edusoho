@@ -5,7 +5,7 @@ export default class Options extends Component {
     super(props);
     this.state = {
       datas: this.props.datas,
-    }
+    };
     this.editor = null;
     this.editorBody = null;
     this.editorHtml = null;
@@ -18,23 +18,24 @@ export default class Options extends Component {
 
   deleteOption(event) {
     this.editorHtml = null;
-    this.props.deleteOption(event.currentTarget.attributes["data-option-id"].value);
+    this.props.deleteOption(event.currentTarget.attributes['data-option-id'].value);
   }
 
   onChangeChecked(event) {
     this.updateInputValue(this.editor.getData()); //fix ie 11,check befor blur;
-    this.props.changeOptionChecked(event.currentTarget.attributes["data-option-id"].value,this.props.datas.checked);
+    this.props.changeOptionChecked(event.currentTarget.attributes['data-option-id'].value,this.props.datas.checked);
   }
 
   initCkeditor(dataSourceUi) {
     if(!this.editor) {
       this.editor = CKEDITOR.replace(this.props.datas.optionId, {
         toolbar: 'Minimal',
+        fileSingleSizeLimit: app.fileSingleSizeLimit,
         filebrowserImageUploadUrl:this.props.imageUploadUrl,
         height: 120
       });
       let self = this;
-      this.editor.on("instanceReady", function () {  
+      this.editor.on('instanceReady', function () {  
         self.editorBody = $('#' + [self.props.datas.optionId]).parent().find('iframe').contents().find('body');
         //setData两个问题：1、引发事件失效 2、死循环触发；
       }); 
@@ -42,16 +43,16 @@ export default class Options extends Component {
         console.log('change'+self.editor.getData());
         setTimeout(function(){
           self.updateInputValue(self.editor.getData());
-        },100)
+        },100);
       });
       this.editor.on('blur', () => { //fix ie 11 中文输入
         console.log('blur'+ self.editor.getData());
         setTimeout(function(){
           self.updateInputValue(self.editor.getData());
-        },100)
+        },100);
       });
     }else {
-      this.editor.setData(datas.inputValue);
+      this.editor.setData(this.props.datas.inputValue);
     }
   }
 
@@ -91,6 +92,6 @@ export default class Options extends Component {
           <a className="btn btn-default btn-sm" data-option-id={ this.props.datas.optionId }  onClick={(event)=>this.deleteOption(event)} href="javascript:;"><i className="glyphicon glyphicon-trash"></i></a>
         </div>
       </div>
-    )
+    );
   }
 }

@@ -7,7 +7,7 @@
   {% if lesson %}{{'my.teaching.open_course.lesson.modal.edit'|trans}}{{ lesson.number }}{% else %}{{'my.teaching.open_course.lesson.modal.add'|trans}}{% endif %}
 {% endblock %}
 
-{% do script(['//service-cdn.qiqiuyun.net/js-sdk/uploader/sdk-v1.js', 'libs/jquery-validation.js', 'app/js/open-course-manage/lesson-modal/index.js']) %}
+{% do script([cloud_sdk_url('uploader'), 'libs/jquery-validation.js', 'libs/select2.js', 'app/js/open-course-manage/lesson-modal/index.js']) %}
 
 {% block body %}
   <form class="form-horizontal" id="lesson-create-form"
@@ -33,6 +33,7 @@
       </div>
       <div class="col-sm-10">
         <input id="title" class="form-control" type="text" name="title" value="{{ lesson.title|default('') }}">
+        <div class="help-block">{{ 'course.plan_task.activity_manage.help_block'|trans }}</div>
       </div>
     </div>
 
@@ -41,7 +42,7 @@
         <label for="mediaSource" class="style control-label-required">{{ 'my.teaching.open_course.lesson.video'|trans }}</label>
       </div>
       <div class="col-sm-10">
-        {% include 'file-chooser/file-choose.html.twig' with {mediaType: 'video', fileType:'video', file: file|default(null), link: lesson.mediaSource|default(null) } %}
+        {% include 'file-chooser/file-choose.html.twig' with {mediaType: 'video', fileType:'video', file: file|default(null), link: lesson.mediaSource|default(null), courseType:'openCourse' } %}
         <input type="hidden" id="mediaSource" name="mediaSource"
               value="{{ lesson.mediaSource|default(null) }}">
       </div>

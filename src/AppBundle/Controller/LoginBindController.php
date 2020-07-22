@@ -2,14 +2,19 @@
 
 namespace AppBundle\Controller;
 
+use ApiBundle\Api\Resource\Setting\Setting;
+use AppBundle\Common\SimpleValidator;
+use AppBundle\Component\OAuthClient\OAuthClientFactory;
+use AppBundle\Controller\OAuth2\OAuthUser;
 use Biz\Sensitive\Service\SensitiveService;
-use Biz\User\CurrentUser;
+use Biz\System\SettingException;
 use Biz\User\Service\AuthService;
 use Biz\User\Service\TokenService;
 use Biz\User\Service\UserService;
-use AppBundle\Common\SimpleValidator;
+use Biz\User\TokenException;
+use Biz\WeChat\Service\WeChatService;
 use Symfony\Component\HttpFoundation\Request;
-use AppBundle\Component\OAuthClient\OAuthClientFactory;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class LoginBindController extends BaseController
 {
@@ -17,54 +22,74 @@ class LoginBindController extends BaseController
     {
         if ($request->query->has('_target_path')) {
             $targetPath = $request->query->get('_target_path');
-
-            if ($targetPath == '') {
+            if ('' == $targetPath) {
                 $targetPath = $this->generateUrl('homepage');
             }
-
             if (!in_array($targetPath, $this->getBlacklist())) {
                 $request->getSession()->set('_target_path', $targetPath);
             }
         }
-
-        $inviteCode = $request->query->get('inviteCode', null);
         $client = $this->createOAuthClient($type);
 
-        $token = $this->getTokenService()->makeToken('login.bind', array(
-            'data' => array(
+        $token = $this->getTokenService()->makeToken('login.bind', [
+            'data' => [
                 'type' => $type,
                 'sessionId' => $request->getSession()->getId(),
-            ),
-            'times' => 1,
+            ],
+            'times' => $this->isAndroidAndWechat($request) ? 0 : 1,
             'duration' => 3600,
-        ));
+        ]);
+        $params = [
+            'type' => $type,
+            'token' => $token['token'],
+        ];
 
-        $callbackUrl = $this->generateUrl('login_bind_callback', array('type' => $type, 'token' => $token['token']), true);
-
-        if ($inviteCode) {
-            $callbackUrl = $callbackUrl.'&inviteCode='.$inviteCode;
+        if ($request->query->get('os')) {
+            $params['os'] = $request->query->get('os');
         }
+
+        $callbackUrl = $this->generateUrl('login_bind_callback', $params, UrlGeneratorInterface::ABSOLUTE_URL);
 
         $url = $client->getAuthorizeUrl($callbackUrl);
 
         return $this->redirect($url);
     }
 
+    protected function isAndroidAndWechat($request)
+    {
+        $userAgent = $this->getWebExtension()->parseUserAgent($request->headers->get('User-Agent'));
+        if (!empty($userAgent)
+            && !empty($userAgent['os']) && 'Android' == $userAgent['os']['name']
+            && !empty($userAgent['client']) && 'WeChat' == $userAgent['client']['name']) {
+            return true;
+        }
+
+        return false;
+    }
+
     protected function getBlacklist()
     {
-        return array('/partner/logout');
+        return ['/partner/logout'];
     }
 
     public function callbackAction(Request $request, $type)
     {
         $code = $request->query->get('code');
-        $inviteCode = $request->query->get('inviteCode');
         $token = $request->query->get('token', '');
-
+        $os = $request->query->get('os', '');
         $this->validateToken($request, $type);
+        $callbackParams = [
+            'type' => $type,
+            'token' => $token,
+        ];
 
-        $callbackUrl = $this->generateUrl('login_bind_callback', array('type' => $type, 'token' => $token), true);
-        $token = $this->createOAuthClient($type)->getAccessToken($code, $callbackUrl);
+        if ($os) {
+            $callbackParams['os'] = $os;
+        }
+
+        $callbackUrl = $this->generateUrl('login_bind_callback', $callbackParams, UrlGeneratorInterface::ABSOLUTE_URL);
+        $oauthClient = $this->createOAuthClient($type);
+        $token = $oauthClient->getAccessToken($code, $callbackUrl);
 
         $bind = $this->getUserService()->getUserBindByTypeAndFromId($type, $token['userId']);
 
@@ -79,202 +104,86 @@ class LoginBindController extends BaseController
                 return $this->redirect($this->generateUrl('register'));
             }
 
-            $this->authenticateUser($user);
+            if ($this->getCurrentUser()->getId() != $user['id']) {
+                $this->authenticateUser($user);
+            }
+
+            if ('weixinmob' == $type) {
+                $user = $this->getCurrentUser();
+                $this->getWeChatService()->freshOfficialWeChatUserWhenLogin($user, $bind, $token);
+            }
 
             if ($this->getAuthService()->hasPartnerAuth()) {
-                return $this->redirect($this->generateUrl('partner_login', array('goto' => $this->getTargetPath($request))));
+                return $this->redirect($this->generateUrl('partner_login', ['goto' => $this->getTargetPath($request)]));
             } else {
-                $goto = $this->getTargetPath($request);
+                $currentUser = $this->getCurrentUser();
+                if (!$currentUser['passwordInit']) {
+                    $params = ['goto' => $this->getTargetPath($request)];
+                    $url = $this->generateUrl('password_init');
+                    $goto = $url.'?'.http_build_query($params);
+                } else {
+                    $goto = $this->getTargetPath($request);
+                }
 
                 return $this->redirect($goto);
             }
         } else {
-            return $this->redirect($this->generateUrl('login_bind_choose', array('type' => $type, 'inviteCode' => $inviteCode)));
+            $oUser = $oauthClient->getUserInfo($token);
+            $this->storeOauthUserToSession($request, $oUser, $type, $os);
+
+            return $this->redirect($this->generateUrl('oauth2_login_index'));
         }
     }
 
-    public function chooseAction(Request $request, $type)
+    protected function storeOauthUserToSession(Request $request, $oUser, $type, $os = '')
     {
-        $token = $request->getSession()->get('oauth_token');
-        $inviteCode = $request->query->get('inviteCode', '');
-        $inviteUser = $inviteCode ? $inviteUser = $this->getUserService()->getUserByInviteCode($inviteCode) : array();
-
-        $client = $this->createOAuthClient($type);
-        $clientMetas = OAuthClientFactory::clients();
-        $clientMeta = $clientMetas[$type];
-
-        try {
-            $oauthUser = $client->getUserInfo($token);
-            $oauthUser['name'] = preg_replace('/[^\x{4e00}-\x{9fa5}a-zA-z0-9_.]+/u', '', $oauthUser['name']);
-            $oauthUser['name'] = str_replace(array('-'), array('_'), $oauthUser['name']);
-        } catch (\Exception $e) {
-            $message = $e->getMessage();
-
-            if ($message == 'unaudited') {
-                $this->setFlashMessage('danger', $this->get('translator')->trans('user.bind.unaudited', array('%name%' => $clientMeta['name'])));
-            } elseif ($message == 'unAuthorize') {
-                return $this->redirect($this->generateUrl('login'));
-            } else {
-                $this->setFlashMessage('danger', $this->get('translator')->trans('user.bind.error', array('%message%' => $message)));
-            }
-
-            return $this->redirect($this->generateUrl('login'));
-        }
-
-        $name = $this->mateName($type);
-
-        return $this->render('login/bind-choose.html.twig', array(
-            'inviteUser' => $inviteUser,
-            'oauthUser' => $oauthUser,
-            'type' => $type,
-            'name' => $name,
-            'hasPartnerAuth' => $this->getAuthService()->hasPartnerAuth(),
-        ));
+        $setting = new Setting($this->container, $this->getBiz());
+        $registerSetting = $setting->getRegister();
+        $oauthUser = new OAuthUser();
+        $oauthUser->authid = $oUser['id'];
+        $oauthUser->name = $this->filterNickname($oUser['name']);
+        $oauthUser->avatar = $oUser['avatar'];
+        $oauthUser->type = $type;
+        $oauthUser->mode = $registerSetting['mode'];
+        $oauthUser->captchaEnabled = $registerSetting['captchaEnabled'];
+        $oauthUser->os = $os;
+        $request->getSession()->set(OAuthUser::SESSION_KEY, $oauthUser);
     }
 
-    protected function validateToken($request, $type)
+    protected function filterNickname($nickname)
+    {
+        $str = mb_substr($nickname, 0, strlen($nickname), 'utf8');
+        $filterArr = array_filter(preg_split('/(?<!^)(?!$)/u', $str), function ($item) {
+            return preg_match('/^[\x{4e00}-\x{9fa5}a-zA-z0-9_.·]+$/u', $item) ? $item : '';
+        });
+
+        return mb_substr(implode('', $filterArr), 0, 9);
+    }
+
+    protected function validateToken(Request $request, $type)
     {
         $token = $request->query->get('token', '');
         if (empty($token)) {
-            throw $this->createAccessDeniedException();
+            $this->createNewException(TokenException::TOKEN_INVALID());
         }
 
         $token = $this->getTokenService()->verifyToken('login.bind', $token);
         $tokenData = $token['data'];
         if ($tokenData['type'] != $type) {
-            throw $this->createAccessDeniedException();
+            $this->createNewException(TokenException::TOKEN_INVALID());
         }
 
         if ($tokenData['sessionId'] != $request->getSession()->getId()) {
-            throw $this->createAccessDeniedException();
+            $this->createNewException(TokenException::TOKEN_INVALID());
         }
-    }
-
-    public function newAction(Request $request, $type)
-    {
-        return $this->createJsonResponse($this->autobind($request, $type));
-    }
-
-    private function autobind(Request $request, $type)
-    {
-        $token = $request->getSession()->get('oauth_token');
-
-        if (empty($token)) {
-            $response = array('success' => false, 'message' => '页面已过期，请重新登录。');
-            goto response;
-        }
-
-        $client = $this->createOAuthClient($type);
-        $oauthUser = $client->getUserInfo($token);
-        $oauthUser['createdIp'] = $request->getClientIp();
-
-        if (empty($oauthUser['id'])) {
-            $response = array('success' => false, 'message' => '网络超时，获取用户信息失败，请重试。');
-            goto response;
-        }
-
-        if (!$this->getAuthService()->isRegisterEnabled()) {
-            $response = array('success' => false, 'message' => '注册功能未开启，请联系管理员！');
-            goto response;
-        }
-
-        $user = $this->generateUser($type, $token, $oauthUser, $setData = array());
-
-        if (empty($user)) {
-            $response = array('success' => false, 'message' => '登录失败，请重试！');
-            goto response;
-        }
-
-        if (!empty($oauthUser['name']) && !empty($oauthUser['email'])) {
-            $this->getUserService()->setupAccount($user['id']);
-        }
-
-        $currentUser = new CurrentUser();
-        $currentUser->fromArray($user);
-        $this->switchUser($request, $currentUser);
-
-        $response = array('success' => true, '_target_path' => $this->getTargetPath($request));
-
-        response:
-        return $response;
-    }
-
-    public function weixinIndexAction(Request $request)
-    {
-        return $this->render('login/bind-weixin.html.twig', array(
-            'hasPartnerAuth' => $this->getAuthService()->hasPartnerAuth(),
-        ));
-    }
-
-    public function newSetAction(Request $request, $type)
-    {
-        $setData = $request->request->all();
-
-        if (isset($setData['set_bind_emailOrMobile']) && !empty($setData['set_bind_emailOrMobile'])) {
-            if (SimpleValidator::email($setData['set_bind_emailOrMobile'])) {
-                $setData['email'] = $setData['set_bind_emailOrMobile'];
-            } elseif (SimpleValidator::mobile($setData['set_bind_emailOrMobile'])) {
-                $setData['mobile'] = $setData['set_bind_emailOrMobile'];
-            }
-
-            unset($setData['set_bind_emailOrMobile']);
-        }
-
-        $token = $request->getSession()->get('oauth_token');
-
-        if (empty($token)) {
-            $response = array('success' => false, 'message' => '页面已过期，请重新登录。');
-            goto response;
-        }
-
-        $client = $this->createOAuthClient($type);
-        $oauthUser = $client->getUserInfo($token);
-        $oauthUser['createdIp'] = $request->getClientIp();
-
-        if (empty($oauthUser['id'])) {
-            $response = array('success' => false, 'message' => '网络超时，获取用户信息失败，请重试。');
-            goto response;
-        }
-
-        if (!$this->getAuthService()->isRegisterEnabled()) {
-            $response = array('success' => false, 'message' => '注册功能未开启，请联系管理员！');
-            goto response;
-        }
-
-        $user = $this->generateUser($type, $token, $oauthUser, $setData);
-
-        if (empty($user)) {
-            $response = array('success' => false, 'message' => '登录失败，请重试！');
-            goto response;
-        }
-
-        if (!$user['setup'] && isset($setData['email']) && stripos($setData['email'], '@edusoho.net') != false) {
-            $this->getUserService()->setupAccount($user['id']);
-        }
-
-        $currentUser = new CurrentUser();
-        $currentUser->fromArray($user);
-        $this->switchUser($request, $currentUser);
-
-        if (!empty($oauthUser['avatar'])) {
-            $this->getUserService()->changeAvatarFromImgUrl($user['id'], $oauthUser['avatar']);
-        }
-
-        $redirectUrl = $this->generateUrl('register_success', array(
-            'goto' => $this->getTargetPath($request),
-        ));
-        $response = array('success' => true, '_target_path' => $redirectUrl);
-
-        response:
-        return $this->createJsonResponse($response);
     }
 
     protected function generateUser($type, $token, $oauthUser, $setData)
     {
-        $registration = array();
+        $registration = [];
         $randString = base_convert(sha1(uniqid(mt_rand(), true)), 16, 36);
         $oauthUser['name'] = preg_replace('/[^\x{4e00}-\x{9fa5}a-zA-z0-9_.]+/u', '', $oauthUser['name']);
-        $oauthUser['name'] = str_replace(array('-'), array('_'), $oauthUser['name']);
+        $oauthUser['name'] = str_replace(['-'], ['_'], $oauthUser['name']);
 
         if (!SimpleValidator::nickname($oauthUser['name'])) {
             $oauthUser['name'] = '';
@@ -283,7 +192,7 @@ class LoginBindController extends BaseController
         $tempType = $type;
 
         if (empty($oauthUser['name'])) {
-            if ($type == 'weixinmob' || $type == 'weixinweb') {
+            if ('weixinmob' == $type || 'weixinweb' == $type) {
                 $tempType = 'weixin';
             }
 
@@ -301,7 +210,7 @@ class LoginBindController extends BaseController
             $registration['email'] = $setData['email'];
             $registration['emailOrMobile'] = $setData['email'];
         } else {
-            $nicknames = array();
+            $nicknames = [];
             $nicknames[] = isset($setData['nickname']) ? $setData['nickname'] : $oauthUser['name'];
             $nicknames[] = mb_substr($oauthUser['name'], 0, 8, 'utf-8').substr($randString, 0, 3);
             $nicknames[] = mb_substr($oauthUser['name'], 0, 8, 'utf-8').substr($randString, 3, 3);
@@ -315,7 +224,7 @@ class LoginBindController extends BaseController
             }
 
             if (empty($registration['nickname'])) {
-                return array();
+                return [];
             }
 
             $registration['email'] = 'u_'.substr($randString, 0, 12).'@edusoho.net';
@@ -343,160 +252,46 @@ class LoginBindController extends BaseController
         return $user;
     }
 
-    public function existAction(Request $request, $type)
-    {
-        $token = $request->getSession()->get('oauth_token');
-        $client = $this->createOAuthClient($type);
-        $oauthUser = $client->getUserInfo($token);
-        $data = $request->request->all();
-
-        $message = 'Email地址或手机号码输入错误';
-
-        if (SimpleValidator::email($data['emailOrMobile'])) {
-            $user = $this->getUserService()->getUserByEmail($data['emailOrMobile']);
-            $message = '该Email地址尚未注册';
-        } elseif (SimpleValidator::mobile($data['emailOrMobile'])) {
-            $user = $this->getUserService()->getUserByVerifiedMobile($data['emailOrMobile']);
-            $message = '该手机号码尚未注册';
-        }
-
-        if (empty($user)) {
-            $response = array('success' => false, 'message' => $message);
-        } elseif (!$this->getUserService()->verifyPassword($user['id'], $data['password'])) {
-            $response = array('success' => false, 'message' => '密码不正确，请重试！');
-        } elseif ($this->getUserService()->getUserBindByTypeAndUserId($type, $user['id'])) {
-            $response = array('success' => false, 'message' => sprintf('该%s帐号已经绑定了该第三方网站的其他帐号，如需重新绑定，请先到账户设置中取消绑定！', $this->setting('site.name')));
-        } else {
-            $response = array('success' => true, '_target_path' => $this->getTargetPath($request));
-            $this->getUserService()->bindUser($type, $oauthUser['id'], $user['id'], $token);
-            $currentUser = new CurrentUser();
-            $currentUser->fromArray($user);
-            $this->switchUser($request, $currentUser);
-        }
-
-        return $this->createJsonResponse($response);
-    }
-
-    public function existBindAction(Request $request)
-    {
-        $token = $request->getSession()->get('oauth_token');
-        $type = 'weixinmob';
-        $client = $this->createOAuthClient($type);
-        $oauthUser = $client->getUserInfo($token);
-        $olduser = $this->getCurrentUser();
-        $userBinds = $this->getUserService()->unBindUserByTypeAndToId($type, $olduser->id);
-        $data = $request->request->all();
-
-        $message = 'Email地址或手机号码输入错误';
-
-        if (SimpleValidator::email($data['emailOrMobile'])) {
-            $user = $this->getUserService()->getUserByEmail($data['emailOrMobile']);
-            $message = '该Email地址尚未注册';
-        } elseif (SimpleValidator::mobile($data['emailOrMobile'])) {
-            $user = $this->getUserService()->getUserByVerifiedMobile($data['emailOrMobile']);
-            $message = '该手机号码尚未注册或绑定';
-        }
-
-        if (empty($user)) {
-            $response = array('success' => false, 'message' => $message);
-        } elseif (!$this->getUserService()->verifyPassword($user['id'], $data['password'])) {
-            $response = array('success' => false, 'message' => '密码不正确，请重试！');
-        } elseif ($this->getUserService()->getUserBindByTypeAndUserId($type, $user['id'])) {
-            $response = array('success' => false, 'message' => '该帐号已经绑定了该第三方网站的其他帐号，如需重新绑定，请先到账户设置中取消绑定！');
-        } else {
-            $response = array('success' => true, '_target_path' => $this->getTargetPath($request));
-            $this->getUserService()->bindUser($type, $oauthUser['id'], $user['id'], $token);
-            $currentUser = new CurrentUser();
-            $currentUser->fromArray($user);
-            $this->switchUser($request, $currentUser);
-        }
-
-        return $this->createJsonResponse($response);
-    }
-
-    public function changeToExistAction(Request $request, $type)
-    {
-        $token = $request->getSession()->get('oauth_token');
-
-        if (empty($token)) {
-            return $this->createMessageResponse('error', '页面已过期，请重新登录。');
-        }
-
-        $client = $this->createOAuthClient($type);
-        $oauthUser = $client->getUserInfo($token);
-        $name = $this->mateExistName($type);
-
-        return $this->render('login/bind-choose-exist.html.twig', array(
-            'oauthUser' => $oauthUser,
-            'type' => $type,
-            'name' => $name,
-            'hasPartnerAuth' => $this->getAuthService()->hasPartnerAuth(),
-        ));
-    }
-
-    protected function mateName($type)
-    {
-        switch ($type) {
-            case 'weixinweb':
-            case 'weixinmob':
-                return '微信注册帐号';
-                break;
-            case 'weibo':
-                return '微博注册帐号';
-                break;
-            case 'qq':
-                return 'QQ注册账号';
-                break;
-            case 'renren':
-                return '人人注册账号';
-                break;
-            default:
-                return '';
-        }
-    }
-
-    protected function mateExistName($type)
-    {
-        switch ($type) {
-            case 'weixinweb':
-            case 'weixinmob':
-                return '微信绑定已有账号';
-                break;
-            case 'weibo':
-                return '微博绑定已有账号';
-                break;
-            case 'qq':
-                return 'QQ绑定已有账号';
-                break;
-            case 'renren':
-                return '人人绑定已有账号';
-                break;
-            default:
-                return '';
-        }
-    }
-
     protected function createOAuthClient($type)
     {
         $settings = $this->setting('login_bind');
 
         if (empty($settings)) {
-            throw new \RuntimeException('第三方登录系统参数尚未配置，请先配置。');
+            $this->createNewException(SettingException::NOTFOUND_THIRD_PARTY_AUTH_CONFIG());
+        }
+
+        if ('apple' == $type) {
+            return $this->createAppleClient();
         }
 
         if (empty($settings) || !isset($settings[$type.'_enabled']) || empty($settings[$type.'_key']) || empty($settings[$type.'_secret'])) {
-            throw new \RuntimeException(sprintf('第三方登录(%s)系统参数尚未配置，请先配置。', $type));
+            $this->createNewException(SettingException::NOTFOUND_THIRD_PARTY_AUTH_CONFIG());
         }
 
         if (!$settings[$type.'_enabled']) {
-            throw new \RuntimeException(sprintf('第三方登录(%s)未开启', $type));
+            $this->createNewException(SettingException::FORBIDDEN_THIRD_PARTY_AUTH());
         }
 
-        $config = array('key' => $settings[$type.'_key'], 'secret' => $settings[$type.'_secret']);
+        $config = ['key' => $settings[$type.'_key'], 'secret' => $settings[$type.'_secret']];
 
         $client = OAuthClientFactory::create($type, $config);
 
         return $client;
+    }
+
+    protected function createAppleClient()
+    {
+        $settings = $this->setting('login_bind');
+
+        if (empty($settings['enabled'])) {
+            throw SettingException::NOTFOUND_THIRD_PARTY_AUTH_CONFIG();
+        }
+
+        $config = $this->setting('apple_setting', []);
+        $config['key'] = empty($config['keyId']) ? '' : $config['keyId'];
+        $config['secret'] = empty($config['secretKey']) ? '' : $config['secretKey'];
+
+        return OAuthClientFactory::create('apple', $config);
     }
 
     /**
@@ -529,5 +324,13 @@ class LoginBindController extends BaseController
     protected function getTokenService()
     {
         return $this->createService('User:TokenService');
+    }
+
+    /**
+     * @return WeChatService
+     */
+    protected function getWeChatService()
+    {
+        return $this->createService('WeChat:WeChatService');
     }
 }

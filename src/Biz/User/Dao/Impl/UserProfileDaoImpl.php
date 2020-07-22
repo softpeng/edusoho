@@ -2,9 +2,9 @@
 
 namespace Biz\User\Dao\Impl;
 
+use Biz\Common\CommonException;
 use Biz\User\Dao\UserProfileDao;
 use Codeages\Biz\Framework\Dao\GeneralDaoImpl;
-use Codeages\Biz\Framework\Service\Exception\InvalidArgumentException;
 
 class UserProfileDaoImpl extends GeneralDaoImpl implements UserProfileDao
 {
@@ -55,7 +55,7 @@ class UserProfileDaoImpl extends GeneralDaoImpl implements UserProfileDao
             'varcharField10', );
 
         if (!in_array($fieldName, $fieldNames)) {
-            throw new InvalidArgumentException('Invalid Arguments');
+            throw CommonException::ERROR_PARAMETER();
         }
 
         $sql = "UPDATE {$this->table} set {$fieldName} =null ";
@@ -66,8 +66,8 @@ class UserProfileDaoImpl extends GeneralDaoImpl implements UserProfileDao
 
     public function findDistinctMobileProfiles($start, $limit)
     {
-        // @TODO SQL Inject
-        $sql = "SELECT * FROM {$this->table} WHERE `mobile` <> '' GROUP BY `mobile` ORDER BY `id` ASC LIMIT {$start}, {$limit}";
+        $sql = "SELECT * FROM {$this->table} WHERE `mobile` <> '' GROUP BY `mobile` ORDER BY `id` ASC";
+        $sql = $this->sql($sql, array(), $start, $limit);
 
         return $this->db()->fetchAll($sql);
     }
@@ -82,12 +82,16 @@ class UserProfileDaoImpl extends GeneralDaoImpl implements UserProfileDao
             $conditions['qq'] = "{$conditions['qq']}%";
         }
 
-        if (isset($conditions['keywordType']) && isset($conditions['keyword']) && $conditions['keywordType'] == 'truename') {
+        if (isset($conditions['keywordType']) && isset($conditions['keyword']) && 'truename' == $conditions['keywordType']) {
             $conditions['truename'] = "%{$conditions['keyword']}%";
         }
 
-        if (isset($conditions['keywordType']) && isset($conditions['keyword']) && $conditions['keywordType'] == 'idcard') {
-            $conditions['idcard'] = "%{$conditions['keyword']}%";
+        if (isset($conditions['keywordType']) && isset($conditions['keyword']) && 'idcardLike' == $conditions['keywordType']) {
+            $conditions['idcardLike'] = "%{$conditions['keyword']}%";
+        }
+
+        if (isset($conditions['idcard'])) {
+            $conditions['idcard'] = trim($conditions['idcard']);
         }
 
         return parent::createQueryBuilder($conditions);
@@ -100,7 +104,8 @@ class UserProfileDaoImpl extends GeneralDaoImpl implements UserProfileDao
             'conditions' => array(
                 'mobile LIKE :mobile',
                 'truename LIKE :truename',
-                'idcard LIKE :idcard',
+                'idcard LIKE :idcardLike',
+                'idcard = :idcard',
                 'id IN (:ids)',
                 'mobile = :tel',
                 'mobile <> :mobileNotEqual',

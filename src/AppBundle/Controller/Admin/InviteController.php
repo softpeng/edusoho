@@ -4,6 +4,7 @@ namespace AppBundle\Controller\Admin;
 
 use AppBundle\Common\Paginator;
 use AppBundle\Common\ArrayToolkit;
+use Biz\User\Service\InviteRecordService;
 use Symfony\Component\HttpFoundation\Request;
 
 class InviteController extends BaseController
@@ -14,12 +15,16 @@ class InviteController extends BaseController
         $conditions = ArrayToolkit::parts($conditions, array('nickname', 'startDate', 'endDate'));
 
         $page = $request->query->get('page', 0);
+        $firstPage = 1;
 
-        if (!empty($conditions['nickname']) && empty($page)) {
+        if (!empty($conditions['nickname'])) {
             $user = $this->getUserService()->getUserByNickname($conditions['nickname']);
             $conditions['inviteUserId'] = empty($user) ? '0' : $user['id'];
             unset($conditions['nickname']);
-            $invitedRecord = $this->getInvitedRecordByUserIdAndConditions($user, $conditions);
+
+            if (empty($page) || $page == $firstPage) {
+                $invitedRecord = $this->getInvitedRecordByUserIdAndConditions($user, $conditions);
+            }
         }
 
         $recordCount = $this->getInviteRecordService()->countRecords($conditions);
@@ -38,13 +43,6 @@ class InviteController extends BaseController
 
         if (!empty($invitedRecord)) {
             $inviteRecords = array_merge($invitedRecord, $inviteRecords);
-        }
-
-        foreach ($inviteRecords as &$record) {
-            list($coinAmountTotalPrice, $amountTotalPrice, $totalPrice) = $this->getInviteRecordService()->getUserOrderDataByUserIdAndTime($record['invitedUserId'], $record['inviteTime']);
-            $record['coinAmountTotalPrice'] = $coinAmountTotalPrice;
-            $record['amountTotalPrice'] = $amountTotalPrice;
-            $record['totalPrice'] = $totalPrice;
         }
 
         $users = $this->getInviteRecordService()->getAllUsersByRecords($inviteRecords);
@@ -75,27 +73,27 @@ class InviteController extends BaseController
 
     public function userRecordsAction(Request $request)
     {
-        $conditions = $request->query->all();
-        $conditions = ArrayToolkit::parts($conditions, array('nickname'));
-
+        $conditions = array();
+        $nickName = $request->query->get('nickname');
+        if (!empty($nickName)) {
+            $user = $this->getUserService()->getUserByNickname($nickName);
+            $conditions['inviteUserId'] = $user['id'];
+        }
         $paginator = new Paginator(
-            $this->get('request'),
-            $this->getUserService()->countUsers($conditions),
+            $request,
+            $this->getInviteRecordService()->countInviteUser($conditions),
             20
         );
 
-        $users = $this->getUserService()->searchUsers(
+        $records = $this->getInviteRecordService()->searchRecordGroupByInviteUserId(
             $conditions,
-            array('id' => 'ASC'),
             $paginator->getOffsetCount(),
             $paginator->getPerPageCount()
         );
 
-        $inviteInformations = $this->getInviteRecordService()->getInviteInformationsByUsers($users);
-
         return $this->render('admin/invite/user-record.html.twig', array(
             'paginator' => $paginator,
-            'inviteInformations' => $inviteInformations,
+            'records' => $records,
         ));
     }
 
@@ -103,31 +101,14 @@ class InviteController extends BaseController
     {
         $inviteUserId = $request->query->get('inviteUserId');
 
-        $details = array();
-
         $invitedRecords = $this->getInviteRecordService()->findRecordsByInviteUserId($inviteUserId);
+        $invitedUserIds = ArrayToolkit::column($invitedRecords, 'invitedUserId');
 
-        foreach ($invitedRecords as $key => $invitedRecord) {
-            list($coinAmountTotalPrice, $amountTotalPrice, $totalPrice) = $this->getInviteRecordService()->getUserOrderDataByUserIdAndTime(
-                 $invitedRecord['invitedUserId'],
-                 $invitedRecord['inviteTime']
-            );
-
-            $user = $this->getUserService()->getUser($invitedRecord['invitedUserId']);
-
-            if (!empty($user)) {
-                $details[] = array(
-                    'userId' => $user['id'],
-                    'nickname' => $user['nickname'],
-                    'totalPrice' => $totalPrice,
-                    'amountTotalPrice' => $amountTotalPrice,
-                    'coinAmountTotalPrice' => $coinAmountTotalPrice,
-                );
-            }
-        }
+        $users = $this->getUserService()->findUsersByIds($invitedUserIds);
 
         return $this->render('admin/invite/invite-modal.html.twig', array(
-            'details' => $details,
+            'invitedRecords' => $invitedRecords,
+            'users' => $users,
         ));
     }
 
@@ -218,6 +199,7 @@ class InviteController extends BaseController
         $coupons = $this->getCouponService()->findCouponsByIds(ArrayToolkit::column($cards, 'cardId'));
 
         $orders = $this->getOrderService()->findOrdersByIds(ArrayToolkit::column($coupons, 'orderId'));
+        $orders = ArrayToolkit::index($orders, 'id');
 
         $users = $this->getUserService()->findUsersByIds(ArrayToolkit::column($cards, 'userId'));
 
@@ -242,6 +224,9 @@ class InviteController extends BaseController
         return array($paginator, $cardInformations);
     }
 
+    /**
+     * @return InviteRecordService
+     */
     protected function getInviteRecordService()
     {
         return $this->createService('User:InviteRecordService');

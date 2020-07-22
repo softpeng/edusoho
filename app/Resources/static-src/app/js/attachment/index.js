@@ -1,14 +1,23 @@
-import notify from "common/notify";
+import notify from 'common/notify';
 
 let $modal = $('#attachment-modal');
 let $uploader = $modal.find('#uploader-container');
 
+const uploadProcess = {
+  document: {
+    type: 'html',
+  },
+};
+
 let uploader = new UploaderSDK({
   id: $uploader.attr('id'),
+  sdkBaseUri: app.cloudSdkBaseUri,
+  disableDataUpload: app.cloudDisableLogReport,
+  disableSentry: app.cloudDisableLogReport,
   initUrl: $uploader.data('initUrl'),
   finishUrl: $uploader.data('finishUrl'),
   accept: $uploader.data('accept'),
-  process: $uploader.data('process'),
+  process: uploadProcess,
   fileSingleSizeLimit: $uploader.data('fileSingleSizeLimit'),
   ui: 'single',
   locale: document.documentElement.lang
@@ -22,9 +31,9 @@ uploader.on('file.finish', (file) => {
   if (file.length && file.length > 0) {
     let minute = parseInt(file.length / 60);
     let second = Math.round(file.length % 60);
-    $("#minute").val(minute);
-    $("#second").val(second);
-    $("#length").val(minute * 60 + second);
+    $('#minute').val(minute);
+    $('#second').val(second);
+    $('#length').val(minute * 60 + second);
   }
 
   const $metas = $('[data-role="metas"]');
@@ -37,12 +46,13 @@ uploader.on('file.finish', (file) => {
     $list = $('[data-role='+currentTarget+']').find('.' + $metas.data('listClass'));
   }
 
-  $.get('/attachment/file/' + file.id + '/show', function (html) {
+  let module = $('input[name="module"]').val();
+  $.get('/attachment/file/' + file.id + '/show', {module: module},function (html) {
     $list.append(html);
     $ids.val(file.id);
     $modal.modal('hide');
     $list.siblings('.js-upload-file').hide();
-  })
+  });
 });
 
 //只执行一次

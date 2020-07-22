@@ -1,360 +1,8 @@
-.class-bg-layer {
-  position: absolute;
-  top: 5px;
-  left: 5px;
-  right: 5px;
-  height: 100%;
-  background-color: #fff;
-  .border-radius;
-  .es-box-shadow;
-  z-index: -1;
-  @media (max-width: @screen-xs-max) {
-    top: 2px;
-    left: 2px;
-  }
-}
+@import './class-detail-header.less';
+@import './class-detail-before.less';
+@import './class-detail-after.less';
 
-// 班级头部
-.class-header {
-  .class-bg-layer {
-    top: 8px;
-  }
-  .class-header-mian {
-    position: relative;
-  }
-  .class-header-bg {
-    background-color: #fff;
-    .border-radius;
-    .box-shadow(0 1px 3px 0 rgba(0,0,0,0.1));
-  }
-  .class-img {
-    float: left;
-    img {
-      .img-responsive;
-      width: 100%;
-      .border-top-left-radius();
-      @media (min-width: @screen-sm-min) {
-        .border-bottom-left-radius();
-      }
-      @media (max-width: @screen-xs-max) {
-        .border-top-right-radius();
-      }
-    }
-  }
-  .class-info {
-    float: left;
-    >.title {
-      margin-top: 15px;
-      @media (max-width: @screen-md-max) {
-        font-size: 20px;
-      }
-    }
-    >.metas {
-      min-height: 40px;
-      margin-bottom: 20px;
-      color: @gray;
-      @media (max-width: @screen-md-max) {
-        min-height: 30px;
-        margin-bottom: 8px;
-      }
-      @media (max-width: @screen-sm-max) {
-        margin-bottom: 10px;
-      }
-    }
-    .price {
-      span {
-        font-size: 24px;
-        color: @gray-darker;
-        @media (max-width: @screen-md-max) {
-          font-size: 20px;
-        }
-      }
-    }
-  }
-  .class-serve {
-    position: relative;
-    height: 70px;
-    border: 1px dashed @gray-lighter;
-    .serve-frame {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      left: 0;
-      width: 30px;
-      padding: 5px;
-      font-size: 12px;
-      line-height: 15px;
-      text-align: center;
-      background-color: @gray-lighter;
-    }
-    >ul {
-      padding: 25px 10px 25px 40px;
-    }
-  }
-  .class-data {
-    list-style-type: none;
-    padding: 11px 0;
-    margin-bottom: 0;
-    background-color: @bg-color;
-    > li {
-      float: left;
-      margin: 10px 0;
-      color: @gray;
-      text-align: center;
-      line-height: 30px;
-      border-left: 1px solid @gray-lighter;
-      @media (max-width: @screen-md-max) {
-        padding: 8px 0;
-        line-height: 25px;
-      }
-      @media (max-width: @screen-md-max) {
-        padding: 5px 0;
-        line-height: 20px;
-      }
-      &:first-child {
-        border: none;
-      }
-      p {
-        margin-bottom: 0;
-      }
-      i {
-        font-size: 26px;
-      }
-      .dropdown-toggle {
-        color:@gray;
-        &:hover {
-          color: @brand-primary;
-        } 
-      }
-    }
-  }
-  .setting {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    padding: 0 3px;
-    + .setting {
-      right: 35px;
-    }
-  }
-  &.before {
-    .class-img {
-      position: relative;
-      width: 50%;
-      @media (max-width: @screen-sm-max) {
-        width: 40%;
-      }
-      @media (max-width: @screen-xs-max) {
-        width: 100%;
-      }
-      .label {
-        position: absolute;
-        top: 5px;
-        left: 5px;
-      }
-    }
-    .class-info {
-      width: 50%;
-      @media (max-width: @screen-sm-max) {
-        width: 60%;
-      }
-      @media (max-width: @screen-xs-max) {
-        width: 100%;
-      }
-      >.title {
-        margin: 20px;
-        @media (max-width: @screen-md-max) {
-          margin: 20px 20px 15px 20px;
-        }
-      }
-      >.metas {
-        min-height: 60px;
-        padding-left: 20px;
-        @media (max-width: @screen-md-max) {
-          min-height: 50px;
-          padding-left: 20px;
-        }
-      }
-    }
-    .bottom-metas {
-      padding: 20px;
-      @media (max-width: @screen-md-max) {
-        padding: 10px;
-      }
-      @media (max-width: @screen-sm-max) {
-        padding: 0 10px;
-      }
-      .btn-buy {
-        float: right;
-        width: 50%;
-        line-height: 70px;
-        text-align: right;
-        @media (max-width: @screen-sm-max) {
-          width: 100%;
-          height: 60px;
-          line-height: 60px;
-        }
-        .btn-link {
-          color: @gray;
-          &:hover {
-            color: @brand-primary;
-            text-decoration: none;
-          }
-        }
-        .btn-lg {
-          padding: 13px 40px;
-          font-size: 14px;
-          @media (max-width: @screen-md-max) {
-            padding: 10px 25px;
-          }
-        }
-      }
-    }
-    .class-serve {
-      float: left;
-      width: 50%;
-      @media (max-width: @screen-xs-max) {
-        width: 100%;
-      }
-    }
-    .class-data {
-      > li {
-        width: 33.33%;
-      }
-      &.active {
-        >li {
-          width: 25%;
-        }
-      }
-    }
-  }
-  &.after {
-    .class-img {
-      width: 300px;
-      @media (max-width: @screen-sm-max) {
-        width: 240px;
-      }
-      @media (max-width: @screen-xs-max) {
-        width: 100%;
-      }
-    }
-    .class-info {
-      width: 410px;
-      padding: 0 20px;
-      @media (max-width: @screen-md-max) {
-        width: 340px;
-      }
-      @media (max-width: @screen-xs-max) {
-        width: 100%;
-      }
-      .price span {
-        font-size: 16px;
-      }
-    }
-    .class-operation {
-      float: left;
-      width: 430px;
-      background-color: @gray-lighter;
-      .border-top-right-radius();
-      .border-bottom-right-radius();
-      @media (max-width: @screen-md-max) {
-        width: 300px;
-      }
-      @media (max-width: @screen-sm-max) {
-        width: 140px;
-      }
-      @media (max-width: @screen-xs-max) {
-        width: 100%;
-      }
-    }
-    .class-serve {
-      display: inline-block;
-    }
-    .class-data {
-      .border-top-right-radius();
-      margin-bottom: 0;
-      @media (max-width: @screen-md-max) {
-        padding: 19px 0;
-      }
-      @media (max-width: @screen-sm-max) {
-        padding: 0;
-      }
-      @media (max-width: @screen-xs-max) {
-        border-bootom-left-radius: 4px;
-        border-bootom-right-radius: 4px;
-      }
-      > li {
-        width: 33.33%;
-        padding: 48px 0;
-        @media (max-width: @screen-sm-max) and (min-width: @screen-sm-min) {
-          width: 100%;
-          border: none;
-          padding: 0;
-          margin: 4px 0;
-        }
-        @media (max-width: @screen-xs-max) {
-          padding: 10px 0;
-        }
-        > a {
-          display: block;
-          color: @gray;
-          .es-transition;
-          &:hover {
-            color: @brand-primary;
-            .es-transition;
-          }
-        }
-      }
-      &.two-col > li {
-        width: 50%;
-        @media (max-width: @screen-sm-max) and (min-width: @screen-sm-min) {
-          width: 100%;
-          margin: 17px 0;
-        }
-      }
-    }
-    
-  }
-  &.after.auditor {
-    .class-data {
-      padding: 0;
-      @media (max-width: @screen-md-max) {
-        padding: 10px 0;
-      }
-      @media (max-width: @screen-sm-max) {
-        padding: 0;
-      }
-      >li {
-        padding: 10px 0;
-        @media (max-width: @screen-sm-max) {
-          padding: 0;
-        }
-        @media (max-width: @screen-xs-max) {
-          padding: 20px 0;
-        }
-      }
-      border-bottom: 1px solid @gray-lighter;
-    }
-    .class-auditor {
-      padding: 18px 40px;
-      line-height: 30px;
-      color: @gray;
-      background-color: @bg-color;
-      @media (max-width: @screen-md-max) {
-        padding: 18px 20px;
-      }
-      @media (max-width: @screen-sm-max) {
-        padding: 10px 0 0 0;
-      }
-      @media (max-width: @screen-xs-max) {
-        padding: 10px 20px;
-      }
-    }
-  }
-}
-
-
-// 班级主体、课程主体－－－－－－－－－－－－－－－－－－－－
+// 班级-课程列表
 .class-course-list {
   .course-item {
     margin-top: 30px;
@@ -367,6 +15,9 @@
       padding: 10px;
       .media-left {
         padding-right: 35px;
+        @media (min-width: @screen-xs-max) and (max-width: @screen-md-max) {
+          padding-right: 15px;
+        }
         img {
           width: 160px;
           height: auto;
@@ -383,7 +34,10 @@
         font-size: 18px;
         margin-bottom: 10px;
         @media(min-width:@screen-xs-max) {
-          margin-right: 210px;
+          margin-right: 72px;
+        }
+        @media (min-width: @screen-xs-max) and (max-width: @screen-md-max) {
+          margin-right: 24px;
         }
         > a {
           color: @gray-darker;
@@ -425,96 +79,25 @@
           .es-transition;
         }
       }
-    } 
-  }
-}
-
-// 课时列表
-.period-list {
-  margin-top: 20px;
-  margin-bottom: 0;
-  padding-left: 0;
-  list-style-type: none;
-  >li {
-    margin-bottom: 10px;
-    padding: 10px 15px;
-  }
-  .chapter,
-  .section {
-    background-color: @gray-lighter;
-    color: @gray;
-  }
-  .chapter {
-    position: relative;
-    &:hover {
-      cursor: pointer;  
     }
-    .es-icon-toc {
-      position: absolute;
-      top: 11px;
-      left: 15px;
-    }
-    .period-show {
-      position: absolute;
-      top: 8px;
-      right: 15px;
-    }
-    .title {
-      padding: 0 30px;
-      .text-overflow;
-    }
-  }
-  .section {
-    padding-left: 45px;
-    .text-overflow;
-  }
-  .period {
-    position: relative;
-    padding: 10px 100px 10px 45px;
-    &:hover,
-    &.item-active {
-      background-color: #f2fae3;
-    }
-    &.disable {
-      background: none;
-    }
-    >a {
-      color: @gray;
-      display: block;
-      .text-overflow;
-    }
-    .es-icon-undone,
-    .es-icon-doing,
-    .es-icon-done1 {
-      position: absolute;
-      top: 11px;
-      left: 15px;
-    }
-    .title {
-      color: @gray-dark;
-    }
-    .date {
-      position: absolute;
-      top: 11px;
-      right: 50px;
-    }
-    .course-type {
-      position: absolute;
-      top: 11px;
-      right: 15px;
-      line-height: 20px;
-      i {
-        font-size: 20px;
-      }
-      small {
-        margin-top: -3px;
+    .class-course-score {
+      @media (min-width: @screen-xs-min) {
+        position: absolute;
+        right: 80px;
+        bottom: 10px;
+        margin-bottom: 0;
       }
     }
-    .period-state {
+    .class-course-price {
       position: absolute;
-      top: 10px;
-      right: 15px;
-      color: @gray;
+      bottom: 10px;
+      line-height: 1;
+      color: #666;
+      .origin-price {
+        margin-left: 4px;
+        font-size: 18px;
+        color: #151515;
+      }
     }
   }
 }
@@ -526,7 +109,6 @@
     p {
       line-height: 30px;
       margin-bottom: 30px;
-      // text-indent: 2em;
     }
     img {
       max-width: 100%;
@@ -689,6 +271,12 @@
 .comment-list {
   list-style-type: none;
   padding-left: 0;
+  .comment .comment-delete-btn {
+    visibility: hidden;
+  }
+  .comment-operated:hover .comment-delete-btn {
+    visibility: visible;
+  }
 }
 
 // 签到

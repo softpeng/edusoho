@@ -1,6 +1,5 @@
 import AttachmentActions from 'app/js/attachment/widget/attachment-actions';
 import EsWebUploader from 'common/es-webuploader';
-import notify from 'common/notify';
 
 let $form = $('#thread-form');
 let validator = $form.validate({
@@ -17,6 +16,7 @@ let validator = $form.validate({
 
 let editor = CKEDITOR.replace('thread_content', {
   toolbar: 'Thread',
+  fileSingleSizeLimit: app.fileSingleSizeLimit,
   filebrowserImageUploadUrl: $('#thread_content').data('imageUploadUrl')
 });
 
@@ -37,11 +37,11 @@ if (threadType == 'event') {
   });
   $form.find('[name="location"]').rules('add', {
     visible_character: true
-  })
+  });
   $form.find('[name="startTime"]').rules('add', {
     required: true,
     DateAndTime: true
-  })
+  });
 
   $form.find('[name="startTime"]').datetimepicker({
     language: document.documentElement.lang,
@@ -57,7 +57,7 @@ if (threadType == 'event') {
     element: '#js-activity-uploader',
     onUploadSuccess: function(file, response) {
       $form.find('[name=actvityPicture]').val(response.url);
-      notify('success', Translator.trans('site.upload_success_hint'));
+      cd.message({type: 'success', message: Translator.trans('site.upload_success_hint')});
     }
   });
 }

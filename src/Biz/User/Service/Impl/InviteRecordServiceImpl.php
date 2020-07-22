@@ -5,6 +5,7 @@ namespace Biz\User\Service\Impl;
 use Biz\BaseService;
 use AppBundle\Common\ArrayToolkit;
 use Biz\User\Service\InviteRecordService;
+use AppBundle\Common\MathToolkit;
 
 class InviteRecordServiceImpl extends BaseService implements InviteRecordService
 {
@@ -53,23 +54,45 @@ class InviteRecordServiceImpl extends BaseService implements InviteRecordService
         return $this->getInviteRecordDao()->search($conditions, $orderBy, $start, $limit);
     }
 
+    public function flushOrderInfo($conditions = array(), $start = 0, $limit = PHP_INT_MAX)
+    {
+        $records = $this->searchRecords(
+            $conditions,
+            array(),
+            $start,
+            $limit
+        );
+
+        foreach ($records as $record) {
+            $orderInfo = $this->getOrderInfoByUserIdAndInviteTime($record['invitedUserId'], $record['inviteTime']);
+
+            $fields['amount'] = empty($orderInfo['payAmount']) ? 0 : MathToolkit::simple($orderInfo['payAmount'], 0.01);
+            $fields['cashAmount'] = empty($orderInfo['cashAmount']) ? 0 : MathToolkit::simple($orderInfo['cashAmount'], 0.01);
+            $fields['coinAmount'] = empty($orderInfo['coinAmount']) ? 0 : MathToolkit::simple($orderInfo['coinAmount'], 0.01);
+            $this->updateOrderInfoById($record['id'], $fields);
+        }
+
+        unset($records);
+    }
+
     public function findByInviteUserIds($userIds)
     {
         return $this->getInviteRecordDao()->findByInviteUserIds($userIds);
     }
 
-    // 得到这个用户在注册后消费情况，订单消费总额；订单虚拟币总额；订单现金总额
-    public function getUserOrderDataByUserIdAndTime($userId, $inviteTime)
+    public function updateOrderInfoById($id, $fields)
     {
-        $coinAmountTotalPrice = $this->getOrderService()->analysisCoinAmount(array('userId' => $userId, 'coinAmount' => 0, 'status' => 'paid', 'paidStartTime' => $inviteTime));
-        $amountTotalPrice = $this->getOrderService()->analysisAmount(array('userId' => $userId, 'amount' => 0, 'status' => 'paid', 'paidStartTime' => $inviteTime));
-        $totalPrice = $this->getOrderService()->analysisTotalPrice(array('userId' => $userId, 'status' => 'paid', 'paidStartTime' => $inviteTime));
+        $fields = ArrayToolkit::parts($fields, array('amount', 'cashAmount', 'coinAmount'));
 
-        $coinAmountTotalPrice = round($coinAmountTotalPrice, 2);
-        $amountTotalPrice = round($amountTotalPrice, 2);
-        $totalPrice = round($totalPrice, 2);
+        return $this->getInviteRecordDao()->update($id, $fields);
+    }
 
-        return array($coinAmountTotalPrice, $amountTotalPrice, $totalPrice);
+    public function getOrderInfoByUserIdAndInviteTime($userId, $inviteTime)
+    {
+        $user = $this->getCurrentUser();
+        $conditions = array('user_id' => $userId, 'statuses' => array('success', 'finished'), 'pay_time_GT' => $inviteTime);
+
+        return $this->getOrderService()->sumPaidAmount($conditions);
     }
 
     public function getAllUsersByRecords($records)
@@ -82,41 +105,36 @@ class InviteRecordServiceImpl extends BaseService implements InviteRecordService
         return $users;
     }
 
-    //得到用户的邀请信息
-    public function getInviteInformationsByUsers($users)
+    public function sumCouponRateByInviteUserId($userId)
     {
-        $inviteInformations = array();
-        foreach ($users as $key => $user) {
-            $invitedRecords = $this->findRecordsByInviteUserId($user['id']);
-            $payingUserCount = 0;
-            $totalPrice = 0;
-            $totalCoinAmount = 0;
-            $totalAmount = 0;
+        return $this->getInviteRecordDao()->sumCouponRateByInviteUserId($userId);
+    }
 
-            foreach ($invitedRecords as $keynum => $invitedRecord) {
-                list($coinAmountTotalPrice, $amountTotalPrice, $tempPrice) = $this->getUserOrderDataByUserIdAndTime($invitedRecord['invitedUserId'], $invitedRecord['inviteTime']);
+    public function searchRecordGroupByInviteUserId($conditions, $start, $limit)
+    {
+        $records = $this->getInviteRecordDao()->searchRecordGroupByInviteUserId($conditions, $start, $limit);
 
-                if ($coinAmountTotalPrice || $amountTotalPrice) {
-                    $payingUserCount = $payingUserCount + 1;
-                }
+        $inviteUserIds = ArrayToolkit::column($records, 'inviteUserId');
+        $users = $this->getUserService()->findUsersByIds($inviteUserIds);
+        $premiumUserCounts = $this->countPremiumUserByInviteUserIds($inviteUserIds);
+        $premiumUserCounts = ArrayToolkit::index($premiumUserCounts, 'inviteUserId');
 
-                $totalCoinAmount = $totalCoinAmount + $coinAmountTotalPrice;
-                $totalAmount = $totalAmount + $amountTotalPrice;
-                $totalPrice = $totalPrice + $tempPrice;
-            }
-
-            $inviteInformations[] = array(
-                'id' => $user['id'],
-                'nickname' => $user['nickname'],
-                'payingUserCount' => $payingUserCount,
-                'payingUserTotalPrice' => $totalPrice,
-                'coinAmountPrice' => $totalCoinAmount,
-                'amountPrice' => $totalAmount,
-                'count' => count($invitedRecords),
-            );
+        foreach ($records as &$record) {
+            $record['premiumUserCounts'] = empty($premiumUserCounts[$record['inviteUserId']]) ? 0 : $premiumUserCounts[$record['inviteUserId']]['invitedUserCount'];
+            $record['invitedUserNickname'] = $users[$record['inviteUserId']]['nickname'];
         }
 
-        return $inviteInformations;
+        return $records;
+    }
+
+    public function countPremiumUserByInviteUserIds($userIds)
+    {
+        return $this->getInviteRecordDao()->countPremiumUserByInviteUserIds($userIds);
+    }
+
+    public function countInviteUser($conditions)
+    {
+        return $this->getInviteRecordDao()->countInviteUser($conditions);
     }
 
     private function _prepareConditions($conditions)

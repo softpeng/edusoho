@@ -1,9 +1,11 @@
 import ThreadShowWidget from 'app/js/thread/thread-show';
+import AttachmentActions from 'app/js/attachment/widget/attachment-actions';
 
 var threadShowWidget = new ThreadShowWidget({
   element: '.class-detail-content'
 });
 
+new AttachmentActions($('#thread-post-form'));
 
 var $onlyTeacherBtnHtml = $('.js-only-teacher-div').html();
 $('.class-detail-content').find('.js-all-post-head').append($onlyTeacherBtnHtml);
@@ -26,7 +28,7 @@ $.get($('#isTeachersUrl').val() + '?ids=' + $userIds, function (ids) {
     $('.class-detail-content').find('.user-id-' + $idArray[i]).each(function () {
       $(this).addClass('teacher');
     });
-  };
+  }
 });
 
 

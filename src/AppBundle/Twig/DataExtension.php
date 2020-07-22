@@ -2,8 +2,13 @@
 
 namespace AppBundle\Twig;
 
-use Codeages\Biz\Framework\Context\Biz;
 use AppBundle\Common\ExtensionManager;
+use Biz\CloudPlatform\CloudAPIFactory;
+use Biz\EduCloud\Service\ConsultService;
+use Biz\S2B2C\Service\S2B2CFacadeService;
+use Biz\System\Service\SettingService;
+use Codeages\Biz\Framework\Context\Biz;
+use ESCloud\SDK\ESCloudSDK;
 
 class DataExtension extends \Twig_Extension
 {
@@ -24,16 +29,26 @@ class DataExtension extends \Twig_Extension
 
     public function getFunctions()
     {
-        $options = array('is_safe' => array('html'));
+        $options = ['is_safe' => ['html']];
 
-        return array(
-            new \Twig_SimpleFunction('data', array($this, 'getData'), $options),
-            new \Twig_SimpleFunction('datas', array($this, 'getDatas'), $options),
-            new \Twig_SimpleFunction('datas_count', array($this, 'getDatasCount'), $options),
-            new \Twig_SimpleFunction('service', array($this, 'callService'), $options),
-            new \Twig_SimpleFunction('isOldSmsUser', array($this, 'getOldSmsUserStatus'), $options),
-            new \Twig_SimpleFunction('cloudStatus', array($this, 'getCloudStatus'), $options),
-        );
+        return [
+            new \Twig_SimpleFunction('data', [$this, 'getData'], $options),
+            new \Twig_SimpleFunction('datas', [$this, 'getDatas'], $options),
+            new \Twig_SimpleFunction('datas_count', [$this, 'getDatasCount'], $options),
+            new \Twig_SimpleFunction('service', [$this, 'callService'], $options),
+            new \Twig_SimpleFunction('isOldSmsUser', [$this, 'getOldSmsUserStatus'], $options),
+            new \Twig_SimpleFunction('cloudStatus', [$this, 'getCloudStatus'], $options),
+            new \Twig_SimpleFunction('cloudFaceStatus', [$this, 'getCloudFaceStatus'], $options),
+            new \Twig_SimpleFunction('cloudConsultPath', [$this, 'getCloudConsultPath'], $options),
+            new \Twig_SimpleFunction('cloud_info', [$this, 'getCloudInfo'], $options),
+        ];
+    }
+
+    public function getCloudInfo()
+    {
+        $api = CloudAPIFactory::create('leaf');
+
+        return $api->get('/me');
     }
 
     public function getData($name, $arguments)
@@ -47,7 +62,7 @@ class DataExtension extends \Twig_Extension
     {
         $method = 'get'.ucfirst($name).'Datas';
         if (!method_exists($this, $method)) {
-            throw new \RuntimeException($this->getServiceKernel()->trans('尚未定义批量获取"%name%"数据', array('%name%' => $name)));
+            throw new \RuntimeException($this->getServiceKernel()->trans('尚未定义批量获取"%name%"数据', ['%name%' => $name]));
         }
 
         return $this->{$method}($conditions, $sort, $start, $limit);
@@ -57,7 +72,7 @@ class DataExtension extends \Twig_Extension
     {
         $method = 'get'.ucfirst($name).'DatasdeCount';
         if (!method_exists($this, $method)) {
-            throw new \RuntimeException($this->getServiceKernel()->trans('尚未定义获取"%name%"数据的记录条数', array('%name%' => $name)));
+            throw new \RuntimeException($this->getServiceKernel()->trans('尚未定义获取"%name%"数据的记录条数', ['%name%' => $name]));
         }
 
         return $this->{$method}($conditions);
@@ -81,7 +96,56 @@ class DataExtension extends \Twig_Extension
 
     public function getCloudStatus()
     {
-        return $this->getEduCloudService()->isHiddenCloud();
+        return $this->getEduCloudService()->isVisibleCloud();
+    }
+
+    public function getCloudFaceStatus()
+    {
+        try {
+            $settings = $this->getSettingService()->get('storage', []);
+            $sdk = new ESCloudSDK(['access_key' => $settings['cloud_access_key'], 'secret_key' => $settings['cloud_secret_key']]);
+            $service = $sdk->getInspectionService();
+            $account = $service->getAccount();
+            if (!empty($account['enabled'])) {
+                return true;
+            } else {
+                return false;
+            }
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    public function hasSupplier()
+    {
+        return !empty($this->getS2B2CFacadeService()->getSupplier());
+    }
+
+    public function canAddCourse()
+    {
+        $allowCoopMode = [
+            S2B2CFacadeService::DEALER_MODE,
+        ];
+
+        $setting = $this->getSettingService()->get('merchant_setting');
+
+        return empty($setting['coop_mode']) ? true : in_array($setting['coop_mode'], $allowCoopMode);
+    }
+
+    public function getCloudConsultPath()
+    {
+        $cloudConsult = $this->getSettingService()->get('cloud_consult', []);
+        if (empty($cloudConsult)) {
+            return false;
+        }
+
+        $cloudConsultEnable = empty($cloudConsult['cloud_consult_code']) && $cloudConsult['cloud_consult_setting_enabled'] && $cloudConsult['cloud_consult_is_buy'];
+
+        if (!$cloudConsultEnable) {
+            return false;
+        }
+
+        return empty($cloudConsult['cloud_consult_js']) ? false : $cloudConsult['cloud_consult_js'];
     }
 
     private function getEduCloudService()
@@ -89,8 +153,32 @@ class DataExtension extends \Twig_Extension
         return $this->biz->service('CloudPlatform:EduCloudService');
     }
 
+    /**
+     * @return ConsultService
+     */
+    protected function getConsultService()
+    {
+        return $this->biz->service('EduCloud:MicroyanConsultService');
+    }
+
+    /**
+     * @return SettingService
+     */
+    protected function getSettingService()
+    {
+        return $this->biz->service('System:SettingService');
+    }
+
     public function getName()
     {
         return 'topxia_data_twig';
+    }
+
+    /**
+     * @return S2B2CFacadeService
+     */
+    protected function getS2B2CFacadeService()
+    {
+        return $this->biz->service('S2B2C:S2B2CFacadeService');
     }
 }

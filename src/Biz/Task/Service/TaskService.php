@@ -2,6 +2,8 @@
 
 namespace Biz\Task\Service;
 
+use Biz\System\Annotation\Log;
+
 interface TaskService
 {
     const LEARN_TIME_STEP = 60;
@@ -12,14 +14,29 @@ interface TaskService
 
     public function getCourseTask($courseId, $id);
 
+    public function getCourseTaskByCourseIdAndCopyId($courseId, $copyId);
+
     public function preCreateTaskCheck($task);
 
+    /**
+     * @param $task
+     *
+     * @return mixed
+     * @Log(module="course",action="add_task")
+     */
     public function createTask($task);
 
     public function batchCreateTasks($tasks);
 
     public function preUpdateTaskCheck($taskId, $fields);
 
+    /**
+     * @param $id
+     * @param $fields
+     *
+     * @return mixed
+     * @Log(module="course",action="update_task",param="id")
+     */
     public function updateTask($id, $fields);
 
     public function updateSeq($id, $fields);
@@ -32,7 +49,15 @@ interface TaskService
 
     public function unpublishTask($id);
 
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="course",action="delete_task")
+     */
     public function deleteTask($id);
+
+    public function deleteTasksByCategoryId($courseId, $categoryId);
 
     public function findTasksByCourseId($courseId);
 
@@ -58,6 +83,8 @@ interface TaskService
     public function findTasksFetchActivityByCourseId($courseId);
 
     public function findTasksFetchActivityAndResultByCourseId($courseId);
+
+    public function wrapTaskResultToTasks($courseId, $tasks);
 
     /**
      * for question and testpaper ranges.
@@ -103,7 +130,7 @@ interface TaskService
      */
     public function canLearnTask($taskId);
 
- // 任务是否可学
+    // 任务是否可学
 
     /**
      * return if the task has been learned.
@@ -135,15 +162,6 @@ interface TaskService
      * @return mixed
      */
     public function setTaskMaxOnlineNum($taskId, $maxNum);
-
-    /**
-     * 统计当前时间以后每天的直播次数.
-     *
-     * @param  $limit
-     *
-     * @return array <string, int|string>
-     */
-    public function findFutureLiveDates($limit = 4);
 
     /**
      * 返回当前正在直播的直播任务
@@ -191,12 +209,9 @@ interface TaskService
      */
     public function findToLearnTasksByCourseIdForMission($courseId);
 
-    public function getTaskByCourseIdAndActivityId($courseId, $activityId);
+    public function getTimeSec($type);
 
-    /**
-     * 获得课程的总学习时间.
-     */
-    public function sumCourseSetLearnedTimeByCourseSetId($courseSetId);
+    public function getTaskByCourseIdAndActivityId($courseId, $activityId);
 
     public function analysisTaskDataByTime($startTime, $endTime);
 
@@ -212,4 +227,14 @@ interface TaskService
     public function findPublishedLivingTasksByCourseSetId($courseSetId);
 
     public function findPublishedTasksByCourseSetId($courseSetId);
+
+    public function getTodayLiveCourseNumber();
+
+    public function countTasksByChpaterId($chapterId);
+
+    public function updateTasksOptionalByLessonId($lessonId, $isOptional = 0);
+
+    public function countLessonsWithMultipleTasks($courseId);
+
+    public function getUserCurrentPublishedLiveTask($userId, $startTime, $endBeforeRange);
 }

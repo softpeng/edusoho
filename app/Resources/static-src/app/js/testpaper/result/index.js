@@ -12,7 +12,8 @@ testpaperCardLocation();
 onlyShowError();
 initWatermark();
 
-new DoTestBase($('.js-task-testpaper-body'));
+let doBase = new DoTestBase($('.js-task-testpaper-body'));
+clearInterval(doBase.$usedTimer);
 
 $('.js-testpaper-redo-timer').timer({
   countdown:true,
@@ -24,5 +25,13 @@ $('.js-testpaper-redo-timer').timer({
   repeat: true,
   start: function() {
     self.usedTime = 0;
+  }
+});
+
+$('#finishPaper').click(function() {
+  if ($(this).attr('disabled') == 'disabled') {
+    return false;
+  } else {
+    return true;
   }
 });

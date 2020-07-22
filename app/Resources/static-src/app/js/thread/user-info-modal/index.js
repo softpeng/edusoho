@@ -8,6 +8,7 @@ $form.validate({
     truename: {
       required: true,
       chinese: true,
+      trim: true,
       byte_minlength: 4,
       byte_maxlength: 10
     },
@@ -17,7 +18,7 @@ $form.validate({
     }
   },
   submitSuccess() {
-    notify('success', Translator.trans('site.save_success_hint'))
+    notify('success', Translator.trans('site.save_success_hint'));
     window.location.reload();
   }
-})
+});

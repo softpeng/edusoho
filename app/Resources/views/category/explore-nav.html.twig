@@ -1,9 +1,22 @@
 {% set tagMarks = data('TagMarks', {tags:tags}) %}
 {% set categoryMarks = data('CategoryMarks', {selectedCategory:selectedCategory, selectedSubCategory:selectedSubCategory, selectedthirdLevelCategory:selectedthirdLevelCategory}) %}
 {% set selectedTagGroups = data('SelectedTagGroups', {tags:tags}) %}
+{% set filter = request.query.get('filter')|default(null) %}
+
+{% if group == 'classroom' %}
+  {% set path = 'classroom_explore' %}
+  {% set orderByDefault = 'createdTime' %}
+{% elseif group == 'open_course' %}
+  {% set path = 'open_course_explore' %}
+  {% set group = 'course' %}
+{% else %}
+  {% set path = 'course_set_explore' %}
+  {% set orderByDefault = 'latest' %}
+{% endif %}
+{% set orderBy = request.query.get('orderBy', orderByDefault|default(null)) %}
 
 <div class="tabs-wrapper">
-  <div class="tabs-mark-group plm ptm">
+  <div class="tabs-mark-group plm ptm clearfix">
     <div class="title">{{'explore.course.category.all'|trans}}</div>
 
     <ul class="content list-unstyled list-inline">
@@ -68,7 +81,6 @@
       </ul>
     </div>
   {% endif %}
-
   {% for tagGroup in tagGroups %}
     {% if group in tagGroup.scope %}
       {% if tagGroup.id not in selectedTagGroups %}

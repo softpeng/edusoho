@@ -2,7 +2,7 @@ export default class Create {
   constructor($element) {
     this.$element = $element;
     this.$courseSetType = this.$element.find('.js-courseSetType');
-    this.$currentCourseSetType = this.$element.find('.js-courseSetType.active');;
+    this.$currentCourseSetType = this.$element.find('.js-courseSetType.active');
     this.init();
   }
 
@@ -10,7 +10,7 @@ export default class Create {
     this.validator = this.$element.validate({
       rules: {
         title: {
-          maxlength: 100,
+          byte_maxlength: 200,
           required: true,
           trim: true,
           course_title: true,
@@ -27,18 +27,14 @@ export default class Create {
     this.$courseSetType.click(event => {
       this.$courseSetType.removeClass('active');
       this.$currentCourseSetType = $(event.currentTarget).addClass('active');
-      $('input[name="type"]').val(this.$currentCourseSetType.data('type'));
+      let type = this.$currentCourseSetType.data('type');
+      $('input[name="type"]').val(type);
       let $title = $('#course_title');
-       $title.rules('remove');
-      if (this.$currentCourseSetType.data('type') != 'live') {
-        $title.rules("add", {
+      if (type === 'live') {
+        $title.rules('remove');
+        $title.rules('add', {
           required: true,
-          trim: true,
-          course_title: true,
-        });
-      }else {
-        $title.rules("add", {
-          required: true,
+          byte_maxlength: 200,
           trim: true,
           open_live_course_title: true,
         });

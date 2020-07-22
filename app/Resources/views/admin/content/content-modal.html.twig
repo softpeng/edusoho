@@ -20,7 +20,7 @@
         <div class="form-group">
           <label for="content-title-field" class="control-label">{{'admin.custom_page_manage.custom_page_title'|trans}}</label>
           <div class="controls">
-            <input class="form-control" id="content-title-field" type="text" name="title" value="{{ field_value(content, 'title') }}">
+            <input class="form-control" id="content-title-field" type="text" name="title" value="{{ content.title|default('') }}">
           </div>
         </div>
       {% endif %}
@@ -113,7 +113,11 @@
         <div class="panel panel-default" >
           <div class="panel-heading">{{'admin.custom_page_manage.custom_page_template'|trans}}</div>
           <div class="panel-body">
-            {% set templates = {'default': 'admin.custom_page_manage.custom_page_default_template'|trans,'blank':'admin.custom_page_manage.custom_page_no_nav_template'|trans} %}
+            {% set templates = {
+              'default': 'admin.custom_page_manage.custom_page_default_template'|trans,
+              'blank': 'admin.custom_page_manage.custom_page_no_nav_template'|trans,
+              'fullBlank': 'admin.custom_page_manage.custom_page_blank_template'|trans
+            } %}
 
             <select class="form-control" name="template">
               {{ select_options(templates, field_value(content, 'template')) }}

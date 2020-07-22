@@ -4,24 +4,24 @@ namespace Biz\File\Event;
 
 use AppBundle\Common\ArrayToolkit;
 use Biz\Course\Service\CourseService;
+use Biz\Course\Service\LiveReplayService;
 use Biz\File\Service\UploadFileService;
 use Codeages\Biz\Framework\Event\Event;
-use Topxia\Service\Common\ServiceKernel;
 use Codeages\PluginBundle\Event\EventSubscriber;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Topxia\Service\Common\ServiceKernel;
 
 class UploadFileEventSubscriber extends EventSubscriber implements EventSubscriberInterface
 {
     public static function getSubscribedEvents()
     {
-        return array(
-            'question.create' => 'onQuestionCreate',
-            'question.update' => 'onQuestionUpdate',
-            'question.delete' => 'onQuestionDelete',
+        return [
+            'question.create' => ['onQuestionCreate', 2],
+            'question.update' => ['onQuestionUpdate', 2],
+            'question.delete' => ['onQuestionDelete', 2],
 
             'course.delete' => 'onCourseDelete',
-            //'course.lesson.create' => 'onCourseLessonCreate',
-            'course.lesson.delete' => 'onCourseLessonDelete',
+
             'course.material.create' => 'onMaterialCreate',
             'course.material.update' => 'onMaterialUpdate',
             'course.material.delete' => 'onMaterialDelete',
@@ -37,8 +37,8 @@ class UploadFileEventSubscriber extends EventSubscriber implements EventSubscrib
             'thread.delete' => 'onThreadDelete',
             'thread.post.delete' => 'onThreadPostDelete',
 
-            'delete.use.file' => 'onDeleteUseFiles',
-        );
+            'live.activity.update' => 'onLiveActivityUpdate',
+        ];
     }
 
     public function onQuestionCreate(Event $event)
@@ -56,8 +56,13 @@ class UploadFileEventSubscriber extends EventSubscriber implements EventSubscrib
 
         $attachment = $argument['attachment'];
 
-        $this->getUploadFileService()->createUseFiles($attachment['stem']['fileIds'], $question['id'], $attachment['stem']['targetType'], $attachment['stem']['type']);
-        $this->getUploadFileService()->createUseFiles($attachment['analysis']['fileIds'], $question['id'], $attachment['analysis']['targetType'], $attachment['analysis']['type']);
+        if (isset($attachment['stem'])) {
+            $this->getUploadFileService()->createUseFiles($attachment['stem']['fileIds'], $question['id'], $attachment['stem']['targetType'], $attachment['stem']['type']);
+        }
+
+        if (isset($attachment['analysis'])) {
+            $this->getUploadFileService()->createUseFiles($attachment['analysis']['fileIds'], $question['id'], $attachment['analysis']['targetType'], $attachment['analysis']['type']);
+        }
     }
 
     public function onQuestionUpdate(Event $event)
@@ -87,8 +92,8 @@ class UploadFileEventSubscriber extends EventSubscriber implements EventSubscrib
 
     protected function deleteAttachment($targetType, $targetId)
     {
-        $conditions = array('targetId' => $targetId, 'type' => 'attachment');
-        if (strpos($targetType, ',') === false) {
+        $conditions = ['targetId' => $targetId, 'type' => 'attachment'];
+        if (false === strpos($targetType, ',')) {
             $conditions['targetType'] = $targetType;
         } else {
             $conditions['targetTypes'] = explode(',', $targetType);
@@ -154,21 +159,6 @@ class UploadFileEventSubscriber extends EventSubscriber implements EventSubscrib
     public function onCourseDelete(Event $event)
     {
         $course = $event->getSubject();
-
-        /**
-         * @TODO 教学计划删除时需要使文件使用数减少
-         */
-        $lessons = $this->getCourseService()->getCourse($course['id']);
-
-        if (!empty($lessons)) {
-            $fileIds = ArrayToolkit::column($lessons, 'mediaId');
-
-            if (!empty($fileIds)) {
-                foreach ($fileIds as $fileId) {
-                    $this->getUploadFileService()->waveUsedCount($fileId, -1);
-                }
-            }
-        }
     }
 
     public function onCourseLessonCreate(Event $event)
@@ -176,15 +166,14 @@ class UploadFileEventSubscriber extends EventSubscriber implements EventSubscrib
         $context = $event->getSubject();
         $lesson = $context['lesson'];
 
-        if (in_array($lesson['type'], array('video', 'audio', 'ppt', 'document', 'flash'))) {
+        if (in_array($lesson['type'], ['video', 'audio', 'ppt', 'document', 'flash'])) {
             $this->getUploadFileService()->waveUsedCount($lesson['mediaId'], 1);
         }
     }
 
     public function onCourseLessonDelete(Event $event)
     {
-        $context = $event->getSubject();
-        $lesson = $context['lesson'];
+        $lesson = $event->getSubject();
 
         if (!empty($lesson['mediaId'])) {
             $this->getUploadFileService()->waveUsedCount($lesson['mediaId'], -1);
@@ -233,7 +222,7 @@ class UploadFileEventSubscriber extends EventSubscriber implements EventSubscrib
         }
 
         if ($file['targetId'] == $material['courseId']) {
-            $this->getUploadFileService()->update($material['fileId'], array('targetId' => 0));
+            $this->getUploadFileService()->update($material['fileId'], ['targetId' => 0]);
         }
     }
 
@@ -267,39 +256,13 @@ class UploadFileEventSubscriber extends EventSubscriber implements EventSubscrib
         }
     }
 
-    public function onDeleteUseFiles(Event $event)
+    public function onLiveActivityUpdate(Event $event)
     {
-        $attachment = $event->getSubject();
+        $liveActivity = $event->getSubject();
+        $fields = $event->getArgument('fields');
 
-        if ($attachment['type'] != 'attachment' || !in_array($attachment['targetType'], array('question.stem', 'question.analysis'))) {
-            return;
-        }
-
-        $question = $this->getQuestionService()->get($attachment['targetId']);
-
-        if ($question['copyId'] > 0) {
-            return;
-        }
-
-        $copyQuestions = $this->getQuestionService()->findQuestionsByCopyId($question['id']);
-
-        if (empty($copyQuestions)) {
-            return;
-        }
-
-        $conditions = array(
-            'type' => 'attachment',
-            'targetType' => $attachment['targetType'],
-            'targetIds' => ArrayToolkit::column($copyQuestions, 'id'),
-        );
-        $attachments = $this->getUploadFileService()->searchUseFiles($conditions, false);
-
-        if (empty($attachments)) {
-            return;
-        }
-
-        foreach ($attachments as $value) {
-            $this->getUploadFileService()->deleteUseFile($value['id']);
+        if (isset($fields['replayStatus']) && LiveReplayService::REPLAY_VIDEO_GENERATE_STATUS == $fields['replayStatus']) {
+            $this->getUploadFileService()->waveUsedCount($fields['mediaId'], 1);
         }
     }
 

@@ -2,6 +2,8 @@
 
 namespace Biz\Course\Service;
 
+use Biz\System\Annotation\Log;
+
 interface MemberService
 {
     const MAX_TEACHER = 100;
@@ -10,7 +12,9 @@ interface MemberService
 
     public function removeCourseStudent($courseId, $userId);
 
-    public function searchMembers($conditions, $orderBy, $start, $limit);
+    public function removeCourseStudents($courseId, array $userIs);
+
+    public function searchMembers($conditions, $orderBy, $start, $limit, $columns = array());
 
     /**
      * @before searchMemberCount
@@ -20,6 +24,10 @@ interface MemberService
      * @return mixed
      */
     public function countMembers($conditions);
+
+    public function stickMyCourseByCourseSetId($courseSetId);
+
+    public function unStickMyCourseByCourseSetId($courseSetId);
 
     public function findWillOverdueCourses();
 
@@ -55,6 +63,17 @@ interface MemberService
 
     public function isCourseMember($courseId, $userId);
 
+    public function setDefaultTeacher($courseId);
+
+    public function findLastLearnTimeRecordStudents($userIds);
+
+    /**
+     * @param $courseId
+     * @param $teachers
+     *
+     * @return mixed
+     * @Log(module="course",action="update_teacher",serviceName="Course:CourseService",funcName="getCourse",param="courseId")
+     */
     public function setCourseTeachers($courseId, $teachers);
 
     public function cancelTeacherInAllCourses($userId);
@@ -79,7 +98,7 @@ interface MemberService
     /**
      * 退学.
      */
-    public function removeStudent($courseId, $userId);
+    public function removeStudent($courseId, $userId, $info = array());
 
     /**
      * 封锁学员，封锁之后学员不能再查看该课程.
@@ -131,7 +150,13 @@ interface MemberService
 
     public function countPostsByCourseIdAndUserId($courseId, $userId);
 
-    public function addMemberExpiryDays($courseId, $userId, $day);
+    public function batchUpdateMemberDeadlinesByDay($courseId, $userIds, $day, $waveType = 'plus');
+
+    public function checkDayAndWaveTypeForUpdateDeadline($courseId, $userIds, $day, $waveType = 'plus');
+
+    public function batchUpdateMemberDeadlinesByDate($courseId, $userIds, $date);
+
+    public function checkDeadlineForUpdateDeadline($courseId, $userIds, $date);
 
     public function updateMemberDeadlineByClassroomIdAndUserId($classroomId, $userId, $deadline);
 
@@ -140,4 +165,8 @@ interface MemberService
     public function findMembersByCourseIdAndRole($courseId, $role);
 
     public function findDailyIncreaseNumByCourseIdAndRoleAndTimeRange($courseId, $role, $timeRange = array(), $format = '%Y-%m-%d');
+
+    public function findMembersByIds($ids);
+
+    public function countStudentMemberByCourseSetId($courseSetId);
 }

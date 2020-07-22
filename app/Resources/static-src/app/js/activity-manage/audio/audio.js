@@ -44,12 +44,12 @@ export default class Audio {
   }
 
   autoValidatorLength() {
-    $(".js-length").blur(function () {
-      let validator = $("#step2-form").data('validator');
+    $('.js-length').blur(function () {
+      let validator = $('#step2-form').data('validator');
       if (validator && validator.form()) {
         const minute = parseInt($('#minute').val()) | 0;
         const second = parseInt($('#second').val()) | 0;
-        $("#length").val(minute * 60 + second);
+        $('#length').val(minute * 60 + second);
       }
     });
   }
@@ -59,22 +59,35 @@ export default class Audio {
     console.log(fileChooser);
     const onSelectFile = file => {
       chooserUiClose();
-      if (file.length) {
-        let minute = parseInt(file.length / 60);
-        let second = Math.round(file.length % 60);
-        $("#minute").val(minute);
-        $("#second").val(second);
-        $("#length").val(minute * 60 + second);
-      }
+      let placeMediaAttr = (file) => {
+        if (file.length !== 0 && file.length !== undefined) {
+          let $minute = $('#minute');
+          let $second = $('#second');
+          let $length = $('#length');
+
+          let length = parseInt(file.length);
+          let minute = parseInt(length / 60);
+          let second = length % 60;
+          $minute.val(minute);
+          $second.val(second);
+          $length.val(length);
+          file.minute = minute;
+          file.second = second;
+        }
+        $('[name="media"]').val(JSON.stringify(file));
+      };
+      placeMediaAttr(file);
+
       $('[name="ext[mediaId]"]').val(file.source);
+      $('#step2-form').valid();
       if (file.source == 'self') {
-        $("#ext_mediaId").val(file.id);
-        $("#ext_mediaUri").val('');
+        $('#ext_mediaId').val(file.id);
+        $('#ext_mediaUri').val('');
       } else {
-        $("#ext_mediaId").val('');
-        $("#ext_mediaUri").val(file.uri);
+        $('#ext_mediaId').val('');
+        $('#ext_mediaUri').val(file.uri);
       }
-    }
+    };
     fileChooser.on('select', onSelectFile);
   }
 }

@@ -11,11 +11,13 @@
 
 	<li class="tab-recommand clearfix">
 		<a href="{{ showUrl }}" target="_blank" title="{{ course.title }}">
-      <img class="img-responsive" src="{{ filepath(course_set_cover(course, 'small'), 'courseSet.png') }}" alt="{{ course.title }}">
+      <img class="img-responsive" src="{{ filepath(course_set_cover(course, 'middle'), 'courseSet.png') }}" alt="{{ course.title }}">
     </a>
 		<div class="open-course-info">
 		  <a class="title" href="{{ showUrl }}" target="_blank" title="{{ course.title }}">{{ course.title }}</a>
-		  <div class="num">{{ course.studentNum }}{{ 'my.teaching.open_course.lesson.recommend.learning_num'|trans }}</div>
+            {% if setting('course.show_student_num_enabled', '1') == 1  %}
+				<div class="num">{{ course.studentNum }}{{ 'my.teaching.open_course.lesson.recommend.learning_num'|trans }}</div>
+			{% endif %}
 		</div>
 	</li>
 {% else %}

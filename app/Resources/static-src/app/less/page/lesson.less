@@ -191,7 +191,9 @@
 }
 
 .loading-background  {
-  background: #fff url('@{img-src}old/loader.gif') no-repeat center center;
+  @media(min-width: @screen-sm-min) {
+    background: #fff url('@{img-src}old/loader.gif') no-repeat center center;
+  }
 }
 
 .slide-player-watermark {
@@ -242,11 +244,12 @@
 
 .slide-player-control .goto-page,
 .slide-player-control .goto-index {
-  width: 50px;
+  width: 65px;
   display: inline-block;
   @media(max-width:@screen-xs-min) {
-    width: 35px;
-    padding: 0 5px;
+    width: 42px;
+    padding: 0;
+    text-align: center;
   }
 } 
 
@@ -270,6 +273,9 @@
   text-align: center;
   width: 100%;
   top: 0px;
+  @media(max-width: @screen-xs-min) {
+    top: 25%;
+  }
   bottom: 50px;
 }
 

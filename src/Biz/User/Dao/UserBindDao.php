@@ -15,4 +15,14 @@ interface UserBindDao extends GeneralDaoInterface
     public function getByToken($token);
 
     public function findByToId($toId);
+
+    public function findByToIdAndType($type, $toId);
+
+    public function deleteByTypeAndToId($type, $toId);
+
+    public function deleteByToId($toId);
+
+    public function findByTypeAndFromIds($type, $fromIds);
+
+    public function findByTypeAndToIds($type, $toIds);
 }

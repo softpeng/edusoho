@@ -25,14 +25,32 @@ class BuildPluginAppCommand extends BaseCommand
         $this->output = $output;
         $this->filesystem = new Filesystem();
         $name = $input->getArgument('name');
-
+        $this->copyTranslationsFile($name);
         $this->copyStaticFile($name);
         $this->_buildDistPackage($name);
     }
 
+    private function copyTranslationsFile($pluginCode)
+    {
+        $this->output->writeln("<info>正在检测翻译文件 {$pluginCode}</info>");
+        $rootDir = $this->getBiz()->offsetGet('kernel.root_dir');
+        $translationsDir = $rootDir."/../plugins/{$pluginCode}Plugin/Resources/static-src/js/translations";
+        $pluginPublicTranslationsDir = $rootDir."/../plugins/{$pluginCode}Plugin/Resources/public/js/controller/translations";
+        $name = strtolower($pluginCode);
+        $staticDir = $rootDir."/../web/static-dist/{$name}plugin/js/translations";
+        if ($this->filesystem->exists($translationsDir)) {
+            $this->output->writeln("<info>    *正在拷贝翻译文件 {$translationsDir} -> {$pluginPublicTranslationsDir}</info>");
+            $this->filesystem->mirror($translationsDir, $pluginPublicTranslationsDir, null, array('override' => true, 'delete' => true));
+            $this->output->writeln("<info>    *正在拷贝翻译文件 {$translationsDir} -> {$staticDir}</info>");
+            $this->filesystem->mirror($translationsDir, $staticDir, null, array('override' => true, 'delete' => true));
+        } else {
+            $this->output->writeln("<warning>    *未检测到翻译文件 {$pluginCode},请查看是否执行app/console trans:dump-js --code=plugin_code</>");
+        }
+    }
+
     private function copyStaticFile($pluginCode)
     {
-        $this->output->writeln("<info>正在检测态资源文件 {$pluginCode}</info>");
+        $this->output->writeln("<info>正在检测静态资源文件 {$pluginCode}</info>");
         $rootDir = $this->getBiz()->offsetGet('kernel.root_dir');
         $originDir = $this->getOriginDir($rootDir, $pluginCode);
         $targetDir = $this->getTargetDir($rootDir, $pluginCode);
@@ -47,7 +65,7 @@ class BuildPluginAppCommand extends BaseCommand
     private function getOriginDir($rootDir, $pluginCode)
     {
         $originDir = $rootDir.'/../web/static-dist/'.strtolower($pluginCode);
-        if ($pluginCode == 'FavoriteReward') {
+        if ('FavoriteReward' == $pluginCode) {
             $originDir = $rootDir.'/../web/static-dist/litetheme';
         }
 
@@ -63,7 +81,7 @@ class BuildPluginAppCommand extends BaseCommand
         $targetDir = $rootDir.'/../plugins/'.$pluginCode.'Plugin';
 
         $folder = strtolower($pluginCode);
-        if ($pluginCode == 'FavoriteReward') {
+        if ('FavoriteReward' == $pluginCode) {
             $folder = 'litetheme';
         }
         if ($this->isPluginTheme($pluginCode)) {
@@ -90,7 +108,7 @@ class BuildPluginAppCommand extends BaseCommand
 
         $distDir = $this->_makeDistDirectory($name, $version);
         $sourceDistDir = $this->_copySource($name, $pluginDir, $distDir);
-        $this->_copyScript($pluginDir, $distDir);
+        $this->_copyScript($name, $pluginDir, $distDir);
         $this->_generateBlocks($pluginDir, $distDir, $this->getContainer());
         $this->_copyMeta($pluginDir, $distDir);
         $this->_cleanGit($sourceDistDir);
@@ -120,7 +138,7 @@ class BuildPluginAppCommand extends BaseCommand
         }
     }
 
-    private function _copyScript($pluginDir, $distDir)
+    private function _copyScript($name, $pluginDir, $distDir)
     {
         $scriptDir = "{$pluginDir}/Scripts";
         $distScriptDir = "{$distDir}/Scripts";
@@ -132,9 +150,11 @@ class BuildPluginAppCommand extends BaseCommand
             $this->output->writeln('<comment>    * 拷贝脚本：无</comment>');
         }
 
-        $this->output->writeln('<info>    * 生成安装引导脚本：Upgrade.php</info>');
+        $this->output->writeln('<info>    * 生成安装引导脚本：EduSohoPluginUpgrade.php</info>');
 
-        $this->filesystem->copy(__DIR__.'/Fixtures/PluginAppUpgradeTemplate.php', "{$distDir}/Upgrade.php");
+        $data = file_get_contents(__DIR__.'/Fixtures/PluginAppUpgradeTemplate.php');
+        $data = str_replace('{{code}}', $name, $data);
+        file_put_contents("{$distDir}/EduSohoPluginUpgrade.php", $data);
     }
 
     private function _copyMeta($pluginDir, $distDir)
@@ -182,7 +202,7 @@ class BuildPluginAppCommand extends BaseCommand
     {
         if (file_exists($pluginDir.'/block.json')) {
             $this->filesystem->copy($pluginDir.'/block.json', $distDir.'/block.json');
-            BlockToolkit::generateBlcokContent($pluginDir.'/block.json', $distDir.'/blocks', $container);
+            BlockToolkit::generateBlockContent($pluginDir.'/block.json', $distDir.'/blocks', $container);
         }
     }
 

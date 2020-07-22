@@ -2,6 +2,7 @@
 
 namespace AppBundle\Controller\Admin;
 
+use Biz\Common\CommonException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use AppBundle\Common\Paginator;
@@ -52,7 +53,7 @@ class GroupController extends BaseController
 
         $paginator = new Paginator(
             $this->get('request'),
-            $this->getThreadService()->searchThreadsCount($conditions),
+            $this->getThreadService()->countThreads($conditions),
             10
         );
 
@@ -231,32 +232,32 @@ class GroupController extends BaseController
             'groupId' => $thread['groupId'],
             'threadId' => $thread['id'],
             );
-        if ($action == 'setElite') {
+        if ('setElite' == $action) {
             $this->getThreadService()->setElite($threadId);
             $message['type'] = 'elite';
             $this->getNotifiactionService()->notify($thread['userId'], 'group-thread', $message);
         }
-        if ($action == 'removeElite') {
+        if ('removeElite' == $action) {
             $this->getThreadService()->removeElite($threadId);
             $message['type'] = 'unelite';
             $this->getNotifiactionService()->notify($thread['userId'], 'group-thread', $message);
         }
-        if ($action == 'setStick') {
+        if ('setStick' == $action) {
             $this->getThreadService()->setStick($threadId);
             $message['type'] = 'top';
             $this->getNotifiactionService()->notify($thread['userId'], 'group-thread', $message);
         }
-        if ($action == 'removeStick') {
+        if ('removeStick' == $action) {
             $this->getThreadService()->removeStick($threadId);
             $message['type'] = 'untop';
             $this->getNotifiactionService()->notify($thread['userId'], 'group-thread', $message);
         }
-        if ($action == 'closeThread') {
+        if ('closeThread' == $action) {
             $this->getThreadService()->closeThread($threadId);
             $message['type'] = 'close';
             $this->getNotifiactionService()->notify($thread['userId'], 'group-thread', $message);
         }
-        if ($action == 'openThread') {
+        if ('openThread' == $action) {
             $this->getThreadService()->openThread($threadId);
             $message['type'] = 'open';
             $this->getNotifiactionService()->notify($thread['userId'], 'group-thread', $message);
@@ -318,7 +319,7 @@ class GroupController extends BaseController
                 );
                 break;
             default:
-                throw $this->createServiceException('参数sort不正确。');
+                $this->createNewException(CommonException::ERROR_PARAMETER());
         }
 
         return $orderBys;
@@ -336,7 +337,7 @@ class GroupController extends BaseController
             unset($conditions['threadType']);
         }
 
-        if (isset($conditions['groupName']) && $conditions['groupName'] !== '') {
+        if (isset($conditions['groupName']) && '' !== $conditions['groupName']) {
             $group = $this->getGroupService()->findGroupByTitle($conditions['groupName']);
             if (!empty($group)) {
                 $conditions['groupId'] = $group[0]['id'];
@@ -345,7 +346,7 @@ class GroupController extends BaseController
             }
         }
 
-        if (isset($conditions['userName']) && $conditions['userName'] !== '') {
+        if (isset($conditions['userName']) && '' !== $conditions['userName']) {
             $user = $this->getUserService()->getUserByNickname($conditions['userName']);
             if (!empty($user)) {
                 $conditions['userId'] = $user['id'];

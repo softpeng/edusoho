@@ -8,6 +8,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Endroid\QrCode\QrCode;
 use Biz\CloudPlatform\Client\CloudAPI;
 use Biz\CloudPlatform\CloudAPIFactory;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class MobileController extends BaseController
 {
@@ -26,7 +27,7 @@ class MobileController extends BaseController
     {
         $referrer = $request->headers->get('Referer');
         $isBaiduMobile = 'm.baidu.com';
-        if (strpos($referrer, $isBaiduMobile) !== false) {
+        if (false !== strpos($referrer, $isBaiduMobile)) {
             return $this->redirectToRoute('homepage');
         }
 
@@ -50,7 +51,7 @@ class MobileController extends BaseController
     public function downloadQrcodeAction(Request $request)
     {
         $code = $request->get('code');
-        $url = $this->generateUrl('mobile_download', array('from' => 'qrcode', 'code' => $code), true);
+        $url = $this->generateUrl('mobile_download', array('from' => 'qrcode', 'code' => $code), UrlGeneratorInterface::ABSOLUTE_URL);
         $qrCode = new QrCode();
         $qrCode->setText($url);
         $qrCode->setSize(150);
@@ -69,6 +70,24 @@ class MobileController extends BaseController
         $baseUrl = $request->getSchemeAndHttpHost();
 
         return $this->redirect($baseUrl.'/mapi_v2/School/getDownloadUrl?'.http_build_query($params));
+    }
+
+    public function usertermsAction(Request $request)
+    {
+        $setting = $this->getSettingService()->get('auth', array());
+
+        return $this->render('mobile/mobile-view-container.html.twig', array(
+            'content' => empty($setting['user_terms_body']) ? '' : $setting['user_terms_body'],
+        ));
+    }
+
+    public function privacyPolicyAction(Request $request)
+    {
+        $setting = $this->getSettingService()->get('auth', array());
+
+        return $this->render('mobile/mobile-view-container.html.twig', array(
+            'content' => empty($setting['privacy_policy_body']) ? '' : $setting['privacy_policy_body'],
+        ));
     }
 
     /**

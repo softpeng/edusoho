@@ -27,7 +27,7 @@
     </div>
     <div class="panel-body clearfix" id="post-action">
       <div class="well well-sm text-sm color-gray clearfix" style="line-height:20px">
-        <div class="es-share dropdown pull-right">
+        <div class="es-share dropdown pull-right js-es-share">
           <span class="es-share top" style="font-size:14px;">
             <a href="javascript:;" class="gray-dark" data-toggle="dropdown"><i class="es-icon es-icon-share"></i> {{'group.thread.share_label'|trans}}</a>
             {% include 'common/share-dropdown.html.twig' with {type:'group_thread', thread:threadMain, group:groupinfo} %}
@@ -35,15 +35,15 @@
         </div>
         <div class="pull-right mrm" id="thread-list">
           {% if threadMain.userId != user.id %}
-            <a href="javascript:;" class="uncollect-btn link-dark" data-url="{{ path('group_thread_uncollect', {threadId:threadMain.id}) }}" {% if isCollected == false %} style="display:none;"{% endif %}><i class="es-icon es-icon-favorite mrs"></i> {{'group.thread.favorited_btn'|trans}}</a>
-            <a href="javascript:;" class="collect-btn link-dark" data-url="{{ path('group_thread_collect', {threadId:threadMain.id}) }}" {% if isCollected == true %} style="display:none;"{% endif %}><i class="es-icon es-icon-favoriteoutline mrs"></i>{{'group.thread.favorite_btn'|trans}}</a>
+            <a href="javascript:;" class="uncollect-btn link-dark" data-target-type="thread" data-target-id="{{ threadMain.id }}" {% if isCollected == false %} style="display:none;"{% endif %}><i class="es-icon es-icon-favorite mrs"></i> {{'group.thread.favorited_btn'|trans}}</a>
+            <a href="javascript:;" class="collect-btn link-dark" data-target-type="thread" data-target-id="{{ threadMain.id }}" {% if isCollected == true %} style="display:none;"{% endif %}><i class="es-icon es-icon-favoriteoutline mrs"></i>{{'group.thread.favorite_btn'|trans}}</a>
           {% endif %}
         </div>
         {{'group.thread.created_time'|trans({'%createdTime%':threadMain.createdTime|smart_time})}}
         <span class="mll"> {{'group.thread.hit_num'|trans({'%hitNum%':threadMain.hitNum})}}</span>
       </div>
       <div class="editor-text">
-        {{threadMain.content|raw}}
+        {{threadMain.content|cdn|raw}}
       </div>
 
       {% include 'attachment/widget/list.html.twig' with {targetType:'group.thread', targetId:threadMain.id} %}
@@ -123,7 +123,7 @@
               </div>
 
               <div class="content editor-text">
-                {{post.content|raw}}
+                {{post.content|cdn|raw}}
                   {% include 'attachment/widget/list.html.twig' with {targetType:'group.thread.post', targetId:post.id} %}
               </div>
 
@@ -141,10 +141,10 @@
                 {% endif %}
 
                 {% if not subPosts %}
-                  <a href="javascript:" class="reply" id="reply-{{post.id}}"  postId="{{post.id}}" postName="{{postMember[post.userId].nickname}}" data-from-user-id-nosub="{{postMember[post.userId].id}}">{{'group.thread.reply_btn'|trans}}</a>
+                  <a href="javascript:" class="reply" id="reply-{{post.id}}"  postId="{{post.id}}" postName="{% if not postMember[post.userId].destroyed|default(0) %}{{postMember[post.userId].nickname}}{% else %}{{ 'user.user_had_destroyed'|trans }}{% endif %}" data-from-user-id-nosub="{{postMember[post.userId].id}}">{{'group.thread.reply_btn'|trans}}</a>
                   <a href="javascript:" class="unreply" id="unreply-{{post.id}}" postId="{{post.id}}" style="display:none;">{{'group.thread.collapse_btn'|trans}}</a>
                 {% else %}
-                  <a style="display:none;" href="javascript:" class="reply" id="reply-{{post.id}}"  postId="{{post.id}}" postName="{{postMember[post.userId].nickname}}" data-from-user-id-nosub="">{{'group.thread.reply_btn'|trans}}({{postReplyCount[post.id]}})</a>
+                  <a style="display:none;" href="javascript:" class="reply" id="reply-{{post.id}}"  postId="{{post.id}}" postName="{% if not postMember[post.userId].destroyed|default(0) %}{{postMember[post.userId].nickname}}{% else %}{{ 'user.user_had_destroyed'|trans }}{% endif %}" data-from-user-id-nosub="">{{'group.thread.reply_btn'|trans}}({{postReplyCount[post.id]}})</a>
                   <a href="javascript:" class="unreply" id="unreply-{{post.id}}" postId="{{post.id}}" >{{'group.thread.collapse_btn'|trans}}</a>
                 {% endif %}
               </div>

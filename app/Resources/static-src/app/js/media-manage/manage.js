@@ -47,7 +47,6 @@ class Manage {
       $.ajax({
         url: data.url,
         type: 'GET',
-        notSetHeader: true,
       }).done(_this.showSubtitleContent);
     });
     select.on('deleteoption', function(data) {
@@ -70,11 +69,14 @@ class Manage {
   initUploader() {
     let select = this.select;
 
-    let videoNo = $uploader.data('mediaGlobalId');;
+    let videoNo = $uploader.data('mediaGlobalId');
     let mediaId = $uploader.data('mediaId');
     let subtitleCreateUrl = $uploader.data('subtitleCreateUrl');
     
     let uploader = new UploaderSDK({
+      sdkBaseUri: app.cloudSdkBaseUri,
+      disableDataUpload: app.cloudDisableLogReport,
+      disableSentry: app.cloudDisableLogReport,
       initUrl: $uploader.data('initUrl'),
       finishUrl: $uploader.data('finishUrl'),
       id: 'uploader',
@@ -86,7 +88,9 @@ class Manage {
       },
       type: 'sub',
       process: {
-        videoNo: videoNo
+        common: {
+          videoNo: videoNo
+        }
       }
     });
 
@@ -98,9 +102,9 @@ class Manage {
 
     uploader.on('file.finish', function(file) {
       $.post(subtitleCreateUrl, {
-        "name": file.name,
-        "subtitleId": file.id,
-        "mediaId": mediaId
+        'name': file.name,
+        'subtitleId': file.id,
+        'mediaId': mediaId
       }).success(function (data) {
         if (!data) {
           return;
@@ -114,7 +118,7 @@ class Manage {
             if (data.subtitles) {
               select.resetOptions(data.subtitles);
             }
-          })
+          });
         }, 5000);
       }).error(function(data) {
         notify('danger', Translator.trans(data.responseJSON.error.message));
@@ -128,7 +132,7 @@ class Manage {
     try {
       captions.parse(data);
     } catch(e) {
-      notify('danger', Translator.trans('subtitle.parse_error_hint'))
+      notify('danger', Translator.trans('subtitle.parse_error_hint'));
       $textTrackDisplay.html(Translator.trans('subtitle.parse_error_hint'));
       return;
     }
@@ -163,7 +167,7 @@ class Manage {
           $subtitleDom.eq(last.index - 2).addClass('active');
         }
       }, 0);
-    })
+    });
   }
   
 }

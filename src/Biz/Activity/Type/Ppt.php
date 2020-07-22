@@ -6,6 +6,8 @@ use AppBundle\Common\ArrayToolkit;
 use Biz\Activity\Config\Activity;
 use Biz\Activity\Dao\PptActivityDao;
 use Biz\Activity\Service\ActivityService;
+use Biz\Common\CommonException;
+use Biz\File\Service\UploadFileService;
 
 class Ppt extends Activity
 {
@@ -13,29 +15,18 @@ class Ppt extends Activity
     {
     }
 
-    public function isFinished($activityId)
-    {
-        $activity = $this->getActivityService()->getActivity($activityId);
-        $ppt = $this->getPptActivityDao()->get($activity['mediaId']);
-
-        if ($ppt['finishType'] === 'time') {
-            $result = $this->getTaskResultService()->getMyLearnedTimeByActivityId($activityId);
-            $result /= 60;
-
-            return !empty($result) && $result >= $ppt['finishDetail'];
-        }
-
-        if ($ppt['finishType'] === 'end') {
-            $log = $this->getActivityLearnLogService()->getMyRecentFinishLogByActivityId($activityId);
-
-            return !empty($log);
-        }
-
-        return false;
-    }
-
     public function create($fields)
     {
+        if (empty($fields['media'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $media = json_decode($fields['media'], true);
+
+        if (empty($media['id'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $fields['mediaId'] = $media['id'];
+
         $default = array(
             'finishDetail' => 1,
             'finishType' => 'end',
@@ -48,8 +39,8 @@ class Ppt extends Activity
             'finishDetail',
         ));
 
-        $biz = $this->getBiz();
-        $ppt['createdUserId'] = $biz['user']['id'];
+        $user = $this->getCurrentUser();
+        $ppt['createdUserId'] = $user['id'];
         $ppt['createdTime'] = time();
 
         $ppt = $this->getPptActivityDao()->create($ppt);
@@ -59,13 +50,13 @@ class Ppt extends Activity
 
     public function copy($activity, $config = array())
     {
-        $biz = $this->getBiz();
+        $user = $this->getCurrentUser();
         $ppt = $this->getPptActivityDao()->get($activity['mediaId']);
         $newPpt = array(
             'mediaId' => $ppt['mediaId'],
             'finishType' => $ppt['finishType'],
             'finishDetail' => $ppt['finishDetail'],
-            'createdUserId' => $biz['user']['id'],
+            'createdUserId' => $user['id'],
         );
 
         return $this->getPptActivityDao()->create($newPpt);
@@ -84,6 +75,16 @@ class Ppt extends Activity
 
     public function update($targetId, &$fields, $activity)
     {
+        if (empty($fields['media'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $media = json_decode($fields['media'], true);
+
+        if (empty($media['id'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $fields['mediaId'] = $media['id'];
+
         $updateFields = ArrayToolkit::parts($fields, array(
             'mediaId',
             'finishType',
@@ -102,10 +103,16 @@ class Ppt extends Activity
 
     public function get($targetId)
     {
-        return $this->getPptActivityDao()->get($targetId);
+        $activity = $this->getPptActivityDao()->get($targetId);
+
+        if ($activity) {
+            $activity['file'] = $this->getUploadFileService()->getFullFile($activity['mediaId']);
+        }
+
+        return $activity;
     }
 
-    public function find($targetIds)
+    public function find($targetIds, $showCloud = 1)
     {
         return $this->getPptActivityDao()->findByIds($targetIds);
     }
@@ -113,6 +120,11 @@ class Ppt extends Activity
     public function materialSupported()
     {
         return true;
+    }
+
+    public function findWithoutCloudFiles($targetIds)
+    {
+        return $this->getPptActivityDao()->findByIds($targetIds);
     }
 
     /**
@@ -129,5 +141,13 @@ class Ppt extends Activity
     protected function getActivityService()
     {
         return $this->getBiz()->service('Activity:ActivityService');
+    }
+
+    /**
+     * @return UploadFileService
+     */
+    protected function getUploadFileService()
+    {
+        return $this->getBiz()->service('File:UploadFileService');
     }
 }

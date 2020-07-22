@@ -3,10 +3,14 @@
 namespace ApiBundle\Api\Resource\Order;
 
 use ApiBundle\Api\ApiRequest;
-use ApiBundle\Api\Exception\ErrorCode;
 use ApiBundle\Api\Resource\AbstractResource;
-use Biz\Order\Service\OrderFacadeService;
+use Biz\Common\CommonException;
+use Biz\Order\OrderException;
+use Biz\OrderFacade\Exception\OrderPayCheckException;
+use Biz\OrderFacade\Product\Product;
+use Biz\OrderFacade\Service\OrderFacadeService;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class Order extends AbstractResource
 {
@@ -16,15 +20,100 @@ class Order extends AbstractResource
 
         if (empty($params['targetId'])
             || empty($params['targetType'])) {
-            throw new BadRequestHttpException('Params missing', null, ErrorCode::INVALID_ARGUMENT);
+            throw CommonException::ERROR_PARAMETER_MISSING();
+        }
+
+        $this->filterParams($params);
+
+        try {
+            /* @var $product Product */
+            $product = $this->getOrderFacadeService()->getOrderProduct($params['targetType'], $params);
+            $product->setPickedDeduct($params);
+
+            $this->addCreateDealers($request);
+
+            $order = $this->getOrderFacadeService()->create($product);
+
+            if (!empty($params['isOrderCreate'])) {
+                return $order;
+            }
+            // 优惠卷全额抵扣
+            if ($this->getOrderFacadeService()->isOrderPaid($order['id'])) {
+                return array(
+                    'id' => $order['id'],
+                    'sn' => $order['sn'],
+                );
+            } else {
+                $this->handleParams($params, $order);
+                $apiRequest = new ApiRequest('/api/trades', 'POST', array(), $params);
+                $trade = $this->invokeResource($apiRequest);
+
+                return array(
+                    'id' => $trade['tradeSn'],
+                    'sn' => $trade['tradeSn'],
+                );
+            }
+        } catch (OrderPayCheckException $payCheckException) {
+            throw new BadRequestHttpException($payCheckException->getMessage(), $payCheckException, $payCheckException->getCode());
+        }
+    }
+
+    public function get(ApiRequest $request, $sn)
+    {
+        $order = $this->getOrderService()->getOrderBySn($sn);
+        if (!$order) {
+            throw OrderException::NOTFOUND_ORDER();
+        }
+        $paymentTrade = $this->getPayService()->getTradeByTradeSn($order['trade_sn']);
+        $order['platform_sn'] = $paymentTrade['platform_sn'];
+        $userId = $this->getCurrentUser()->getId();
+        if ($this->getCurrentUser()->isAdmin()) {
+            return $order;
+        } elseif ($userId == $order['user_id']) {
+            return $order;
+        }
+    }
+
+    public function filterParams(&$params)
+    {
+        if (isset($params['coinPayAmount'])) {
+            $params['coinAmount'] = $params['coinPayAmount'];
+            unset($params['coinPayAmount']);
         }
 
         if (isset($params['payPassword'])) {
             $params['payPassword'] = $this->decrypt($params['payPassword']);
         }
 
-        list($order) = $this->getOrderFacadeService()->createOrder($params['targetType'], $params['targetId'], $params);
-        return $order;
+        if (isset($params['unencryptedPayPassword'])) {
+            $params['payPassword'] = $params['unencryptedPayPassword'];
+        }
+    }
+
+    public function handleParams(&$params, $order)
+    {
+        $params['gateway'] = (!empty($params['payment']) && 'wechat' == $params['payment']) ? 'WechatPay_MWeb' : 'Alipay_LegacyWap';
+        $params['type'] = 'purchase';
+        $params['app_pay'] = isset($params['appPay']) && 'Y' == $params['appPay'] ? 'Y' : 'N';
+        $params['orderSn'] = $order['sn'];
+        if (isset($params['payPassword'])) {
+            $params['unencryptedPayPassword'] = $params['payPassword'];
+        }
+        if ('Alipay_LegacyWap' == $params['gateway']) {
+            $params['return_url'] = $this->generateUrl('cashier_pay_return_for_app', array('payment' => 'alipay'), UrlGeneratorInterface::ABSOLUTE_URL);
+            $params['show_url'] = $this->generateUrl('cashier_pay_return_for_app', array('payment' => 'alipay'), UrlGeneratorInterface::ABSOLUTE_URL);
+        }
+    }
+
+    private function addCreateDealers($request)
+    {
+        $serviceNames = array('Distributor:DistributorProductDealerService');
+
+        foreach ($serviceNames as $serviceName) {
+            $service = $this->getBiz()->service($serviceName);
+            $service->setParams($request->getHttpRequest()->cookies->all());
+            $this->getOrderFacadeService()->addDealer($service);
+        }
     }
 
     private function decrypt($payPassword)
@@ -33,10 +122,26 @@ class Order extends AbstractResource
     }
 
     /**
+     * @return OrderService
+     */
+    protected function getOrderService()
+    {
+        return $this->getBiz()->service('Order:OrderService');
+    }
+
+    /**
      * @return OrderFacadeService
      */
     private function getOrderFacadeService()
     {
-        return $this->service('Order:OrderFacadeService');
+        return $this->service('OrderFacade:OrderFacadeService');
+    }
+
+    /**
+     * @return PayService
+     */
+    protected function getPayService()
+    {
+        return $this->service('Pay:PayService');
     }
 }

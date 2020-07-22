@@ -6,6 +6,8 @@ use Biz\BaseService;
 use Biz\Sign\Dao\SignTargetStatisticsDao;
 use Biz\Sign\Dao\SignUserLogDao;
 use Biz\Sign\Dao\SignUserStatisticsDao;
+use Biz\Sign\SignException;
+use Biz\User\UserException;
 use Codeages\Biz\Framework\Event\Event;
 use Biz\Sign\Service\SignService;
 
@@ -16,13 +18,13 @@ class SignServiceImpl extends BaseService implements SignService
         $user = $this->getUserService()->getUser($userId);
 
         if (empty($user)) {
-            throw $this->createNotFoundException('用户不存在.', 404);
+            $this->createNewException(UserException::NOTFOUND_USER());
         }
 
         $isSignedToday = $this->isSignedToday($userId, $targetType, $targetId);
 
         if ($isSignedToday) {
-            throw $this->createServiceException('今日已签到!', 403);
+            $this->createNewException(SignException::DUPLICATE_SIGN());
         }
 
         $sign = array();
@@ -33,7 +35,7 @@ class SignServiceImpl extends BaseService implements SignService
 
         $sign = $this->getSignUserLogDao()->create($sign);
         $statistics = $this->targetSignedNumIncrease($targetType, $targetId, date('Ymd', time()));
-        $this->getSignUserLogDao()->update($sign['id'], array('rank' => $statistics['signedNum']));
+        $this->getSignUserLogDao()->update($sign['id'], array('_rank' => $statistics['signedNum']));
         $this->refreshKeepDays($userId, $targetType, $targetId);
 
         $this->dispatchEvent('class.signed', new Event($sign));
@@ -51,7 +53,7 @@ class SignServiceImpl extends BaseService implements SignService
         return empty($signs) ? false : true;
     }
 
-    public function isYestodaySigned($userId, $targetType, $targetId)
+    public function isYesterdaySigned($userId, $targetType, $targetId)
     {
         $startTimeToday = strtotime(date('y-n-d 0:0:0', strtotime('-1 days')));
         $endTimeToday = strtotime(date('y-n-d 23:59:59', strtotime('-1 days')));
@@ -84,7 +86,7 @@ class SignServiceImpl extends BaseService implements SignService
     {
         $todaySign = $this->findSignRecordsByPeriod($userId, $targetType, $targetId, date('y-n-d'), date('y-n-d'));
 
-        return $todaySign ? $todaySign['0']['rank'] : -1;
+        return $todaySign ? $todaySign['0']['_rank'] : -1;
     }
 
     protected function refreshKeepDays($userId, $targetType, $targetId)
@@ -92,8 +94,7 @@ class SignServiceImpl extends BaseService implements SignService
         $statistics = $this->getSignUserStatisticsDao()->getStatisticsByUserIdAndTargetTypeAndTargetId($userId, $targetType, $targetId);
 
         if ($statistics) {
-            $statistics = $this->isYestodaySigned($userId, $targetType, $targetId);
-            if ($statistics) {
+            if ($this->isYesterdaySigned($userId, $targetType, $targetId)) {
                 $this->getSignUserStatisticsDao()->update($statistics['id'], array('keepDays' => $statistics['keepDays'] + 1));
             } else {
                 $this->getSignUserStatisticsDao()->update($statistics['id'], array('keepDays' => 1));

@@ -1,6 +1,6 @@
-import postal from "postal";
+import postal from 'postal';
 import QuestionForm from './form';
-import Question from './question'
+import Question from './question';
 
 class QuestionPlugin {
   constructor() {
@@ -23,9 +23,10 @@ class QuestionPlugin {
       this.$element.find('.empty-item').remove();
     });
 
-    channel.subscribe('back-to-list', () => this.onBackList())
+    channel.subscribe('back-to-list', () => this.onBackList());
+    channel.subscribe('js-more-show', (event) => this.onToggleShow(event));
 
-      $("[data-toggle='popover']").popover();
+    $('[data-toggle=\'popover\']').popover();
   }
 
   onRedirectQuestion(event) {
@@ -40,6 +41,12 @@ class QuestionPlugin {
     this.question && this.question.destroy();
     this.$list.show();
     this.$detail.hide();
+  }
+
+  onToggleShow(event) {
+    const $target = $(event.currentTarget);
+    $target.find('.js-change-btn').toggle();
+    $target.prev().toggleClass('active');
   }
 }
 

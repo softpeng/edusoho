@@ -3,15 +3,19 @@
 namespace Biz\Content\Service\Impl;
 
 use Biz\BaseService;
+use Biz\Common\CommonException;
 use Biz\Content\Dao\FileDao;
 use Biz\Content\Dao\FileGroupDao;
+use Biz\Content\FileException;
 use Biz\Content\Service\FileService;
 use Biz\Course\Service\CourseService;
 use Biz\System\Service\SettingService;
+use Biz\User\UserException;
 use Symfony\Component\HttpFoundation\File\File;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use AppBundle\Common\ArrayToolkit;
 use AppBundle\Common\FileToolkit;
+use Symfony\Component\Filesystem\Filesystem;
 
 class FileServiceImpl extends BaseService implements FileService
 {
@@ -61,7 +65,7 @@ class FileServiceImpl extends BaseService implements FileService
     {
         $user = $this->getCurrentUser();
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('用户尚未登录。');
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         return $this->addFile($group, $file);
@@ -72,7 +76,7 @@ class FileServiceImpl extends BaseService implements FileService
         $errors = FileToolkit::validateFileExtension($file);
         if ($errors) {
             @unlink($file->getRealPath());
-            throw $this->createServiceException('该文件格式，不允许上传。');
+            $this->createNewException(FileException::FILE_UPLOAD_NOT_ALLOWED());
         }
         $group = $this->getGroupDao()->getByCode($group);
 
@@ -176,14 +180,16 @@ class FileServiceImpl extends BaseService implements FileService
     protected function saveFile(File $file, $uri)
     {
         $parsed = $this->parseFileUri($uri);
-        if ($parsed['access'] == 'public') {
-            $directory = realpath($this->biz['topxia.upload.public_directory']);
+        if ('public' == $parsed['access']) {
+            $path = $this->biz['topxia.upload.public_directory'];
         } else {
-            $directory = realpath($this->biz['topxia.upload.private_directory']);
+            $path = $this->biz['topxia.upload.private_directory'];
         }
 
+        $this->checkDirectoryExist($path);
+        $directory = realpath($path);
         if (!is_writable($directory)) {
-            throw $this->createServiceException(sprintf('文件上传路径%s不可写，文件上传失败。', $directory));
+            $this->createNewException(FileException::FILE_DIRECTORY_UN_WRITABLE());
         }
 
         $directory .= '/'.$parsed['directory'];
@@ -198,6 +204,16 @@ class FileServiceImpl extends BaseService implements FileService
         return $newFile;
     }
 
+    protected function checkDirectoryExist($dirPath)
+    {
+        $fileSystem = new FileSystem();
+        if (!$fileSystem->exists($dirPath)) {
+            $fileSystem->mkdir($dirPath, 0777);
+        }
+
+        return true;
+    }
+
     protected function generateUri($group, File $file)
     {
         if ($file instanceof UploadedFile) {
@@ -209,7 +225,7 @@ class FileServiceImpl extends BaseService implements FileService
         $filenameParts = explode('.', $filename);
         $ext = array_pop($filenameParts);
         if (empty($ext)) {
-            throw $this->createServiceException('获取文件扩展名失败！');
+            $this->createNewException(FileException::FILE_EXT_PARSE_FAILED());
         }
 
         $uri = ($group['public'] ? 'public://' : 'private://').$group['code'].'/';
@@ -227,15 +243,15 @@ class FileServiceImpl extends BaseService implements FileService
     {
         $parsed = array();
         $parts = explode('://', $uri);
-        if (empty($parts) || count($parts) != 2) {
-            throw $this->createServiceException(sprintf('解析文件URI(%s)失败！', $uri));
+        if (empty($parts) || 2 != count($parts)) {
+            $this->createNewException(FileException::FILE_PARSE_URI_FAILED());
         }
         $parsed['access'] = $parts[0];
         $parsed['path'] = $parts[1];
         $parsed['directory'] = dirname($parsed['path']);
         $parsed['name'] = basename($parsed['path']);
 
-        if ($parsed['access'] == 'public') {
+        if ('public' == $parsed['access']) {
             $directory = $this->biz['topxia.upload.public_directory'];
         } else {
             $directory = $this->biz['topxia.upload.private_directory'];
@@ -304,12 +320,12 @@ class FileServiceImpl extends BaseService implements FileService
     public function getImgFileMetaInfo($fileId, $scaledWidth, $scaledHeight)
     {
         if (empty($fileId)) {
-            throw $this->createInvalidArgumentException('参数不正确');
+            $this->createNewException(CommonException::ERROR_PARAMETER());
         }
 
         $file = $this->getFile($fileId);
         if (empty($file)) {
-            throw $this->createNotFoundException('文件不存在');
+            $this->createNewException(FileException::FILE_NOT_FOUND());
         }
 
         $parsed = $this->parseFileUri($file['uri']);

@@ -2,30 +2,35 @@
 
 namespace AppBundle\Controller;
 
-use Biz\User\CurrentUser;
-use AppBundle\Common\Paginator;
-use Vip\Service\Vip\VipService;
-use Biz\User\Service\AuthService;
-use Biz\User\Service\UserService;
-use Vip\Service\Vip\LevelService;
 use AppBundle\Common\ArrayToolkit;
-use Biz\Group\Service\GroupService;
+use AppBundle\Common\Paginator;
+use AppBundle\Common\SmsToolkit;
+use Biz\Classroom\Service\ClassroomService;
+use Biz\Course\Service\CourseNoteService;
 use Biz\Course\Service\CourseService;
+use Biz\Course\Service\CourseSetService;
 use Biz\Course\Service\MemberService;
 use Biz\Course\Service\ThreadService;
+use Biz\Favorite\Service\FavoriteService;
+use Biz\Group\Service\GroupService;
 use Biz\System\Service\SettingService;
-use Biz\User\Service\UserFieldService;
-use Biz\Course\Service\CourseSetService;
-use Biz\Course\Service\CourseNoteService;
+use Biz\User\CurrentUser;
+use Biz\User\Service\AuthService;
 use Biz\User\Service\NotificationService;
-use Biz\Classroom\Service\ClassroomService;
+use Biz\User\Service\UserFieldService;
+use Biz\User\Service\UserService;
+use Biz\User\UserException;
 use Symfony\Component\HttpFoundation\Request;
-use AppBundle\Common\SmsToolkit;
+use Vip\Service\Vip\LevelService;
+use Vip\Service\Vip\VipService;
 
 class UserController extends BaseController
 {
     public function headerBlockAction($user)
     {
+        if (1 == $user['destroyed']) {
+            return $this->render('user/header-destroyed-block.html.twig', ['user' => $user]);
+        }
         $userProfile = $this->getUserService()->getUserProfile($user['id']);
         $user = array_merge($user, $userProfile);
 
@@ -40,12 +45,12 @@ class UserController extends BaseController
         // 粉丝数
         $follower = $this->getUserService()->findUserFollowerCount($user['id']);
 
-        return $this->render('user/header-block.html.twig', array(
+        return $this->render('user/header-block.html.twig', [
             'user' => $user,
             'isFollowed' => $isFollowed,
             'following' => $following,
             'follower' => $follower,
-        ));
+        ]);
     }
 
     public function showAction(Request $request, $id)
@@ -70,7 +75,7 @@ class UserController extends BaseController
         if (!$user->isLogin()) {
             return $this->createMessageResponse('error', '用户未登录，请先登录！');
         } else {
-            return $this->redirect($this->generateUrl('user_show', array('id' => $user['id'])));
+            return $this->redirect($this->generateUrl('user_show', ['id' => $user['id']]));
         }
     }
 
@@ -110,21 +115,21 @@ class UserController extends BaseController
         $userProfile['about'] = strip_tags($userProfile['about'], '');
         $userProfile['about'] = preg_replace('/ /', '', $userProfile['about']);
         $user = array_merge($user, $userProfile);
-        $classrooms = array();
+        $classrooms = [];
 
-        $studentClassrooms = $this->getClassroomService()->searchMembers(array('role' => 'student', 'userId' => $user['id']), array('createdTime' => 'desc'), 0, PHP_INT_MAX);
-        $auditorClassrooms = $this->getClassroomService()->searchMembers(array('role' => 'auditor', 'userId' => $user['id']), array('createdTime' => 'desc'), 0, PHP_INT_MAX);
+        $studentClassrooms = $this->getClassroomService()->searchMembers(['role' => 'student', 'userId' => $user['id']], ['createdTime' => 'desc'], 0, PHP_INT_MAX);
+        $auditorClassrooms = $this->getClassroomService()->searchMembers(['role' => 'auditor', 'userId' => $user['id']], ['createdTime' => 'desc'], 0, PHP_INT_MAX);
 
         $classrooms = array_merge($studentClassrooms, $auditorClassrooms);
 
         $classroomIds = ArrayToolkit::column($classrooms, 'classroomId');
 
         if (!empty($classroomIds)) {
-            $conditions = array(
+            $conditions = [
                 'status' => 'published',
                 'showable' => '1',
                 'classroomIds' => $classroomIds,
-            );
+            ];
 
             $paginator = new Paginator(
                 $this->get('request'),
@@ -134,14 +139,14 @@ class UserController extends BaseController
 
             $classrooms = $this->getClassroomService()->searchClassrooms(
                 $conditions,
-                array('createdTime' => 'DESC'),
+                ['createdTime' => 'DESC'],
                 $paginator->getOffsetCount(),
                 $paginator->getPerPageCount()
             );
 
             foreach ($classrooms as $key => $classroom) {
                 if (empty($classroom['teacherIds'])) {
-                    $classroomTeacherIds = array();
+                    $classroomTeacherIds = [];
                 } else {
                     $classroomTeacherIds = $classroom['teacherIds'];
                 }
@@ -157,11 +162,11 @@ class UserController extends BaseController
             );
         }
 
-        return $this->render('user/classroom-learning.html.twig', array(
+        return $this->render('user/classroom-learning.html.twig', [
             'paginator' => $paginator,
             'classrooms' => $classrooms,
             'user' => $user,
-        ));
+        ]);
     }
 
     public function teachingAction(Request $request, $id)
@@ -171,11 +176,11 @@ class UserController extends BaseController
         $userProfile['about'] = strip_tags($userProfile['about'], '');
         $userProfile['about'] = preg_replace('/ /', '', $userProfile['about']);
         $user = array_merge($user, $userProfile);
-        $conditions = array(
-            'roles' => array('teacher', 'headTeacher'),
+        $conditions = [
+            'roles' => ['teacher', 'headTeacher'],
             'userId' => $user['id'],
-        );
-        $classroomMembers = $this->getClassroomService()->searchMembers($conditions, array('createdTime' => 'desc'), 0, PHP_INT_MAX);
+        ];
+        $classroomMembers = $this->getClassroomService()->searchMembers($conditions, ['createdTime' => 'desc'], 0, PHP_INT_MAX);
 
         $classroomIds = ArrayToolkit::column($classroomMembers, 'classroomId');
         if (empty($classroomIds)) {
@@ -184,13 +189,13 @@ class UserController extends BaseController
                 0,
                 20
             );
-            $classrooms = array();
+            $classrooms = [];
         } else {
-            $conditions = array(
+            $conditions = [
                 'status' => 'published',
                 'showable' => '1',
                 'classroomIds' => $classroomIds,
-            );
+            ];
 
             $paginator = new Paginator(
                 $this->get('request'),
@@ -200,14 +205,14 @@ class UserController extends BaseController
 
             $classrooms = $this->getClassroomService()->searchClassrooms(
                 $conditions,
-                array('createdTime' => 'DESC'),
+                ['createdTime' => 'DESC'],
                 $paginator->getOffsetCount(),
                 $paginator->getPerPageCount()
             );
 
             foreach ($classrooms as $key => $classroom) {
                 if (empty($classroom['teacherIds'])) {
-                    $classroomTeacherIds = array();
+                    $classroomTeacherIds = [];
                 } else {
                     $classroomTeacherIds = $classroom['teacherIds'];
                 }
@@ -217,11 +222,11 @@ class UserController extends BaseController
             }
         }
 
-        return $this->render('user/classroom-teaching.html.twig', array(
+        return $this->render('user/classroom-teaching.html.twig', [
             'paginator' => $paginator,
             'classrooms' => $classrooms,
             'user' => $user,
-        ));
+        ]);
     }
 
     public function favoritedAction(Request $request, $id)
@@ -232,22 +237,30 @@ class UserController extends BaseController
         $userProfile['about'] = preg_replace('/ /', '', $userProfile['about']);
         $user = array_merge($user, $userProfile);
 
+        $conditions = [
+            'userId' => $user['id'],
+            'targetTypes' => ['course', 'openCourse'],
+        ];
+
         $paginator = new Paginator(
             $this->get('request'),
-            $this->getCourseSetService()->countUserFavorites($user['id']),
+            $this->getFavoriteService()->countFavorites($conditions),
             20
         );
 
-        $favorites = $this->getCourseSetService()->searchUserFavorites(
-            $user['id'], $paginator->getOffsetCount(), $paginator->getPerPageCount()
+        $favorites = $this->getFavoriteService()->searchFavorites(
+            $conditions,
+            ['createdTime' => 'DESC'],
+            $paginator->getOffsetCount(),
+            $paginator->getPerPageCount()
         );
 
-        return $this->render('user/courses_favorited.html.twig', array(
+        return $this->render('user/courses_favorited.html.twig', [
             'user' => $user,
             'courseFavorites' => $favorites,
             'paginator' => $paginator,
             'type' => 'favorited',
-        ));
+        ]);
     }
 
     public function groupAction(Request $request, $id)
@@ -257,11 +270,11 @@ class UserController extends BaseController
         $userProfile['about'] = strip_tags($userProfile['about'], '');
         $userProfile['about'] = preg_replace('/ /', '', $userProfile['about']);
         $user = array_merge($user, $userProfile);
-        $admins = $this->getGroupService()->searchMembers(array('userId' => $user['id'], 'role' => 'admin'),
-            array('createdTime' => 'DESC'), 0, 1000
+        $admins = $this->getGroupService()->searchMembers(['userId' => $user['id'], 'role' => 'admin'],
+            ['createdTime' => 'DESC'], 0, 1000
         );
-        $owners = $this->getGroupService()->searchMembers(array('userId' => $user['id'], 'role' => 'owner'),
-            array('createdTime' => 'DESC'), 0, 1000
+        $owners = $this->getGroupService()->searchMembers(['userId' => $user['id'], 'role' => 'owner'],
+            ['createdTime' => 'DESC'], 0, 1000
         );
         $members = array_merge($admins, $owners);
         $groupIds = ArrayToolkit::column($members, 'groupId');
@@ -269,23 +282,23 @@ class UserController extends BaseController
 
         $paginator = new Paginator(
             $this->get('request'),
-            $this->getGroupService()->countMembers(array('userId' => $user['id'], 'role' => 'member')),
+            $this->getGroupService()->countMembers(['userId' => $user['id'], 'role' => 'member']),
             20
         );
 
-        $members = $this->getGroupService()->searchMembers(array('userId' => $user['id'], 'role' => 'member'), array('createdTime' => 'DESC'), $paginator->getOffsetCount(),
+        $members = $this->getGroupService()->searchMembers(['userId' => $user['id'], 'role' => 'member'], ['createdTime' => 'DESC'], $paginator->getOffsetCount(),
             $paginator->getPerPageCount());
 
         $groupIds = ArrayToolkit::column($members, 'groupId');
         $groups = $this->getGroupService()->getGroupsByids($groupIds);
 
-        return $this->render('user/group.html.twig', array(
+        return $this->render('user/group.html.twig', [
             'user' => $user,
             'type' => 'group',
             'adminGroups' => $adminGroups,
             'paginator' => $paginator,
             'groups' => $groups,
-        ));
+        ]);
     }
 
     public function followingAction(Request $request, $id)
@@ -306,20 +319,20 @@ class UserController extends BaseController
 
         if ($followings) {
             $followingIds = ArrayToolkit::column($followings, 'id');
-            $followingUserProfiles = ArrayToolkit::index($this->getUserService()->searchUserProfiles(array('ids' => $followingIds), array('id' => 'ASC'), 0, count($followingIds)), 'id');
+            $followingUserProfiles = ArrayToolkit::index($this->getUserService()->searchUserProfiles(['ids' => $followingIds], ['id' => 'ASC'], 0, count($followingIds)), 'id');
         }
 
         $myfollowings = $this->_getUserFollowing();
 
-        return $this->render('user/friend.html.twig', array(
+        return $this->render('user/friend.html.twig', [
             'user' => $user,
             'paginator' => $paginator,
             'friends' => $followings,
             'userProfile' => $userProfile,
             'myfollowings' => $myfollowings,
-            'allUserProfile' => isset($followingUserProfiles) ? $followingUserProfiles : array(),
+            'allUserProfile' => isset($followingUserProfiles) ? $followingUserProfiles : [],
             'friendNav' => 'following',
-        ));
+        ]);
     }
 
     public function followerAction(Request $request, $id)
@@ -341,24 +354,24 @@ class UserController extends BaseController
 
         if ($followers) {
             $followerIds = ArrayToolkit::column($followers, 'id');
-            $followerUserProfiles = ArrayToolkit::index($this->getUserService()->searchUserProfiles(array('ids' => $followerIds), array('id' => 'ASC'), 0, count($followerIds)), 'id');
+            $followerUserProfiles = ArrayToolkit::index($this->getUserService()->searchUserProfiles(['ids' => $followerIds], ['id' => 'ASC'], 0, count($followerIds)), 'id');
         }
 
-        return $this->render('user/friend.html.twig', array(
+        return $this->render('user/friend.html.twig', [
             'user' => $user,
             'paginator' => $paginator,
             'friends' => $followers,
             'userProfile' => $userProfile,
             'myfollowings' => $myfollowings,
-            'allUserProfile' => isset($followerUserProfiles) ? $followerUserProfiles : array(),
+            'allUserProfile' => isset($followerUserProfiles) ? $followerUserProfiles : [],
             'friendNav' => 'follower',
-        ));
+        ]);
     }
 
     public function remindCounterAction(Request $request)
     {
         $user = $this->getCurrentUser();
-        $counter = array('newMessageNum' => 0, 'newNotificationNum' => 0);
+        $counter = ['newMessageNum' => 0, 'newNotificationNum' => 0];
 
         if ($user->isLogin()) {
             $counter['newMessageNum'] = $user['newMessageNum'];
@@ -373,7 +386,7 @@ class UserController extends BaseController
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException();
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         $this->getUserService()->unFollow($user['id'], $id);
@@ -386,7 +399,7 @@ class UserController extends BaseController
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException();
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         $this->getUserService()->follow($user['id'], $id);
@@ -400,13 +413,13 @@ class UserController extends BaseController
         $currentUser = $this->getCurrentUser();
 
         if (!$currentUser->isLogin()) {
-            $response = array('success' => false, 'message' => '请先登入');
+            $response = ['success' => false, 'message' => '请先登入'];
         }
 
         if (!$this->getUserService()->verifyPassword($currentUser['id'], $password)) {
-            $response = array('success' => false, 'message' => '输入的密码不正确');
+            $response = ['success' => false, 'message' => '输入的密码不正确'];
         } else {
-            $response = array('success' => true, 'message' => '');
+            $response = ['success' => true, 'message' => ''];
         }
 
         return $this->createJsonResponse($response);
@@ -426,19 +439,19 @@ class UserController extends BaseController
         $user['learningNum'] = $this->getCourseService()->countUserLearningCourses($userId);
         $user['followingNum'] = $this->getUserService()->findUserFollowingCount($userId);
         $user['followerNum'] = $this->getUserService()->findUserFollowerCount($userId);
-        $levels = array();
+        $levels = [];
 
         if ($this->isPluginInstalled('Vip')) {
-            $levels = ArrayToolkit::index($this->getLevelService()->searchLevels(array('enabled' => 1), null, 0, 100), 'id');
+            $levels = ArrayToolkit::index($this->getLevelService()->searchLevels(['enabled' => 1], null, 0, 100), 'id');
         }
 
-        return $this->render('user/card-show.html.twig', array(
+        return $this->render('user/card-show.html.twig', [
             'user' => $user,
             'profile' => $profile,
             'isFollowed' => $isFollowed,
             'levels' => $levels,
             'nowTime' => time(),
-        ));
+        ]);
     }
 
     public function fillUserInfoAction(Request $request)
@@ -456,9 +469,9 @@ class UserController extends BaseController
 
         $goto = $this->getTargetPath($request);
 
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $formData = $request->request->all();
-            $authSetting = $this->setting('auth', array());
+            $authSetting = $this->setting('auth', []);
 
             if (!empty($formData['mobile']) && !empty($authSetting['mobileSmsValidate'])) {
                 list($result, $sessionField, $requestField) = SmsToolkit::smsCheck($request, 'sms_bind');
@@ -477,11 +490,11 @@ class UserController extends BaseController
         $userFields = ArrayToolkit::index($userFields, 'fieldName');
         $userInfo = $this->getUserService()->getUserProfile($user['id']);
 
-        return $this->render('user/fill-userinfo-fields.html.twig', array(
+        return $this->render('user/fill-userinfo-fields.html.twig', [
             'userFields' => $userFields,
             'user' => $userInfo,
             'goto' => $goto,
-        ));
+        ]);
     }
 
     public function fillInfoWhenBuyAction(Request $request)
@@ -493,14 +506,50 @@ class UserController extends BaseController
 
         $this->saveUserInfo($request, $user);
 
-        return $this->redirect($request->get('targetUrl'));
+        /**
+         * 这里要重构,这段代码是多余了，为了兼容点击任务预览跳转支付页面
+         * TODO
+         */
+        $courseId = $request->request->get('courseId', 0);
+        if ($courseId) {
+            $this->getCourseService()->tryFreeJoin($courseId);
+            $member = $this->getCourseMemberService()->getCourseMember($courseId, $user['id']);
+            if ($member) {
+                return $this->createJsonResponse([
+                    'url' => $this->generateUrl('my_course_show', ['id' => $courseId]),
+                ]);
+            } else {
+                return $this->createJsonResponse([
+                    'url' => $this->generateUrl('order_show', ['targetId' => $courseId, 'targetType' => 'course']),
+                ]);
+            }
+        }
+        /* end todo */
+
+        return $this->createJsonResponse([
+            'msg' => 'success',
+        ]);
+    }
+
+    public function stickCourseSetAction(Request $request, $courseSetId)
+    {
+        $this->getCourseMemberService()->stickMyCourseByCourseSetId($courseSetId);
+
+        return $this->createJsonResponse(true);
+    }
+
+    public function unStickCourseSetAction(Request $request, $courseSetId)
+    {
+        $this->getCourseMemberService()->unStickMyCourseByCourseSetId($courseSetId);
+
+        return $this->createJsonResponse(true);
     }
 
     protected function saveUserInfo($request, $user)
     {
         $formData = $request->request->all();
 
-        $userInfo = ArrayToolkit::parts($formData, array(
+        $userInfo = ArrayToolkit::parts($formData, [
             'truename',
             'mobile',
             'qq',
@@ -515,17 +564,13 @@ class UserController extends BaseController
             'dateField1', 'dateField2', 'dateField3', 'dateField4', 'dateField5',
             'varcharField1', 'varcharField2', 'varcharField3', 'varcharField4', 'varcharField5', 'varcharField10', 'varcharField6', 'varcharField7', 'varcharField8', 'varcharField9',
             'textField1', 'textField2', 'textField3', 'textField4', 'textField5', 'textField6', 'textField7', 'textField8', 'textField9', 'textField10',
-        ));
+        ]);
 
         if (isset($formData['email']) && !empty($formData['email'])) {
             $this->getAuthService()->changeEmail($user['id'], null, $formData['email']);
-
-            if (!$user['setup']) {
-                $this->getUserService()->setupAccount($user['id']);
-            }
         }
 
-        $authSetting = $this->setting('auth', array());
+        $authSetting = $this->setting('auth', []);
         if (!empty($formData['mobile']) && !empty($authSetting['fill_userinfo_after_login']) && !empty($authSetting['mobileSmsValidate'])) {
             $verifiedMobile = $formData['mobile'];
             $this->getUserService()->changeMobile($user['id'], $verifiedMobile);
@@ -545,7 +590,7 @@ class UserController extends BaseController
         $user = $this->getUserService()->getUser($id);
 
         if (empty($user)) {
-            throw $this->createNotFoundException();
+            $this->createNewException(UserException::NOTFOUND_USER());
         }
 
         return $user;
@@ -555,11 +600,11 @@ class UserController extends BaseController
     {
         $userProfile = $this->getUserService()->getUserProfile($user['id']);
 
-        return $this->render('user/about.html.twig', array(
+        return $this->render('user/about.html.twig', [
             'user' => $user,
             'userProfile' => $userProfile,
             'type' => 'about',
-        ));
+        ]);
     }
 
     protected function _learnAction($user)
@@ -576,39 +621,75 @@ class UserController extends BaseController
             $paginator->getPerPageCount()
         );
 
-        return $this->render('user/course-sets.html.twig', array(
+        return $this->render('user/course-sets.html.twig', [
             'user' => $user,
             'courseSets' => $courseSets,
             'paginator' => $paginator,
             'type' => 'learn',
-        ));
+        ]);
     }
 
     protected function _teachAction($user)
     {
-        $conditions = array(
+        $conditions = [
             'status' => 'published',
             'parentId' => 0,
-        );
+        ];
         $paginator = new Paginator(
             $this->get('request'),
             $this->getCourseSetService()->countUserTeachingCourseSets($user['id'], $conditions),
             20
         );
 
-        $sets = $this->getCourseSetService()->searchUserTeachingCourseSets(
-            $user['id'],
+        $sets = $this->getCourseSetService()->searchCourseSetsByTeacherOrderByStickTime(
             $conditions,
+            ['createdTime' => 'DESC'],
+            $user['id'],
             $paginator->getOffsetCount(),
             $paginator->getPerPageCount()
         );
 
-        return $this->render('user/course-sets.html.twig', array(
+        $sets = ArrayToolkit::index($sets, 'id');
+
+        //这里迫于当前逻辑是未发布计划也会算在内，所以这里没有找courseIds也没有加published条件
+//        $teachedCourseIds = $this->getCourseService()->searchCourses(
+//            array('userId' => $user['id']),
+//            array(),
+//            0,
+//            PHP_INT_MAX,
+//            array('courseId')
+//        );
+
+        $setIds = ArrayToolkit::column($sets, 'id');
+
+        $stickSeqCourseSetMembers = $this->getCourseMemberService()->searchMembers(
+            ['userId' => $user['id'], 'courseSetIds' => $setIds],
+            ['stickyTime' => 'DESC', 'createdTime' => 'DESC'],
+            0,
+            PHP_INT_MAX,
+            ['courseSetId', 'stickyTime']
+        );
+
+        foreach ($stickSeqCourseSetMembers as $stickSeqCourseSetMember) {
+            if (!empty($stickSeqCourseSetMember['stickyTime']) && isset($sets[$stickSeqCourseSetMember['courseSetId']])) {
+                $sets[$stickSeqCourseSetMember['courseSetId']]['stickyTime'] = $stickSeqCourseSetMember['stickyTime'];
+            }
+        }
+
+        if (count($sets) > 1) {
+            $stickSeqCourseSetIds = ArrayToolkit::column($stickSeqCourseSetMembers, 'courseSetId');
+
+            usort($sets, function ($a, $b) use ($stickSeqCourseSetIds) {
+                return (array_search($a['id'], $stickSeqCourseSetIds) < array_search($b['id'], $stickSeqCourseSetIds)) ? -1 : 1;
+            });
+        }
+
+        return $this->render('user/course-sets.html.twig', [
             'user' => $user,
             'courseSets' => $sets,
             'paginator' => $paginator,
             'type' => 'teach',
-        ));
+        ]);
     }
 
     protected function _getUserFollowing()
@@ -731,5 +812,13 @@ class UserController extends BaseController
     protected function getCourseSetService()
     {
         return $this->getBiz()->service('Course:CourseSetService');
+    }
+
+    /**
+     * @return FavoriteService
+     */
+    protected function getFavoriteService()
+    {
+        return $this->getBiz()->service('Favorite:FavoriteService');
     }
 }

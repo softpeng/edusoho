@@ -3,6 +3,8 @@
 namespace AppBundle\Controller\File;
 
 use AppBundle\Controller\BaseController;
+use Biz\File\UploadFileException;
+use Biz\User\UserException;
 use Topxia\Service\Common\ServiceKernel;
 use AppBundle\Util\UploaderToken;
 use Symfony\Component\HttpFoundation\Request;
@@ -13,6 +15,7 @@ class AttachmentController extends BaseController
     {
         $query = $request->query->all();
         $useSeajs = $request->query->get('useSeajs', false);
+        $module = $request->query->get('module', '');
         $parser = new UploaderToken();
         $params = $parser->parse($query['token']);
 
@@ -31,6 +34,7 @@ class AttachmentController extends BaseController
             'token' => $query['token'],
             'idsClass' => $query['idsClass'],
             'listClass' => $query['listClass'],
+            'module' => $module,
             'targetType' => $params['targetType'],
             'targetId' => $params['targetId'],
             'fileSize' => empty($attachmentSetting['fileSize']) ? 0 : $attachmentSetting['fileSize'],
@@ -72,23 +76,33 @@ class AttachmentController extends BaseController
         ));
     }
 
+    public function directVideoPreviewAction(Request $request, $id)
+    {
+        $ssl = $request->isSecure() ? true : false;
+        $file = $this->getUploadFileService()->getDownloadMetas($id, $ssl);
+
+        return $this->render('attachment/direct-video-preview.html.twig', array(
+            'url' => $file['url'],
+        ));
+    }
+
     public function playerAction(Request $request, $id)
     {
         $user = $this->getUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException();
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         $attachment = $this->getUploadFileService()->getUseFile($id);
         $file = $this->getUploadFileService()->getFile($attachment['fileId']);
 
-        if ($file['storage'] != 'cloud') {
-            throw $this->createNotFoundException('attachment not found');
+        if ('cloud' != $file['storage']) {
+            $this->createNewException(UploadFileException::NOTFOUND_ATTACHMENT());
         }
 
-        if ($file['targetType'] != 'attachment') {
-            throw $this->createNotFoundException('attachment not found');
+        if ('attachment' != $file['targetType']) {
+            $this->createNewException(UploadFileException::NOTFOUND_ATTACHMENT());
         }
 
         return $this->forward('AppBundle:MaterialLib/GlobalFilePlayer:player', array(
@@ -101,15 +115,15 @@ class AttachmentController extends BaseController
     {
         $user = $this->getUser();
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException();
+            $this->createNewException(UserException::UN_LOGIN());
         }
         $attachment = $this->getUploadFileService()->getUseFile($id);
 
         if (empty($attachment)) {
-            throw $this->createNotFoundException();
+            $this->createNewException(UploadFileException::NOTFOUND_ATTACHMENT());
         }
 
-        if ($attachment['type'] != 'attachment') {
+        if ('attachment' != $attachment['type']) {
             return $this->createMessageResponse('error', '无权下载该资料');
         }
 
@@ -123,10 +137,16 @@ class AttachmentController extends BaseController
 
     public function fileShowAction(Request $request, $fileId)
     {
+        $module = $request->query->get('module', '');
         $file = $this->getUploadFileService()->getFile($fileId);
         $attachment = array('file' => $file);
 
-        return $this->render('attachment/file-item.html.twig', array(
+        $template = 'attachment/file-item.html.twig';
+        if ('simple' == $module) {
+            $template = 'testpaper/subject/file-simple-item.html.twig';
+        }
+
+        return $this->render($template, array(
             'attachment' => $attachment,
         ));
     }
@@ -134,13 +154,13 @@ class AttachmentController extends BaseController
     public function deleteAction(Request $request, $id)
     {
         $previewType = $request->query->get('type', 'attachment');
-        if ($previewType == 'attachment') {
+        if ('attachment' == $previewType) {
             $this->getUploadFileService()->deleteUseFile($id);
         } else {
             if ($this->getUploadFileService()->canManageFile($id)) {
                 $this->getUploadFileService()->deleteFile($id);
             } else {
-                throw $this->createAccessDeniedException('opteration forbiddened');
+                $this->createNewException(UploadFileException::FORBIDDEN_MANAGE_FILE());
             }
         }
 

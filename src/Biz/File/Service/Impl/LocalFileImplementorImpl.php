@@ -6,8 +6,10 @@ use Biz\BaseService;
 use Biz\File\Dao\UploadFileDao;
 use Biz\File\Service\FileImplementor;
 use AppBundle\Common\FileToolkit;
+use Biz\File\UploadFileException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Biz\User\Service\UserService;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class LocalFileImplementorImpl extends BaseService implements FileImplementor
 {
@@ -24,13 +26,14 @@ class LocalFileImplementorImpl extends BaseService implements FileImplementor
         return $this->getFile($file);
     }
 
+    //@todo 目前没用到，如果用到，逻辑要改动
     public function addFile($targetType, $targetId, array $fileInfo = array(), UploadedFile $originalFile = null)
     {
         $errors = FileToolkit::validateFileExtension($originalFile);
 
         if ($errors) {
             @unlink($originalFile->getRealPath());
-            throw $this->createServiceException('该文件格式，不允许上传。');
+            $this->createNewException(UploadFileException::EXTENSION_NOT_ALLOWED());
         }
 
         $uploadFile = array();
@@ -42,7 +45,7 @@ class LocalFileImplementorImpl extends BaseService implements FileImplementor
 
         $filename = FileToolkit::generateFilename($uploadFile['ext']);
 
-        $uploadFile['hashId'] = "{$uploadFile['targetType']}/{$uploadFile['targetId']}/{$filename}";
+        $uploadFile['hashId'] = "{$targetType}/{$targetId}/{$filename}";
 
         $uploadFile['convertHash'] = "ch-{$uploadFile['hashId']}";
         $uploadFile['convertStatus'] = 'none';
@@ -68,7 +71,7 @@ class LocalFileImplementorImpl extends BaseService implements FileImplementor
 
     public function convertFile($file, $status, $result = null, $callback = null)
     {
-        throw $this->createServiceException('本地文件暂不支持转换');
+        $this->createNewException(UploadFileException::LOCAL_CONVERT_NOT_SUPPORT());
     }
 
     public function updateFile($file, $fields)
@@ -141,13 +144,14 @@ class LocalFileImplementorImpl extends BaseService implements FileImplementor
 
         if ($errors) {
             @unlink($originalFile->getRealPath());
-            throw $this->createServiceException('该文件格式，不允许上传。');
+            $this->createNewException(UploadFileException::EXTENSION_NOT_ALLOWED());
         }
 
         $targetPath = $this->getFilePath($targetType, $targetId);
 
         $filename = str_replace("{$targetType}/{$targetId}/", '', $data['hashId']);
-        $originalFile->move($targetPath, $filename);
+
+        return $originalFile->move($targetPath, $filename);
     }
 
     public function reconvertOldFile($file, $convertCallback, $pipeline = null)
@@ -212,7 +216,7 @@ class LocalFileImplementorImpl extends BaseService implements FileImplementor
     {
         global $kernel;
 
-        $url = $kernel->getContainer()->get('router')->generate('uploadfile_upload', $params, true);
+        $url = $kernel->getContainer()->get('router')->generate('uploadfile_upload', $params, UrlGeneratorInterface::ABSOLUTE_URL);
 
         return $url;
     }
@@ -235,6 +239,10 @@ class LocalFileImplementorImpl extends BaseService implements FileImplementor
 
     protected function getFilePath($targetType, $targetId)
     {
+        if (preg_match('/\/|\\\\/i', $targetType.$targetId, $matches)) {
+            $this->createNewException(UploadFileException::ARGUMENTS_INVALID());
+        }
+
         $baseDirectory = $this->biz['topxia.disk.local_directory'];
 
         return $baseDirectory.DIRECTORY_SEPARATOR.$targetType.DIRECTORY_SEPARATOR.$targetId;

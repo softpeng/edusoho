@@ -54,6 +54,67 @@ class ActivityDaoTest extends BaseDaoTestCase
         $this->assertArrayEquals($activity3, $activities[2], $this->getCompareKeys());
     }
 
+    public function testGetByCopyIdAndCourseSetId()
+    {
+        $activity1 = $this->mockActivity(array('title' => 'activity 1', 'copyId' => 1));
+        $activity = $this->getActivityDao()->getByCopyIdAndCourseSetId($activity1['copyId'], $activity1['fromCourseSetId']);
+
+        $this->assertArrayEquals($activity1, $activity, $this->getCompareKeys());
+    }
+
+    public function testFindSelfVideoActivityByCourseIds()
+    {
+        $activity1 = $this->getActivityDao()->findSelfVideoActivityByCourseIds(array());
+
+        $this->assertEquals($activity1, array());
+
+        $fields = array(
+            'id' => 1,
+            'mediaSource' => 'self',
+        );
+        $video = $this->getVideoActivityDao()->create($fields);
+        $activity1 = $this->mockActivity(array('title' => 'activity1', 'mediaType' => 'video', 'mediaId' => 1));
+        $activity2 = $this->mockActivity(array('title' => 'activity2', 'mediaId' => 1));
+        $activity3 = $this->mockActivity(array('title' => 'activity3', 'mediaType' => 'video'));
+        $activity4 = $this->mockActivity(array(
+            'title' => 'activity4',
+            'mediaType' => 'video',
+            'mediaId' => 1,
+            'fromCourseId' => 2,
+        ));
+        $activities = $this->getActivityDao()->findSelfVideoActivityByCourseIds(array(1, 2));
+
+        $this->assertEquals(count($activities), 2);
+        $this->assertEquals($activities[0]['fileId'], 0);
+        $this->assertArrayEquals($activity1, $activities[0], $this->getCompareKeys());
+        $this->assertArrayEquals($activity4, $activities[1], $this->getCompareKeys());
+    }
+
+    public function findFinishedLivesWithinTwoHours()
+    {
+        $expected = array();
+        $expected[1] = $this->mockDataObject(array('startTime' => time() - 3600 * 4, 'endTime' => time() - 3600 * 3, 'mediaType' => 'live'));
+        $expected[2] = $this->mockDataObject(array('startTime' => time() - 3600, 'endTime' => time() - 1800, 'mediaType' => 'live'));
+
+        $res = $this->getDao()->findFinishedLivesWithinTwoHours();
+        $testFields = $this->getCompareKeys();
+
+        $this->assertArrayEquals($expected[2], $res[0], $testFields);
+        $this->assertEquals(1, count($res));
+    }
+
+    public function testFindOverlapTimeActivitiesByCourseId()
+    {
+        $activity1 = $this->mockActivity(array('title' => 'activity1', 'startTime' => 20, 'endTime' => 30));
+        $activity2 = $this->mockActivity(array('title' => 'activity2', 'startTime' => 30, 'endTime' => 40));
+        $activity3 = $this->mockActivity(array('title' => 'activity3', 'startTime' => 25, 'endTime' => 35));
+        $activities = $this->getActivityDao()->findOverlapTimeActivitiesByCourseId(1, 30, 20, 2);
+
+        $this->assertEquals(count($activities), 2);
+        $this->assertArrayEquals($activity1, $activities[0], $this->getCompareKeys());
+        $this->assertArrayEquals($activity3, $activities[1], $this->getCompareKeys());
+    }
+
     protected function getDefaultMockFields()
     {
         return array(
@@ -64,6 +125,8 @@ class ActivityDaoTest extends BaseDaoTestCase
             'fromCourseId' => 1,
             'fromCourseSetId' => 1,
             'fromUserId' => 1,
+            'startTime' => time() - 1000,
+            'endTime' => time(),
         );
     }
 
@@ -84,5 +147,10 @@ class ActivityDaoTest extends BaseDaoTestCase
     protected function getActivityDao()
     {
         return $this->createDao('Activity:ActivityDao');
+    }
+
+    protected function getVideoActivityDao()
+    {
+        return $this->createDao('Activity:VideoActivityDao');
     }
 }

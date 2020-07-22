@@ -12,13 +12,13 @@ class PayPasswordModal {
   }
   validate() {
     let currentDom = this.currentDom;
-    let validator =  this.element.validate({
+    let validator = this.element.validate({
       ajax: true,
       currentDom,
       rules: {
-        'form[currentUserLoginPassword]':  {
+        'form[currentUserLoginPassword]': {
           required: true,
-          passwordCheck: true
+          es_remote: true
         },
         'form[newPayPassword]': {
           required: true,
@@ -37,9 +37,9 @@ class PayPasswordModal {
         notify('success', data.message);
         setTimeout(function() {
           window.location.reload();
-        },1000);
+        }, 1000);
       }
-    })
+    });
     return validator;
   }
   initEvent() {
@@ -54,5 +54,4 @@ class PayPasswordModal {
 new PayPasswordModal({
   element: '#settings-pay-password-form',
   currentDom: '.js-submit-form'
-})
-
+});

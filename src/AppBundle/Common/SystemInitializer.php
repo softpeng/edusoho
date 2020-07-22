@@ -10,14 +10,16 @@ use Biz\Crontab\SystemCrontabInitializer;
 use Biz\Dictionary\Service\DictionaryService;
 use Biz\Org\Service\OrgService;
 use Biz\Role\Service\RoleService;
+use Biz\System\Service\SettingService;
 use Biz\Taxonomy\Service\CategoryService;
 use Biz\Taxonomy\Service\TagService;
+use Biz\User\CurrentUser;
+use Biz\User\Service\UserService;
+use Codeages\Biz\Pay\Service\AccountService;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Filesystem\Filesystem;
 use Topxia\Service\Common\ServiceKernel;
-use Biz\System\Service\SettingService;
-use Biz\User\CurrentUser;
-use Biz\User\Service\UserService;
+use CustomBundle\Biz\Common\CustomSystemInitializer;
 
 class SystemInitializer
 {
@@ -39,9 +41,10 @@ class SystemInitializer
         $this->_initThemes();
         $this->_initCoin();
         $this->_initJob();
+        $this->_initQueueJob();
         $this->_initOrg();
         $this->_initRole();
-        $this->_initDictionary();
+        $this->_initUserBalance();
 
         $this->_initDefaultSetting();
         $this->_initMagicSetting();
@@ -51,33 +54,21 @@ class SystemInitializer
         $this->_initRefundSetting();
         $this->_initSiteSetting();
         $this->_initStorageSetting();
+        $this->_initCouponSetting();
+        $this->_initQuestionBankCategory();
         $this->_initSystemUsers();
+        $this->_initCustom();
     }
 
-    protected function _initDictionary()
+    public function _initCustom()
     {
-        $this->output->write('  初始化字典  ');
-
-        $dictionary = $this->getDictionaryService()->addDictionary(array(
-            'name' => '退学原因',
-            'type' => 'refund_reason',
-        ));
-
-        $this->getDictionaryService()->addDictionaryItem(array(
-            'type' => $dictionary['type'],
-            'name' => '课程内容质量差',
-            'createdTime' => time(),
-            'updateTime' => time(),
-        ));
-
-        $this->getDictionaryService()->addDictionaryItem(array(
-            'type' => $dictionary['type'],
-            'name' => '老师服务态度不好',
-            'createdTime' => time(),
-            'updateTime' => time(),
-        ));
-
-        $this->output->writeln(' ...<info>成功</info>');
+        try {
+            $biz = ServiceKernel::instance()->getBiz();
+            $customSystemInitializer = new CustomSystemInitializer($biz, $this->output);
+            $customSystemInitializer->init();
+        } catch (\Exception $e) {
+            $this->output->write('  定制初始化的数据异常'.$e->getMessage());
+        }
     }
 
     public function initAdminUser($fields)
@@ -208,7 +199,8 @@ class SystemInitializer
             'bank_gateway' => 'none',
             'alipay_enabled' => 0,
             'alipay_key' => '',
-            'alipay_secret' => '',
+            'alipay_accessKey' => '',
+            'alipay_secretKey' => '',
         );
 
         $this->getSettingService()->set('payment', $default);
@@ -252,7 +244,8 @@ class SystemInitializer
         $settingService->get('developer', array());
         $developer['cloud_api_failover'] = 1;
         $settingService->set('developer', $developer);
-
+        $settingService->set('backstage', array('is_v2' => 1));
+        $settingService->set('app_discovery', ['version' => 1]);
         $this->output->writeln(' ...<info>成功</info>');
     }
 
@@ -265,9 +258,23 @@ class SystemInitializer
             'cloud_api_server' => 'http://api.edusoho.net',
             'cloud_access_key' => '',
             'cloud_secret_key' => '',
+            'video_h5_enable' => 1,
         );
 
         $this->getSettingService()->set('storage', $default);
+
+        $this->output->writeln(' ...<info>成功</info>');
+    }
+
+    private function _initCouponSetting()
+    {
+        $this->output->write('  初始化优惠码设置');
+
+        $default = array(
+            'enabled' => 1,
+        );
+
+        $this->getSettingService()->set('coupon', $default);
 
         $this->output->writeln(' ...<info>成功</info>');
     }
@@ -608,7 +615,7 @@ EOD;
                         'data' => $data,
                     ));
                 } else {
-                    $this->getBlockService()->updateBlockTemplate($block['id'], array(
+                    $this->getBlockService()->updateBlockTemplate($block['blockTemplateId'], array(
                         'content' => $content,
                         'data' => $data,
                     ));
@@ -626,6 +633,17 @@ EOD;
         SystemCrontabInitializer::init();
 
         $this->output->writeln(' ...<info>成功</info>');
+    }
+
+    protected function _initQueueJob()
+    {
+        $this->output->write('  DataBase消息队列初始化');
+        try {
+            SystemQueueCrontabinitializer::init();
+            $this->output->writeln(' ...<info>成功</info>');
+        } catch (\Exception $e) {
+            $this->output->writeln(' ...<info>失败</info>'.$e->getMessage());
+        }
     }
 
     protected function _initSystemUsers()
@@ -673,6 +691,13 @@ EOD;
         $this->output->writeln(' ...<info>成功</info>');
     }
 
+    protected function _initQuestionBankCategory()
+    {
+        $this->output->write('  初始化题库默认分类');
+        $this->getQuestionBankCategoryService()->createCategory(array('name' => '默认分类', 'parentId' => 0));
+        $this->output->writeln(' ...<info>成功</info>');
+    }
+
     public function initLockFile()
     {
         $this->output->write('  初始化install.lock');
@@ -683,11 +708,27 @@ EOD;
     }
 
     /**
+     * 创建系统用户
+     */
+    private function _initUserBalance()
+    {
+        $this->getAccountService()->createUserBalance(array('user_id' => 0));
+    }
+
+    /**
      * @return TagService
      */
     protected function getTagService()
     {
         return ServiceKernel::instance()->getBiz()->service('Taxonomy:TagService');
+    }
+
+    /**
+     * @return AccountService
+     */
+    protected function getAccountService()
+    {
+        return ServiceKernel::instance()->getBiz()->service('Pay:AccountService');
     }
 
     /**
@@ -768,5 +809,13 @@ EOD;
     protected function getDictionaryService()
     {
         return ServiceKernel::instance()->getBiz()->service('Dictionary:DictionaryService');
+    }
+
+    /**
+     * @return \Biz\QuestionBank\Service\CategoryService
+     */
+    protected function getQuestionBankCategoryService()
+    {
+        return ServiceKernel::instance()->getBiz()->service('QuestionBank:CategoryService');
     }
 }

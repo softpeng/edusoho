@@ -3,6 +3,7 @@
 namespace Biz\Content\Service\Impl;
 
 use Biz\BaseService;
+use Biz\Content\ContentException;
 use Biz\Content\Dao\ContentDao;
 use Biz\Content\Service\ContentService;
 use Biz\Content\Type\ContentTypeFactory;
@@ -23,13 +24,13 @@ class ContentServiceImpl extends BaseService implements ContentService
         return $this->getContentDao()->getByAlias($alias);
     }
 
-    public function searchContents($conditions, $sort, $start, $limit)
+    public function searchContents($conditions, $orderBy, $start, $limit)
     {
-        switch ($sort) {
-            default:
-                $orderBy = array('createdTime' => 'DESC');
-                break;
+        if (!is_array($orderBy)) {
+            //老版本使用字符串表示顺序且只有一个latest,兼容orderBy为字符串时的写法
+            $orderBy = array('createdTime' => 'DESC');
         }
+
         $conditions = $this->prepareSearchConditions($conditions);
 
         return $this->getContentDao()->search($conditions, $orderBy, $start, $limit);
@@ -59,7 +60,7 @@ class ContentServiceImpl extends BaseService implements ContentService
         $user = $this->getCurrentUser();
 
         if (empty($content['type'])) {
-            throw $this->createInvalidArgumentException('参数缺失，创建内容失败！');
+            $this->createNewException(ContentException::TYPE_REQUIRED());
         }
 
         $type = ContentTypeFactory::create($content['type']);
@@ -68,9 +69,10 @@ class ContentServiceImpl extends BaseService implements ContentService
         $content['type'] = $type->getAlias();
 
         if (empty($content['title'])) {
-            throw $this->createInvalidArgumentException('内容标题不能为空，创建内容失败！');
+            $this->createNewException(ContentException::TITLE_REQUIRED());
         }
 
+        $content['title'] = $this->purifyHtml($content['title'], true);
         $content['userId'] = $this->getCurrentUser()->id;
         $content['createdTime'] = time();
 
@@ -79,8 +81,8 @@ class ContentServiceImpl extends BaseService implements ContentService
         }
 
         // if(isset($content['body'])){
-  //           $content['body'] = $this->purifyHtml($content['body']);
-  //       }
+        //           $content['body'] = $this->purifyHtml($content['body']);
+        //       }
 
         $tagIds = empty($content['tagIds']) ? array() : $content['tagIds'];
 
@@ -89,7 +91,6 @@ class ContentServiceImpl extends BaseService implements ContentService
         $content = $this->getContentDao()->create($content);
 
         $this->dispatchEvent('content.create', new Event(array('contentId' => $content['id'], 'userId' => $user['id'], 'tagIds' => $tagIds)));
-        $this->getLogService()->info('content', 'create', "创建内容《({$content['title']})》({$content['id']})", $content);
 
         return $content;
     }
@@ -101,7 +102,7 @@ class ContentServiceImpl extends BaseService implements ContentService
         $content = $this->getContent($id);
 
         if (empty($content)) {
-            throw $this->createNotFoundException('内容不存在，更新失败！');
+            $this->createNewException(ContentException::NOTFOUND_CONTENT());
         }
 
         $type = ContentTypeFactory::create($content['type']);
@@ -116,8 +117,6 @@ class ContentServiceImpl extends BaseService implements ContentService
 
         $content = $this->getContent($id);
 
-        $this->getLogService()->info('content', 'update', "内容《({$content['title']})》({$content['id']})更新", $content);
-
         $this->dispatchEvent('content.update', new Event(array('contentId' => $id, 'userId' => $user['id'], 'tagIds' => $tagIds)));
 
         return $content;
@@ -126,7 +125,6 @@ class ContentServiceImpl extends BaseService implements ContentService
     public function trashContent($id)
     {
         $this->getContentDao()->update($id, $fields = array('status' => 'trash'));
-        $this->getLogService()->info('content', 'trash', "内容#{$id}移动到回收站");
     }
 
     public function deleteContent($id)
@@ -134,13 +132,11 @@ class ContentServiceImpl extends BaseService implements ContentService
         $this->getContentDao()->delete($id);
 
         $this->dispatchEvent('content.delete', $id);
-        $this->getLogService()->info('content', 'delete', "内容#{$id}永久删除");
     }
 
     public function publishContent($id)
     {
         $this->getContentDao()->update($id, $fields = array('status' => 'published'));
-        $this->getLogService()->info('content', 'publish', "内容#{$id}发布");
     }
 
     public function isAliasAvaliable($alias)

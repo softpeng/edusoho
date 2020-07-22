@@ -11,7 +11,7 @@ interface LogService
      * @param string $action  操作
      * @param string $message 记录的详情
      */
-    public function info($module, $action, $message, array $data = null);
+    public function info($module, $action, $message, $data = null);
 
     /**
      * 记录警告日志.
@@ -20,7 +20,7 @@ interface LogService
      * @param string $action  操作
      * @param string $message 记录的详情
      */
-    public function warning($module, $action, $message, array $data = null);
+    public function warning($module, $action, $message, $data = null);
 
     /**
      * 记录错误日志.
@@ -29,7 +29,7 @@ interface LogService
      * @param string $action  操作
      * @param string $message 记录的详情
      */
-    public function error($module, $action, $message, array $data = null);
+    public function error($module, $action, $message, $data = null);
 
     /**
      * 日志搜索
@@ -49,6 +49,8 @@ interface LogService
      */
     public function searchLogs($conditions, $sort, $start, $limit);
 
+    public function searchOldLogs($conditions, $sort, $start, $limit);
+
     /**
      * 根据指定搜索条件返回该条数。
      *                 如array(
@@ -64,23 +66,13 @@ interface LogService
      */
     public function searchLogCount($conditions);
 
+    public function searchOldLogCount($conditions);
+
     public function analysisLoginNumByTime($startTime, $endTime);
 
     public function analysisLoginDataByTime($startTime, $endTime);
 
-    /**
-     * [findLogModule 获取全部的日志模块莫名称,插件根据安装情况显示].
-     *
-     * @return [type] [description]
-     */
-    public function getLogModuleDicts();
+    public function getModules();
 
-    /**
-     * [findLogActionDictsyModule 根据模块名称获取可选操作].
-     *
-     * @param [type] $module [description]
-     *
-     * @return [type] [description]
-     */
-    public function findLogActionDictsyModule($module);
+    public function getActionsByModule($module);
 }

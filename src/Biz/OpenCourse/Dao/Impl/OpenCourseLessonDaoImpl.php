@@ -56,6 +56,21 @@ class OpenCourseLessonDaoImpl extends GeneralDaoImpl implements OpenCourseLesson
         return $this->db()->delete($this->table, array('courseId' => $id));
     }
 
+    public function searchLessonsWithOrderBy($conditions, $start, $limit)
+    {
+        $builder = $this->createQueryBuilder($conditions)
+            ->select('*, (CASE WHEN endTime < UNIX_TIMESTAMP(NOW()) THEN 1 WHEN startTime > UNIX_TIMESTAMP(NOW()) THEN 2 ELSE 3 END) AS weight,
+        (
+            CASE WHEN endTime < UNIX_TIMESTAMP(NOW()) THEN UNIX_TIMESTAMP(NOW()) - endTime ELSE startTime
+            END) AS seq')
+            ->addOrderBy('weight', 'DESC')
+            ->addOrderBy('seq', 'ASC')
+        ->setFirstResult($start)
+        ->setMaxResults($limit);
+
+        return $builder->execute()->fetchAll();
+    }
+
     public function findTimeSlotOccupiedLessonsByCourseId($courseId, $startTime, $endTime, $excludeLessonId = 0)
     {
         $addtionalCondition = ';';
@@ -77,6 +92,15 @@ class OpenCourseLessonDaoImpl extends GeneralDaoImpl implements OpenCourseLesson
         $sql = "SELECT MAX(seq) FROM {$this->table()} WHERE  courseId = ?";
 
         return $this->db()->fetchColumn($sql, array($courseId));
+    }
+
+    public function findFinishedLivesWithinTwoHours()
+    {
+        $currentTime = time();
+        $expiredTime = 3600 * 2;
+        $sql = "SELECT * FROM {$this->table} WHERE type = 'liveOpen' AND {$currentTime} > endTime AND ({$currentTime} - endTime) < {$expiredTime} AND replayStatus = 'ungenerated' AND progressStatus != 'closed';";
+
+        return $this->db()->fetchAll($sql, array());
     }
 
     protected function createQueryBuilder($conditions)

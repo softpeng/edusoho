@@ -2,7 +2,6 @@
 {% set bodyClass = 'bg-blank open-course-list' %}
 {% set mobile = is_show_mobile_page() %}
 {% set siteNav = 'open/course/explore' %}
-{% do script(['libs/echo-js.js','app/js/open-course/explore/index.js'])%}
 
 {% block title %} {{'explore.open_course.title'|trans}} - {{ parent() }}{% endblock %}
 {% block top_content %}
@@ -26,6 +25,8 @@
   {% endif %}
 {% endblock %}
 {% block content %}
+  {{ render(controller('AppBundle:Category:treeNav',{request:app.request, category:category, tags:tags, group:'open_course'})) }}
+
   <div class="open-course-list">
     <div class="row course-list es-open-course-list">
       {% for course in courses if course %}
@@ -40,7 +41,7 @@
             <span class="tag-live"></span>
           </span>
                 {% endif %}
-                {{ lazy_img(filepath(course.middlePicture, 'course.png'), 'img-responsive', course.title) }}
+                {{ lazy_img(filepath(course.largePicture, 'course.png'), 'img-responsive', course.title) }}
               </a>
               {% if course.type == 'liveOpen' and lessons %}
                 <div class="mask">
@@ -61,7 +62,9 @@
               </div>
               <div class="metas pull-right">
                 <span class="num"><i class="es-icon es-icon-removeredeye"></i>{{ course.hitNum }}</span>
-                <span class="comment"><i class="es-icon es-icon-textsms"></i>{{ course.postNum }}</span>
+                {% if setting('openCourse.show_comment', '1') == 1 %}
+                  <span class="comment"><i class="es-icon es-icon-textsms"></i>{{ course.postNum }}</span>
+                {% endif %}
               </div>
             </div>
 

@@ -1,1 +1,0 @@
-webpackJsonp(["app/css/main-red"],[function(n,p){}]);

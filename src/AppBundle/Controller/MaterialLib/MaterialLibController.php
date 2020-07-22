@@ -7,7 +7,11 @@ use Biz\File\Service\UploadFileShareHistoryService;
 use AppBundle\Common\Paginator;
 use AppBundle\Common\ArrayToolkit;
 use AppBundle\Controller\BaseController;
+use Biz\Taxonomy\Service\TagService;
+use Biz\User\UserException;
 use Symfony\Component\HttpFoundation\Request;
+use Biz\File\UploadFileException;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class MaterialLibController extends BaseController
 {
@@ -16,7 +20,7 @@ class MaterialLibController extends BaseController
         $currentUser = $this->getCurrentUser();
 
         if (!$currentUser->isTeacher() && !$currentUser->isAdmin()) {
-            throw $this->createAccessDeniedException('access denied');
+            return $this->createMessageResponse('error', '您不是老师，不能查看此页面！');
         }
 
         return $this->render('material-lib/web/material-thumb-view.html.twig', array(
@@ -35,7 +39,7 @@ class MaterialLibController extends BaseController
         }
 
         $queryString = $request->query->get('q');
-        $tags = $this->getTagService()->getTagByLikeName($queryString);
+        $tags = $this->getTagService()->findTagsByLikeName($queryString);
 
         foreach ($tags as $tag) {
             $data[] = array('id' => $tag['id'], 'name' => $tag['name']);
@@ -49,7 +53,7 @@ class MaterialLibController extends BaseController
         $currentUser = $this->getCurrentUser();
 
         if (!$currentUser->isTeacher() && !$currentUser->isAdmin()) {
-            throw $this->createAccessDeniedException('access denied');
+            $this->createNewException(UserException::PERMISSION_DENIED());
         }
 
         $currentUserId = $currentUser['id'];
@@ -100,7 +104,7 @@ class MaterialLibController extends BaseController
         $currentUser = $this->getCurrentUser();
 
         if (!$currentUser->isTeacher() && !$currentUser->isAdmin()) {
-            throw $this->createAccessDeniedException('您无权访问此页面');
+            $this->createNewException(UserException::PERMISSION_DENIED());
         }
 
         $currentUserId = $currentUser['id'];
@@ -142,12 +146,6 @@ class MaterialLibController extends BaseController
     public function previewAction(Request $request, $fileId)
     {
         $file = $this->getUploadFileService()->tryAccessFile($fileId);
-        if ($file['storage'] == 'cloud') {
-            return $this->forward('AppBundle:Admin/CloudFile:preview', array(
-                'request' => $request,
-                'globalId' => $file['globalId'],
-            ));
-        }
 
         return $this->render('material-lib/web/preview.html.twig', array(
             'file' => $file,
@@ -158,7 +156,7 @@ class MaterialLibController extends BaseController
     {
         $file = $this->getUploadFileService()->tryAccessFile($fileId);
 
-        if ($file['storage'] == 'cloud') {
+        if ('cloud' == $file['storage']) {
             return $this->forward('AppBundle:MaterialLib/GlobalFilePlayer:player', array(
                 'request' => $request,
                 'globalId' => $file['globalId'],
@@ -184,19 +182,19 @@ class MaterialLibController extends BaseController
         $currentUser = $this->getCurrentUser();
         $file = $this->getUploadFileService()->tryAccessFile($fileId);
 
-        if ($file['storage'] == 'local' || $currentUser['id'] != $file['createdUserId']) {
+        if ('local' == $file['storage'] || $currentUser['id'] != $file['createdUserId']) {
             $fileTags = $this->getUploadFileTagService()->findByFileId($fileId);
             $tags = $this->getTagService()->findTagsByIds(ArrayToolkit::column($fileTags, 'tagId'));
             $file['tags'] = ArrayToolkit::column($tags, 'name');
 
-            return $this->render('material-lib/Web/static-detail.html.twig', array(
+            return $this->render('material-lib/web/static-detail.html.twig', array(
                 'material' => $file,
                 'thumbnails' => '',
                 'editUrl' => $this->generateUrl('material_edit', array('fileId' => $file['id'])),
             ));
         } else {
             try {
-                if ($file['type'] == 'video') {
+                if ('video' == $file['type']) {
                     $thumbnails = $this->getCloudFileService()->getDefaultHumbnails($file['globalId']);
                 }
             } catch (\RuntimeException $e) {
@@ -217,10 +215,8 @@ class MaterialLibController extends BaseController
         $currentUser = $this->getCurrentUser();
 
         if (!$currentUser->isTeacher() && !$currentUser->isAdmin()) {
-            throw $this->createAccessDeniedException('access denied');
+            $this->createNewException(UserException::PERMISSION_DENIED());
         }
-
-        $currentUserId = $currentUser['id'];
 
         $allTeachers = $this->getUserService()->searchUsers(
             array('roles' => 'ROLE_TEACHER', 'locked' => 0),
@@ -229,9 +225,19 @@ class MaterialLibController extends BaseController
             1000
         );
 
+        $teacherData = array();
+
+        foreach ($allTeachers as $teacher) {
+            if ($teacher['id'] != $currentUser['id']) {
+                array_push($teacherData, array(
+                    'id' => $teacher['id'],
+                    'text' => $teacher['nickname'],
+                ));
+            }
+        }
+
         return $this->render('material-lib/web/my-share/share-my-materials.html.twig', array(
-            'allTeachers' => $allTeachers,
-            'currentUserId' => $currentUserId,
+            'teacherData' => $teacherData,
         ));
     }
 
@@ -240,7 +246,7 @@ class MaterialLibController extends BaseController
         $user = $this->getCurrentUser();
 
         if (!$user->isTeacher() && !$user->isAdmin()) {
-            throw $this->createAccessDeniedException('access denied');
+            $this->createNewException(UserException::PERMISSION_DENIED());
         }
 
         $conditions['sourceUserId'] = $user['id'];
@@ -271,14 +277,29 @@ class MaterialLibController extends BaseController
             $targetUsers = $this->getUserService()->findUsersByIds($targetUserIds);
         }
 
-        $allTeachers = $this->getUserService()->searchUsers(array('roles' => 'ROLE_TEACHER', 'locked' => 0), array('nickname' => 'ASC'), 0, 1000);
+        $allTeachers = $this->getUserService()->searchUsers(
+            array('roles' => 'ROLE_TEACHER', 'locked' => 0),
+            array('nickname' => 'ASC'),
+            0,
+            1000
+        );
+
+        $teacherData = array();
+
+        foreach ($allTeachers as $teacher) {
+            if ($teacher['id'] != $user['id']) {
+                array_push($teacherData, array(
+                    'id' => $teacher['id'],
+                    'text' => $teacher['nickname'],
+                ));
+            }
+        }
 
         return $this->render('material-lib/web/my-share/material-share-history.html.twig', array(
             'shareHistories' => isset($shareHistories) ? $shareHistories : array(),
             'targetUsers' => isset($targetUsers) ? $targetUsers : array(),
             'source' => 'myShareHistory',
-            'currentUserId' => $user['id'],
-            'allTeachers' => $allTeachers,
+            'teacherData' => $teacherData,
             'paginator' => $paginator,
         ));
     }
@@ -288,7 +309,7 @@ class MaterialLibController extends BaseController
         $user = $this->getCurrentUser();
 
         if (!$user->isTeacher() && !$user->isAdmin()) {
-            throw $this->createAccessDeniedException('access denied');
+            $this->createNewException(UserException::PERMISSION_DENIED());
         }
 
         $conditions['sourceUserId'] = $user['id'];
@@ -333,7 +354,7 @@ class MaterialLibController extends BaseController
         $user = $this->getCurrentUser();
 
         if (!$user->isTeacher() && !$user->isAdmin()) {
-            throw $this->createAccessDeniedException('access denied');
+            $this->createNewException(UserException::PERMISSION_DENIED());
         }
 
         $conditions['sourceUserId'] = $user['id'];
@@ -377,7 +398,7 @@ class MaterialLibController extends BaseController
         $user = $this->getCurrentUser();
 
         if (!$user->isTeacher() && !$user->isAdmin()) {
-            throw $this->createAccessDeniedException('access denied');
+            $this->createNewException(UserException::PERMISSION_DENIED());
         }
 
         $mySharingContacts = $this->getUploadFileService()->findMySharingContacts($user['id']);
@@ -390,11 +411,12 @@ class MaterialLibController extends BaseController
         $currentUser = $this->getCurrentUser();
 
         if (!$currentUser->isTeacher() && !$currentUser->isAdmin()) {
-            throw $this->createAccessDeniedException('access denied');
+            $this->createNewException(UserException::PERMISSION_DENIED());
         }
 
         $currentUserId = $currentUser['id'];
         $targetUserIds = $request->request->get('targetUserIds');
+        $targetUserIds = explode(',', $targetUserIds);
 
         if (!empty($targetUserIds)) {
             foreach ($targetUserIds as $targetUserId) {
@@ -423,7 +445,7 @@ class MaterialLibController extends BaseController
         $currentUser = $this->getCurrentUser();
 
         if (!$currentUser->isTeacher() && !$currentUser->isAdmin()) {
-            throw $this->createAccessDeniedException('access denied');
+            $this->createNewException(UserException::PERMISSION_DENIED());
         }
 
         $currentUserId = $currentUser['id'];
@@ -434,9 +456,9 @@ class MaterialLibController extends BaseController
             $this->getUploadFileShareHistoryService()->addShareHistory($currentUserId, $targetUserId, 0);
 
             $targetUser = $this->getUserService()->getUser($targetUserId);
-            $userUrl = $this->generateUrl('user_show', array('id' => $currentUser['id']), true);
+            $userUrl = $this->generateUrl('user_show', array('id' => $currentUser['id']), UrlGeneratorInterface::ABSOLUTE_URL);
             $toMyShareUrl = $this->generateUrl('material_lib_browsing', array('type' => 'all', 'viewMode' => 'thumb', 'source' => 'shared'));
-            $this->getNotificationService()->notify($targetUser['id'], 'default', "<a href='{$userUrl}' target='_blank'><strong>{$currentUser['nickname']}</strong></a>".$this->getServiceKernel()->trans('已取消分享资料给你，')."<a href='{$toMyShareUrl}'>".$this->getServiceKernel()->trans('点击查看').'</a>');
+            $this->getNotificationService()->notify($targetUser['id'], 'default', "<a href='{$userUrl}' target='_blank'><strong>{$currentUser['nickname']}</strong></a>".$this->trans('已取消分享资料给你，')."<a href='{$toMyShareUrl}'>".$this->trans('点击查看').'</a>');
         }
 
         return $this->createJsonResponse(true);
@@ -474,6 +496,10 @@ class MaterialLibController extends BaseController
 
     public function downloadAction(Request $request, $fileId)
     {
+        if (!$this->getCourseSetService()->hasCourseSetManageRole()) {
+            $this->createNewException(UploadFileException::PERMISSION_DENIED());
+        }
+
         $this->getUploadFileService()->tryAccessFile($fileId);
 
         return $this->forward('AppBundle:UploadFile:download', array(
@@ -510,7 +536,7 @@ class MaterialLibController extends BaseController
     {
         $data = $request->request->all();
 
-        if (isset($data['ids']) && $data['ids'] != '') {
+        if (isset($data['ids']) && '' != $data['ids']) {
             foreach ($data['ids'] as $fileId) {
                 $this->getUploadFileService()->tryManageFile($fileId);
             }
@@ -527,7 +553,7 @@ class MaterialLibController extends BaseController
     {
         $data = $request->request->all();
 
-        if (isset($data['ids']) && $data['ids'] != '') {
+        if (isset($data['ids']) && '' != $data['ids']) {
             foreach ($data['ids'] as $fileId) {
                 $this->getUploadFileService()->tryManageFile($fileId);
             }
@@ -582,6 +608,9 @@ class MaterialLibController extends BaseController
         return $this->createService('System:SettingService');
     }
 
+    /**
+     * @return TagService
+     */
     protected function getTagService()
     {
         return $this->createService('Taxonomy:TagService');
@@ -621,5 +650,10 @@ class MaterialLibController extends BaseController
     protected function getCourseMaterialService()
     {
         return $this->createService('Course:MaterialService');
+    }
+
+    protected function getCourseSetService()
+    {
+        return $this->createService('Course:CourseSetService');
     }
 }

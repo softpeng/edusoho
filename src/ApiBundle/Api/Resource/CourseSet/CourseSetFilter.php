@@ -10,16 +10,18 @@ use ApiBundle\Api\Util\Money;
 class CourseSetFilter extends Filter
 {
     protected $simpleFields = array(
-        'id', 'title', 'subtitle', 'summary', 'type', 'cover', 'studentNum', 'maxCoursePrice', 'minCoursePrice', 'discount', 'maxOriginPrice', 'minOriginPrice'
+        'id', 'title', 'subtitle', 'summary', 'type', 'cover', 'studentNum', 'maxCoursePrice', 'minCoursePrice', 'discount', 'discountType', 'maxOriginPrice', 'minOriginPrice', 'status',
     );
 
     protected $publicFields = array(
-        'tags', 'category', 'serializeMode', 'status', 'goals', 'audiences', 'ratingNum', 'rating', 'noteNum',
-        'recommended', 'recommendedSeq', 'recommendedTime', 'orgId', 'orgCode', 'discountId', 'discount', 'maxRate', 'hitNum', 'materialNum', 'parentId', 'locked', 'maxCoursePrice', 'minCoursePrice', 'teachers', 'creator', 'createdTime', 'updatedTime'
+        'tags', 'category', 'serializeMode', 'goals', 'audiences', 'ratingNum', 'rating', 'noteNum',
+        'recommended', 'recommendedSeq', 'recommendedTime', 'orgId', 'orgCode', 'discountId', 'discount', 'discountType', 'maxRate', 'hitNum', 'materialNum', 'parentId', 'locked', 'maxCoursePrice', 'minCoursePrice', 'teachers', 'creator', 'createdTime', 'updatedTime',
     );
 
     protected function simpleFields(&$data)
     {
+        $data['discount'] = strval(floatval($data['discount']));
+
         $data['summary'] = $this->convertAbsoluteUrl($data['summary']);
         $this->transformCover($data['cover']);
 
@@ -33,11 +35,12 @@ class CourseSetFilter extends Filter
         if (isset($data['minOriginPrice'])) {
             $data['minOriginPrice2'] = Money::convert($data['minOriginPrice']);
         }
-
     }
 
     protected function publicFields(&$data)
     {
+        $data['discount'] = strval(floatval($data['discount']));
+
         $data['recommendedTime'] = date('c', $data['recommendedTime']);
 
         $userFilter = new UserFilter();
@@ -47,8 +50,8 @@ class CourseSetFilter extends Filter
 
     private function transformCover(&$cover)
     {
-        $cover['small'] = AssetHelper::getFurl(empty($cover['small']) ? '':$cover['small'], 'course.png');
-        $cover['middle'] = AssetHelper::getFurl(empty($cover['middle']) ? '':$cover['middle'], 'course.png');
-        $cover['large'] = AssetHelper::getFurl(empty($cover['large']) ? '':$cover['large'], 'course.png');
+        $cover['small'] = AssetHelper::getFurl(empty($cover['small']) ? '' : $cover['small'], 'course.png');
+        $cover['middle'] = AssetHelper::getFurl(empty($cover['middle']) ? '' : $cover['middle'], 'course.png');
+        $cover['large'] = AssetHelper::getFurl(empty($cover['large']) ? '' : $cover['large'], 'course.png');
     }
 }

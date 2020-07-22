@@ -34,10 +34,18 @@ class CourseSyncSubscriber extends EventSubscriber implements EventSubscriberInt
             //章节的更新和删除会比较麻烦，因为还涉及子节点（比如task的引用也要切换）的处理
             'course.chapter.update' => 'onCourseChapterUpdate',
             'course.chapter.delete' => 'onCourseChapterDelete',
+
+            'course.lesson.create' => 'onCourseChapterCreate',
+            'course.lesson.update' => 'onCourseChapterUpdate',
+            'course.lesson.publish' => 'onCourseChapterUpdate',
+            'course.lesson.unpublish' => 'onCourseChapterUpdate',
+            'course.lesson.setOptional' => 'onCourseChapterUpdate',
             //同步新建的任务时同步新增material记录即可，这里无需处理
             // 'course.material.create' => 'onCourseMaterialCreate',
             'course.material.update' => 'onCourseMaterialUpdate',
             'course.material.delete' => 'onCourseMaterialDelete',
+
+            'course.change.showPublishLesson' => 'onCourseUpdate',
         );
     }
 
@@ -59,6 +67,7 @@ class CourseSyncSubscriber extends EventSubscriber implements EventSubscriberInt
     public function onCourseSetUpdate(Event $event)
     {
         $courseSet = $event->getSubject();
+        $this->updateCourseSetTitleByCourseSet($courseSet);
         if ($courseSet['parentId'] > 0) {
             return;
         }
@@ -85,7 +94,17 @@ class CourseSyncSubscriber extends EventSubscriber implements EventSubscriberInt
                 'maxRate',
                 'materialNum',
             ));
-            $this->getCourseSetDao()->update($cc['id'], $cc);
+            $copyCourseSet = $this->getCourseSetDao()->update($cc['id'], $cc);
+            $this->updateCourseSetTitleByCourseSet($copyCourseSet);
+        }
+    }
+
+    protected function updateCourseSetTitleByCourseSet($courseSet)
+    {
+        $courses = $this->getCourseService()->findCoursesByCourseSetId($courseSet['id']);
+        foreach ($courses as $course) {
+            $course['courseSetTitle'] = $courseSet['title'];
+            $this->getCourseDao()->update($course['id'], $course);
         }
     }
 
@@ -95,7 +114,11 @@ class CourseSyncSubscriber extends EventSubscriber implements EventSubscriberInt
         if ($course['parentId'] > 0) {
             return;
         }
+        $this->updateCopiedCourses($course);
+    }
 
+    protected function updateCopiedCourses($course)
+    {
         $copiedCourses = $this->getCourseDao()->findCoursesByParentIdAndLocked($course['id'], 1);
         if (empty($copiedCourses)) {
             return;
@@ -103,6 +126,7 @@ class CourseSyncSubscriber extends EventSubscriber implements EventSubscriberInt
 
         $syncFields = ArrayToolkit::parts($course, array(
             'title',
+            'courseSetTitle',
             'learnMode',
             'summary',
             'goals',
@@ -140,6 +164,11 @@ class CourseSyncSubscriber extends EventSubscriber implements EventSubscriberInt
             'materialNum',
             'rewardPoint',
             'taskRewardPoint',
+            'maxStudentNum',
+            'isHideUnpublish',
+            'lessonNum',
+            'publishLessonNum',
+            'enableAudio',
         ));
         $this->getCourseDao()->update(array('parentId' => $course['id'], 'locked' => 1), $syncFields);
     }

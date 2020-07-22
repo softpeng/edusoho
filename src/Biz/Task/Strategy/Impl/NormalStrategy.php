@@ -5,64 +5,86 @@ namespace Biz\Task\Strategy\Impl;
 use AppBundle\Common\ArrayToolkit;
 use Biz\Task\Strategy\BaseStrategy;
 use Biz\Task\Strategy\CourseStrategy;
+use Biz\Task\TaskException;
 use Biz\Task\Visitor\CourseStrategyVisitorInterface;
-use Codeages\Biz\Framework\Service\Exception\NotFoundException;
 
 class NormalStrategy extends BaseStrategy implements CourseStrategy
 {
     public function accept(CourseStrategyVisitorInterface $visitor)
     {
         $method = 'visit'.substr(strrchr(__CLASS__, '\\'), 1);
-        $visitor->$method($this);
+
+        return $visitor->$method($this);
     }
 
     public function createTask($field)
     {
-        $task = parent::createTask($field);
-
+        $task = $this->_createLesson($field);
         $task['activity'] = $this->getActivityService()->getActivity($task['activityId'], $fetchMedia = true);
 
         return $task;
     }
 
-    public function getTasksTemplate()
+    public function updateTask($id, $fields)
     {
-        return 'course-manage/tasks/normal-tasks.html.twig';
-    }
+        $task = parent::updateTask($id, $fields);
 
-    public function getTaskItemTemplate()
-    {
-        return 'task-manage/item/normal-list-item.html.twig';
-    }
-
-    public function deleteTask($task)
-    {
-        if (empty($task)) {
-            return true;
+        if ($task['isLesson']) {
+            $this->getCourseService()->updateChapter(
+                $task['courseId'],
+                $task['categoryId'],
+                array('title' => $task['title'])
+            );
         }
 
-        try {
-            $this->biz['db']->beginTransaction();
+        return $task;
+    }
 
-            $this->getTaskDao()->delete($task['id']);
-            $this->getTaskResultService()->deleteUserTaskResultByTaskId($task['id']);
-            $this->getActivityService()->deleteActivity($task['activityId']);
+    public function getTasksListJsonData($courseId)
+    {
+        $course = $this->getCourseService()->getCourse($courseId);
+        $tasks = $this->getTaskService()->findTasksFetchActivityByCourseId($courseId);
+        $items = $this->getTasksAndChapters($course['id'], $tasks);
 
-            $this->biz['db']->commit();
-        } catch (\Exception $e) {
-            $this->biz['db']->rollback();
-            throw $e;
+        return array(
+            'data' => array(
+                'items' => $items,
+            ),
+            'template' => 'lesson-manage/normal-list.html.twig',
+        );
+    }
+
+    public function getTasksJsonData($task)
+    {
+        $course = $this->getCourseService()->getCourse($task['courseId']);
+        $taskNum = $this->getTaskService()->countTasksByChpaterId($task['categoryId']);
+        $chapter = $this->getChapterDao()->get($task['categoryId']);
+        $task['activity'] = $this->getActivityService()->getActivity($task['activityId'], $fetchMedia = true);
+        $tasks = array($task);
+        if (1 == $taskNum) {
+            $template = 'lesson-manage/normal/lesson.html.twig';
+        } elseif ($task['isLesson']) {
+            $template = 'lesson-manage/normal/lesson.html.twig';
+            $tasks = $this->getTaskService()->findTasksFetchActivityByChapterId($task['categoryId']);
+        } else {
+            $template = 'lesson-manage/normal/tasks.html.twig';
         }
+        $chapter['tasks'] = $tasks;
 
-        return true;
+        return array(
+            'data' => array(
+                'course' => $course,
+                'lesson' => $chapter,
+                'tasks' => $tasks,
+            ),
+            'template' => $template,
+        );
     }
 
     /**
      * 任务学习.
      *
      * @param  $task
-     *
-     * @throws NotFoundException
      *
      * @return bool
      */
@@ -71,7 +93,7 @@ class NormalStrategy extends BaseStrategy implements CourseStrategy
         $course = $this->getCourseService()->getCourse($task['courseId']);
 
         //自由式学习 可以学习任意课时
-        if ($course['learnMode'] == 'freeMode') {
+        if ('freeMode' == $course['learnMode']) {
             return true;
         }
 
@@ -80,11 +102,16 @@ class NormalStrategy extends BaseStrategy implements CourseStrategy
             return true;
         }
 
-        if ($task['type'] == 'live') {
+        if ('live' == $task['type']) {
             return true;
         }
 
-        if ($task['type'] == 'testpaper' && $task['startTime']) {
+        if ('testpaper' == $task['type'] && $task['startTime']) {
+            return true;
+        }
+
+        $taskResult = $this->getTaskResultService()->getUserTaskResultByTaskId($task['id']);
+        if ('finish' == $taskResult['status']) {
             return true;
         }
 
@@ -105,6 +132,7 @@ class NormalStrategy extends BaseStrategy implements CourseStrategy
         $taskIds = ArrayToolkit::column($preTasks, 'id');
 
         $taskResults = $this->getTaskResultService()->findUserTaskResultsByTaskIds($taskIds);
+
         $taskResults = ArrayToolkit::index($taskResults, 'courseTaskId');
         array_walk(
             $preTasks,
@@ -114,6 +142,43 @@ class NormalStrategy extends BaseStrategy implements CourseStrategy
         );
 
         return $this->getTaskService()->isPreTasksIsFinished($preTasks);
+    }
+
+    // 获得章，节，课时，任务
+    // return  array(
+    //     'chapter',
+    //     'unit',
+    //     'lesson' => array(
+    //         'task'
+    //     )
+    // )
+    protected function getTasksAndChapters($courseId, $tasks)
+    {
+        $items = array();
+        uasort(
+            $tasks,
+            function ($item1, $item2) {
+                return $item1['seq'] > $item2['seq'];
+            }
+        );
+        $tasks = ArrayToolkit::group($tasks, 'categoryId');
+
+        $chapters = $this->getChapterDao()->findChaptersByCourseId($courseId);
+        uasort(
+            $chapters,
+            function ($item1, $item2) {
+                return $item1['seq'] > $item2['seq'];
+            }
+        );
+        foreach ($chapters as $index => $chapter) {
+            $chapterId = $chapter['id'];
+            if (!empty($tasks[$chapterId])) {
+                $chapter['tasks'] = $tasks[$chapterId];
+            }
+            $items[] = $chapter;
+        }
+
+        return $items;
     }
 
     public function prepareCourseItems($courseId, $tasks, $limitNum)
@@ -143,7 +208,7 @@ class NormalStrategy extends BaseStrategy implements CourseStrategy
 
         $taskCount = 0;
         foreach ($items as $key => $item) {
-            if (strpos($key, 'task') !== false) {
+            if (false !== strpos($key, 'task')) {
                 ++$taskCount;
             }
             if ($taskCount > $limitNum) {
@@ -162,5 +227,18 @@ class NormalStrategy extends BaseStrategy implements CourseStrategy
     public function unpublishTask($task)
     {
         return $this->getTaskDao()->update($task['id'], array('status' => 'unpublished'));
+    }
+
+    private function _createLesson($task)
+    {
+        $chapter = $this->getCourseService()->getChapter($task['fromCourseId'], $task['categoryId']);
+        if (empty($chapter) || 'lesson' != $chapter['type']) {
+            throw TaskException::CATEGORYID_INVALID();
+        }
+
+        $task['status'] = $chapter['status'];
+        $task['isOptional'] = $chapter['isOptional'];
+
+        return parent::createTask($task);
     }
 }
