@@ -1,0 +1,25 @@
+{% extends 'course-manage/layout.html.twig' %}
+
+{% block title %}{{ 'course.live_statistics'|trans }} - {{ course.title }} - {{ parent() }}{% endblock %}
+{% set course_side_nav = 'live-statistics' %}
+{% set assistant = data('AssistantPermission', { courseId: course.id }) %}
+
+{% block page_title %}{{ 'course.live_statistics'|trans }}{% endblock %}
+
+{% do script(['app/vue/views/course_manage/live_statistics/index.js']) %}
+
+{% block stylesheets %}
+  {{ parent() }}
+  <link href="{{ asset('static-dist/app/css/main-ant.css') }}" rel="stylesheet"/>
+{% endblock %}
+
+{% block main %}
+  <input type="hidden" class="js-course-id" value="{{ course.id }}" />
+  <div id="app">
+    <div class="cd-main">
+      <div class="cd-main__body">
+        {% include "vue-components/loading.html.twig" %}
+      </div>
+    </div>
+  </div>
+{% endblock %}

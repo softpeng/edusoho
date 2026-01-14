@@ -2,8 +2,15 @@
 
 namespace AppBundle\Component\Export;
 
+use Biz\System\Service\LogService;
+use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\Filesystem\Filesystem;
+
 abstract class Exporter implements ExporterInterface
 {
+    /**
+     * @var ContainerInterface
+     */
     protected $container;
     protected $conditions;
     protected $parameter;
@@ -16,28 +23,33 @@ abstract class Exporter implements ExporterInterface
         $this->conditions = $this->buildCondition($conditions);
     }
 
+    //定义导出标题
     abstract public function getTitles();
 
+    //获得导出正文内容
     abstract public function getContent($start, $limit);
 
+    //下载权限判断
     abstract public function canExport();
 
+    //获得导出总条数
     abstract public function getCount();
 
+    //构建查询条件
     abstract public function buildCondition($conditions);
 
-    public function export($name)
+    public function export($name = '')
     {
         if (!$this->canExport()) {
-            return array(
+            return [
                 'success' => 0,
                 'message' => 'export.not_allowed',
-            );
+            ];
         }
         list($start, $limit) = $this->getPageConditions();
 
         $fileName = empty($this->parameter['start']) ? $this->generateExportName() : $this->parameter['fileName'];
-        $filePath = $this->exportFileRootPath().$fileName;
+        $filePath = $this->exportFileRootPath() . $fileName;
 
         $data = $this->getContent($start, $limit);
 
@@ -46,22 +58,24 @@ abstract class Exporter implements ExporterInterface
         $endPage = $start + $limit;
 
         $count = $this->getCount();
+
         $endStatus = $endPage >= $count;
 
         $status = $endStatus ? 'finish' : 'continue';
 
-        return array(
+        return [
             'status' => $status,
             'fileName' => $fileName,
             'start' => $endPage,
             'count' => $count,
             'success' => '1',
-        );
+        ];
     }
 
+    //获得导出分页参数
     public function buildParameter($conditions)
     {
-        $parameter = array();
+        $parameter = [];
         $start = isset($conditions['start']) ? $conditions['start'] : 0;
         $fileName = isset($conditions['fileName']) ? basename($conditions['fileName']) : '';
 
@@ -71,9 +85,13 @@ abstract class Exporter implements ExporterInterface
         return $parameter;
     }
 
+    public function postExport()
+    {
+    }
+
     protected function addContent($data, $start, $filePath)
     {
-        if ($start == 0) {
+        if (0 == $start) {
             array_unshift($data, $this->transTitles());
         }
         $partPath = $this->updateFilePaths($filePath, $start);
@@ -82,14 +100,14 @@ abstract class Exporter implements ExporterInterface
 
     private function generateExportName()
     {
-        return 'export_'.time().rand();
+        return 'export_' . time() . rand();
     }
 
     protected function updateFilePaths($path, $page)
     {
         $content = file_exists($path) ? file_get_contents($path) : '';
         $content = unserialize($content);
-        $partPath = $path.$page;
+        $partPath = $path . $page;
         $content[] = $partPath;
         file_put_contents($path, serialize($content));
 
@@ -99,11 +117,12 @@ abstract class Exporter implements ExporterInterface
     protected function getPageConditions()
     {
         $magic = $this->getSettingService()->get('magic');
+        $magic = is_array($magic) ? $magic : [];
         if (empty($magic['export_limit'])) {
             $magic['export_limit'] = 1000;
         }
 
-        return array($this->parameter['start'], $magic['export_limit']);
+        return [$this->parameter['start'], $magic['export_limit']];
     }
 
     private function transTitles()
@@ -121,8 +140,13 @@ abstract class Exporter implements ExporterInterface
     private function exportFileRootPath()
     {
         $biz = $this->getBiz();
+        $filesystem = new Filesystem();
+        $rootPath = $biz['topxia.upload.private_directory'] . '/tmp/';
+        if (!$filesystem->exists($rootPath)) {
+            $filesystem->mkdir($rootPath);
+        }
 
-        return $biz['topxia.upload.private_directory'].'/';
+        return $rootPath;
     }
 
     public function getUser()
@@ -140,6 +164,14 @@ abstract class Exporter implements ExporterInterface
     protected function getSettingService()
     {
         return $this->getBiz()->service('System:SettingService');
+    }
+
+    /**
+     * @return LogService
+     */
+    protected function getLogService()
+    {
+        return $this->getBiz()->service('System:LogService');
     }
 
     protected function getBiz()

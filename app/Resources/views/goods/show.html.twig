@@ -1,0 +1,65 @@
+{% extends 'layout.html.twig' %}
+
+{% do script(['libs/jquery-countdown.js', 'app/js/goods/show/index.js']) %}
+{% do css(['app/css/main-ant.css']) %}
+
+{% block title %}{{ goods.title|raw }} - {{ parent() }}{% endblock %}
+{% block full_content %}
+<style>
+.description-content > ul {
+  list-style: disc !important;
+}
+
+.description-content > ol {
+  list-style: auto !important;
+}
+</style>
+  {% include 'common/anti-brush-captcha.html.twig' %}
+
+  <div id="show-product-page" class="" style=""
+       data-goods="{{ goods|json_encode }}"
+       data-components-data="{{ goodsComponents|json_encode }}"
+       data-current-user-id="{{ app.user.uuid|default(null) }}"
+       data-target-id="{{ app.request.query.get('targetId')|default(null) }}"
+       data-is-user-login="{{ app.user.isLogin()|default(0) }}"
+       data-current-url="{{ url('goods_show', { id: app.request.get('id')}) }}"
+       data-goods-setting="{{ setting('goods_setting', {})|json_encode }}"
+       data-drp-recruit-switch="{{ setting('drp.recruitSwitch')|default() }}"
+       data-ugc-review-setting="{{ setting('ugc_review', {})|json_encode }}"
+       data-vip-enabled="{{ setting('vip.enabled')|default(1) }}"
+  ></div>
+  <div class="js-hidden-i18n" style="display:none;">
+    {
+    "i18nChapterName": "{{course_chapter_alias('chapter')|trans}}",
+    "i18nUnitName": "{{course_chapter_alias('part')|trans}}",
+    "i18nLessonName": "{{'site.data.lesson'|trans}}",
+    "i18nTaskName":"{{ course_chapter_alias('task')|trans}}"
+    }
+  </div>
+  <div class="js-hidden-activity-metas" style="display:none;">
+    {
+    {% set allMetas = activity_meta() %}
+    {% for key, item in allMetas %}
+      {% if not loop.first %}
+        ,
+      {% endif %}
+
+      "{{key}}": {
+      "icon": "{{item.icon}}",
+      "name": "{{item.name}}"
+      }
+    {% endfor %}
+    }
+  </div>
+
+  <div class="js-hidden-current-timestamp" style="display:none;">{{ date().timestamp }}</div>
+
+  {%
+    include 'common/weixin-share.html.twig' with {
+      'title': goods.title,
+      'desc': goods.summary|striptags|purify_and_trim_html,
+      'link': app.request.uri,
+      'imgUrl': fileurl(goods.images.large|default(),'course.png'),
+    }
+  %}
+{% endblock %}

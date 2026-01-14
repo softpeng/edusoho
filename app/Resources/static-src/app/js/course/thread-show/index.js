@@ -1,19 +1,25 @@
-// var Validator = require('bootstrap.validator');
-// require('es-ckeditor');
-// Notify = require('common/bootstrap-notify');
-// require('./common').run();
+import notify from 'common/notify';
+import Captcha from 'app/common/captcha';
+let captcha = new Captcha({drag:{limitType:"thread", bar:'#drag-btn', target: '.js-jigsaw'}});
 
-var editor = CKEDITOR.replace('post_content', {
-  toolbar: 'Thread',
-  filebrowserImageUploadUrl: $('#post_content').data('imageUploadUrl')
-});
-editor.on('change', () => {
-  $('#post_content').val(editor.getData());
-});
-editor.on('blur', () => {
-  $('#post_content').val(editor.getData());
-});
+if ($('#post_content').length != 0) {
+  var editor = CKEDITOR.replace('post_content', {
+    toolbar: 'Thread',
+    fileSingleSizeLimit: app.fileSingleSizeLimit,
+    filebrowserImageUploadUrl: $('#post_content').data('imageUploadUrl')
+  });
+  editor.on('change', () => {
+    $('#post_content').val(editor.getData());
+  });
+  editor.on('blur', () => {
+    $('#post_content').val(editor.getData());
+  });
+}
 
+let isShowCaptcha = 0;
+// if($("input[name=enable_anti_brush_captcha]").val() == 1){
+//     isShowCaptcha= $(captcha.params.maskClass).length ? 1 : 0;
+// }
 let $form = $('#thread-post-form');
 
 let validator = $form.validate({
@@ -24,42 +30,57 @@ let validator = $form.validate({
   }
 });
 
+captcha.on('success',function(data){
+  if(data.type == 'reply'){
+    isShowCaptcha = 0;
+    $form.find("input[name=_dragCaptchaToken]").val(data.token);
+    threadPostForm();
+  }
+})
+
+function threadPostForm(){
+  $.ajax({
+    'url': $form.attr('action'),
+    'type': 'post',
+    'data': $form.serialize(),
+    success: function (html) {
+      $('.js-btn-thread-post-form-save').button('reset');
+      console.log('success');
+      $('#thread-post-num').text(parseInt($('#thread-post-num').text()) + 1);
+      var id = $(html).appendTo('.thread-post-list').attr('id');
+      editor.setData('');
+      //清除附件
+      $('.js-attachment-list').empty();
+      $('.js-attachment-ids').val('');
+      $('.js-upload-file').show();
+
+      $form.find('[type=submit]').removeAttr('disabled');
+
+      isShowCaptcha = 1;
+      captcha.hideDrag();
+
+      window.location.href = '#' + id;
+    },
+    error: function (data) {
+      isShowCaptcha = 1;
+      captcha.hideDrag();
+      $('.js-btn-thread-post-form-save').button('reset');
+    }
+  });
+}
+
 $('.js-btn-thread-post-form-save').click(() => {
   if (validator.form()) {
     $('.js-btn-thread-post-form-save').button('loading');
     $('.thread-post-list').find('li.empty').remove();
-    var $form = $("#thread-post-form");
-    $.ajax({
-      'url': $form.attr('action'),
-      'type': 'post',
-      'data': $form.serialize(),
-      success: function (html) {
-        $('.js-btn-thread-post-form-save').button('reset');
-        console.log('success');
-        $("#thread-post-num").text(parseInt($("#thread-post-num").text()) + 1);
-        var id = $(html).appendTo('.thread-post-list').attr('id');
-        editor.setData('');
-        //清除附件
-        $('.js-attachment-list').empty();
-        $('.js-attachment-ids').val("");
-        $('.js-upload-file').removeClass('hidden');
-
-        $form.find('[type=submit]').removeAttr('disabled');
-
-        window.location.href = '#' + id;
-      },
-      error: function (data) {
-        $('.js-btn-thread-post-form-save').button('reset');
-        data = $.parseJSON(data.responseText);
-        if (data.error) {
-          Notify.danger(data.error.message);
-        } else {
-          Notify.danger(Translator.trans('course.thread_replay_failed_hint'));
-        }
-      }
-    });
+    threadPostForm();
+    // captcha.setType("reply");
+    // if(isShowCaptcha == 1){
+    //   captcha.showDrag();
+    //   return false;
+    // }
   }
-})
+});
 
 $('[data-role=confirm-btn]').click(function () {
   var $btn = $(this);
@@ -76,16 +97,13 @@ $('[data-role=confirm-btn]').click(function () {
   });
 });
 
-$('.thread-post-list').on('click', '.thread-post-action', function () {
-
-  var userName = $(this).data('user');
-
+$('.thread-post-list').on('click', '.js-call-username', function() {
+  const userName = $(this).parent().data('user');
   editor.focus();
   editor.insertHtml('@' + userName + '&nbsp;');
-
 });
 
-$(".thread-post-list").on('click', '[data-action=post-delete]', function () {
+$('.thread-post-list').on('click', '[data-action=post-delete]', function () {
   if (!confirm(Translator.trans('course.thread_delete_hint'))) {
     return false;
   }

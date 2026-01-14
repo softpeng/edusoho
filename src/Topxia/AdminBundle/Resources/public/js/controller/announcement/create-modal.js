@@ -23,13 +23,32 @@ define(function(require, exports, module) {
                     $modal.modal('hide');
                     window.location.reload();
                 }).error(function() {
-                    Notify.danger(Translator.trans('操作失败'));
+                    Notify.danger(Translator.trans('admin.announcement.save_error_hint'));
                 });
             }
         });
 
-        var editor = CKEDITOR.replace('content-filed', {
-            toolbar: 'SimpleMini'
+        var editor = CKEDITOR.replace('content-field', {
+          toolbar: 'SimpleMini',
+        });
+
+        let tmp = 0;
+        editor.on('change', () => {
+            if (tmp) {
+              tmp = 0;
+              return;
+            }
+
+            let text = editor.getData()
+              .replace(/<?img[^>]*?>/g, '')
+              .replaceAll('<p></p>' , '');
+
+            if (text === editor.getData()) {
+              return;
+            }
+
+            tmp =1;
+            editor.setData(text)
         });
 
         validator.on('formValidate', function(elemetn, event) {
@@ -39,7 +58,7 @@ define(function(require, exports, module) {
         Validator.addRule(
             'time_check',
             /^(?:(?!0000)[0-9]{4}-(?:(?:0[1-9]|1[0-2])-(?:0[1-9]|1[0-9]|2[0-8])|(?:0[13-9]|1[0-2])-(?:29|30)|(?:0[13578]|1[02])-31)|(?:[0-9]{2}(?:0[48]|[2468][048]|[13579][26])|(?:0[48]|[2468][048]|[13579][26])00)-02-29) ([0-1]{1}[0-9]{1})|(2[0-4]{1}):[0-5]{1}[0-9]{1}$/,
-            Translator.trans('请输入正确的日期和时间,格式如XXXX-MM-DD hh:mm')
+            Translator.trans('validate.valid_date_and_time_input.message')
         );
 
         validator.addItem({

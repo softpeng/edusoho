@@ -22,6 +22,7 @@ class TagDaoImpl extends GeneralDaoImpl implements TagDao
             'orderbys' => array('createdTime'),
             'conditions' => array(
                 'name = :name',
+                'name LIKE :likeName',
                 'orgId = :orgId',
                 'orgCode = :orgCode',
                 'orgCode LIKE :likeOrgCode',
@@ -54,8 +55,8 @@ class TagDaoImpl extends GeneralDaoImpl implements TagDao
 
     public function findAll($start, $limit)
     {
-        $this->filterStartLimit($start, $limit);
-        $sql = "SELECT * FROM {$this->table()} ORDER BY createdTime DESC LIMIT {$start}, {$limit}";
+        $sql = "SELECT * FROM {$this->table()} ORDER BY createdTime DESC";
+        $sql = $this->sql($sql, array(), $start, $limit);
 
         return $this->db()->fetchAll($sql, array());
     }
@@ -80,11 +81,5 @@ class TagDaoImpl extends GeneralDaoImpl implements TagDao
         $sql = "SELECT COUNT(*) FROM {$this->table()} ";
 
         return $this->db()->fetchColumn($sql, array());
-    }
-
-    protected function filterStartLimit(&$start, &$limit)
-    {
-        $start = (int) $start;
-        $limit = (int) $limit;
     }
 }

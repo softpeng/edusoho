@@ -12,6 +12,7 @@ class Users extends BaseResource
     public function get(Application $app, Request $request)
     {
         $conditions = $request->query->all();
+        unset($conditions['start'], $conditions['limit']);
 
         if (empty($conditions)) {
             return array();
@@ -97,7 +98,7 @@ class Users extends BaseResource
         }
 
         register:
-        $user = $this->getUserService()->register($fields);
+        $user = $this->getUserService()->register($fields, array('mobile'));
         $user['profile'] = $this->getUserService()->getUserProfile($user['id']);
         return $this->callFilter('User', $user);
 

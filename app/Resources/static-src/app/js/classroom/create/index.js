@@ -6,14 +6,17 @@ let validator = $form.validate({
   rules: {
     title: {
       required: true,
-      minlength: 2,
-      maxlength: 30
+      byte_minlength: 2,
+      byte_maxlength: 100,
+      classroom_title: true,
     }
   }
-})
+});
 
 $form.on('click', '#classroom-create-btn', (event) => {
+  const $target = $(event.target);
   if (validator && validator.form()) {
+    $target.button('loading');
     $form.submit();
   }
-})
+});

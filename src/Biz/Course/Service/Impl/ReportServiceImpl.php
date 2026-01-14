@@ -3,26 +3,28 @@
 namespace Biz\Course\Service\Impl;
 
 use AppBundle\Common\ArrayToolkit;
+use AppBundle\Common\SimpleValidator;
 use Biz\BaseService;
+use Biz\Common\CommonException;
 use Biz\Course\Dao\ReportDao;
-use Biz\Task\Service\TaskService;
+use Biz\Course\Service\CourseNoteService;
 use Biz\Course\Service\CourseService;
 use Biz\Course\Service\MemberService;
 use Biz\Course\Service\ReportService;
 use Biz\Course\Service\ThreadService;
 use Biz\Task\Service\TaskResultService;
-use Biz\Course\Service\CourseNoteService;
+use Biz\Task\Service\TaskService;
 use Biz\Task\Service\TryViewLogService;
-use Biz\Testpaper\Service\TestpaperService;
 use Biz\User\Service\UserService;
-use AppBundle\Common\SimpleValidator;
 
 class ReportServiceImpl extends BaseService implements ReportService
 {
+    private static $mockStartTime;
+
     public function summary($courseId)
     {
         $course = $this->getCourseService()->getCourse($courseId);
-        $defaultSummary = array(
+        $defaultSummary = [
             'studentNum' => 0,
             'studentNumToday' => 0,
             'finishedNum' => 0,
@@ -35,33 +37,38 @@ class ReportServiceImpl extends BaseService implements ReportService
             'askNumToday' => 0,
             'discussionNum' => 0,
             'discussionNumToday' => 0,
-        );
+        ];
 
-        $summary = array();
+        $summary = [];
 
         $startTime = strtotime(date('Y-m-d'));
 
-        $summary['studentNum'] = $this->getCourseMemberService()->countMembers(array('courseId' => $courseId, 'role' => 'student'));
-        $summary['studentNumToday'] = $this->getCourseMemberService()->countMembers(array('courseId' => $courseId, 'role' => 'student', 'startTimeGreaterThan' => $startTime));
-        $summary['finishedNum'] = $this->getCourseMemberService()->countMembers(array(
+        //仅供单元测试
+        if (!empty(self::$mockStartTime)) {
+            $startTime = self::$mockStartTime;
+        }
+
+        $summary['studentNum'] = $this->getCourseMemberService()->countMembers(['courseId' => $courseId, 'role' => 'student']);
+        $summary['studentNumToday'] = $this->getCourseMemberService()->countMembers(['courseId' => $courseId, 'role' => 'student', 'startTimeGreaterThan' => $startTime]);
+        $summary['finishedNum'] = $this->getCourseMemberService()->countMembers([
             'role' => 'student',
             'learnedCompulsoryTaskNumGreaterThan' => $course['compulsoryTaskNum'],
             'courseId' => $courseId,
-        ));
-        $summary['finishedNumToday'] = $this->getCourseMemberService()->countMembers(array(
+        ]);
+        $summary['finishedNumToday'] = $this->getCourseMemberService()->countMembers([
             'role' => 'student',
             'learnedCompulsoryTaskNumGreaterThan' => $course['compulsoryTaskNum'],
             'courseId' => $courseId,
             'lastLearnTimeGreaterThan' => $startTime,
-        ));
-        $summary['tryViewNum'] = $this->getTaskTryViewService()->countTryViewLogs(array('courseId' => $courseId));
-        $summary['tryViewNumToday'] = $this->getTaskTryViewService()->countTryViewLogs(array('courseId' => $courseId, 'createdTime_GE' => $startTime));
-        $summary['noteNum'] = $this->getCourseNoteService()->countCourseNotes(array('courseId' => $courseId));
-        $summary['noteNumToday'] = $this->getCourseNoteService()->countCourseNotes(array('courseId' => $courseId, 'startTimeGreaterThan' => $startTime));
-        $summary['askNum'] = $this->getThreadService()->countThreads(array('courseId' => $courseId, 'type' => 'question'));
-        $summary['askNumToday'] = $this->getThreadService()->countThreads(array('courseId' => $courseId, 'type' => 'question', 'startCreatedTime' => $startTime));
-        $summary['discussionNum'] = $this->getThreadService()->countThreads(array('courseId' => $courseId, 'type' => 'discussion'));
-        $summary['discussionNumToday'] = $this->getThreadService()->countThreads(array('courseId' => $courseId, 'type' => 'discussion', 'startCreatedTime' => $startTime));
+        ]);
+        $summary['tryViewNum'] = $this->getTaskTryViewService()->countTryViewLogs(['courseId' => $courseId]);
+        $summary['tryViewNumToday'] = $this->getTaskTryViewService()->countTryViewLogs(['courseId' => $courseId, 'createdTime_GE' => $startTime]);
+        $summary['noteNum'] = $this->getCourseNoteService()->countCourseNotes(['courseId' => $courseId]);
+        $summary['noteNumToday'] = $this->getCourseNoteService()->countCourseNotes(['courseId' => $courseId, 'startTimeGreaterThan' => $startTime]);
+        $summary['askNum'] = $this->getThreadService()->countThreads(['courseId' => $courseId, 'type' => 'question']);
+        $summary['askNumToday'] = $this->getThreadService()->countThreads(['courseId' => $courseId, 'type' => 'question', 'startCreatedTime' => $startTime]);
+        $summary['discussionNum'] = $this->getThreadService()->countThreads(['courseId' => $courseId, 'type' => 'discussion']);
+        $summary['discussionNumToday'] = $this->getThreadService()->countThreads(['courseId' => $courseId, 'type' => 'discussion', 'startCreatedTime' => $startTime]);
 
         $summary = array_merge($defaultSummary, $summary);
 
@@ -91,18 +98,18 @@ class ReportServiceImpl extends BaseService implements ReportService
 
         $userPickData = ArrayToolkit::index($userPickData, 'date');
 
-        $result = array();
+        $result = [];
         foreach ($period as $date) {
             $dateStr = $date->format('Y-m-d');
             if (isset($userPickData[$dateStr])) {
                 $total += $userPickData[$dateStr]['count'];
             }
 
-            $result[] = array(
+            $result[] = [
                 'date' => $dateStr,
                 'finishedNum' => $total,
                 'finishedRate' => $this->getPercent($total, $course['studentNum']),
-            );
+            ];
         }
 
         return $result;
@@ -123,16 +130,16 @@ class ReportServiceImpl extends BaseService implements ReportService
         $studentIncreaseData = ArrayToolkit::index($studentIncreaseData, 'date');
         $tryViewIncreaseData = ArrayToolkit::index($tryViewIncreaseData, 'date');
 
-        $result = array();
+        $result = [];
         foreach ($period as $date) {
             $dateStr = $date->format('Y-m-d');
             $studentIncreaseNum = isset($studentIncreaseData[$dateStr]) ? $studentIncreaseData[$dateStr]['count'] : 0;
             $tryViewIncreaseNum = isset($tryViewIncreaseData[$dateStr]) ? $tryViewIncreaseData[$dateStr]['count'] : 0;
-            $result[] = array(
+            $result[] = [
                 'date' => $dateStr,
                 'studentIncrease' => $studentIncreaseNum,
                 'tryViewIncrease' => $tryViewIncreaseNum,
-            );
+            ];
         }
 
         return $result;
@@ -140,53 +147,54 @@ class ReportServiceImpl extends BaseService implements ReportService
 
     public function getStudentDetail($courseId, $userIds, $taskLimit = 20)
     {
-        $users = $this->getUserService()->searchUsers(array('userIds' => $userIds), array(), 0, count($userIds));
+        $users = $this->getUserService()->searchUsers(['userIds' => $userIds], [], 0, count($userIds));
         $users = ArrayToolkit::index($users, 'id');
-
+        $userProfiles = $this->getUserService()->findUserProfilesByIds($userIds);
+        $userProfiles = ArrayToolkit::index($userProfiles, 'id');
         $courseTasks = $this->getTaskService()->searchTasks(
-            array(
+            [
                 'courseId' => $courseId,
                 'isOptional' => 0,
                 'status' => 'published',
-            ),
-            array('seq' => 'ASC'),
+            ],
+            ['seq' => 'ASC'],
             0,
             $taskLimit
         );
         $taskIds = ArrayToolkit::column($courseTasks, 'id');
 
         $taskResults = $this->getTaskResultService()->searchTaskResults(
-            array(
+            [
                 'courseId' => $courseId,
                 'userIds' => $userIds,
                 'courseTaskIds' => $taskIds,
-            ),
-            array(),
+            ],
+            [],
             0,
             PHP_INT_MAX
         );
 
         $taskResults = ArrayToolkit::groupIndex($taskResults, 'userId', 'courseTaskId');
 
-        return array($users, $courseTasks, $taskResults);
+        return [$users, $courseTasks, $taskResults, $userProfiles];
     }
 
     public function buildStudentDetailOrderBy($conditions)
     {
-        $orderBy = array('createdTime' => 'DESC');
+        $orderBy = ['createdTime' => 'DESC'];
         if (!empty($conditions['orderBy'])) {
             switch ($conditions['orderBy']) {
                 case 'createdTimeDesc':
-                    $orderBy = array('createdTime' => 'DESC');
+                    $orderBy = ['createdTime' => 'DESC'];
                     break;
                 case 'createdTimeAsc':
-                    $orderBy = array('createdTime' => 'ASC');
+                    $orderBy = ['createdTime' => 'ASC'];
                     break;
                 case 'learnedCompulsoryTaskNumDesc':
-                    $orderBy = array('learnedCompulsoryTaskNum' => 'DESC');
+                    $orderBy = ['learnedCompulsoryTaskNum' => 'DESC'];
                     break;
                 case 'learnedCompulsoryTaskNumAsc':
-                    $orderBy = array('learnedCompulsoryTaskNum' => 'ASC');
+                    $orderBy = ['learnedCompulsoryTaskNum' => 'ASC'];
                     break;
             }
         }
@@ -197,10 +205,10 @@ class ReportServiceImpl extends BaseService implements ReportService
     public function buildStudentDetailConditions($conditions, $courseId)
     {
         $course = $this->getCourseService()->getCourse($courseId);
-        $memberConditions = array(
+        $memberConditions = [
             'courseId' => $course['id'],
             'role' => 'student',
-        );
+        ];
 
         if (!empty($conditions['range'])) {
             switch ($conditions['range']) {
@@ -219,11 +227,11 @@ class ReportServiceImpl extends BaseService implements ReportService
             $mobile = SimpleValidator::mobile($conditions['nameOrMobile']);
             if ($mobile) {
                 $user = $this->getUserService()->getUserByVerifiedMobile($conditions['nameOrMobile']);
-                $users = empty($user) ? array() : array($user);
+                $users = empty($user) ? [] : [$user];
             } else {
                 $users = $this->getUserService()->searchUsers(
-                    array('nickname' => $conditions['nameOrMobile']),
-                    array(),
+                    ['nickname' => $conditions['nameOrMobile']],
+                    [],
                     0,
                     PHP_INT_MAX
                 );
@@ -249,39 +257,70 @@ class ReportServiceImpl extends BaseService implements ReportService
         return $userIds;
     }
 
-    public function getLateMonthLearnData($courseId)
+    public function prepareCourseIdAndFilter($courseId, $filter)
     {
-        $now = time();
-        $lastMonthData = $this->getLatestMonthData($courseId, $now);
-        $before30DaysData = $this->getAMonthAgoStatCount($courseId, $now);
-        $late30DaysStat = array();
-        for ($i = 29; $i >= 0; --$i) {
-            $day = date('Y-m-d', strtotime('-'.$i.' days'));
-            $late30DaysStat[$day]['day'] = date('m-d', strtotime('-'.$i.' days'));
-            $late30DaysStat[$day]['studentNum'] = $before30DaysData['studentNum'];
-            $late30DaysStat[$day]['finishedNum'] = $before30DaysData['finishedNum'];
-            $late30DaysStat[$day]['finishedRate'] = $before30DaysData['finishedRate'];
-            $late30DaysStat[$day]['noteNum'] = $before30DaysData['noteNum'];
-            $late30DaysStat[$day]['askNum'] = $before30DaysData['askNum'];
-            $late30DaysStat[$day]['discussionNum'] = $before30DaysData['discussionNum'];
+        switch ($filter) {
+            case 'all':
+                $conditions = [
+                    'courseId' => $courseId,
+                    'role' => 'student',
+                ];
+                break;
+            case 'unLearnedSevenDays':
+                $endTime = strtotime(date('Y-m-d', strtotime('-7 days')));
+                $conditions = [
+                    'courseId' => $courseId,
+                    'role' => 'student',
+                    'lastLearnTimeLessThen' => $endTime,
+                    'isLearned' => 0,
+                ];
+                break;
+            case 'unFinished':
+                $conditions = [
+                    'courseId' => $courseId,
+                    'role' => 'student',
+                    'isLearned' => 0,
+                ];
+                break;
+            default:
+                $this->createNewException(CommonException::ERROR_PARAMETER());
         }
 
-        //隐藏笔记、提问、讨论的历史数据
-        $this->countStudentsData($courseId, $lastMonthData['students'], $late30DaysStat);
+        return $conditions;
+    }
 
-        return $late30DaysStat;
+    public function prepareSort($sort)
+    {
+        switch ($sort) {
+            case 'createdTimeDesc':
+                $orderBy = ['createdTime' => 'DESC'];
+                break;
+            case 'createdTimeAsc':
+                $orderBy = ['createdTime' => 'ASC'];
+                break;
+            case 'CompletionRateDesc':
+                $orderBy = ['learnedCompulsoryTaskNum' => 'DESC'];
+                break;
+            case 'CompletionRateDAsc':
+                $orderBy = ['learnedCompulsoryTaskNum' => 'ASC'];
+                break;
+            default:
+                $this->createNewException(CommonException::ERROR_PARAMETER());
+        }
+
+        return $orderBy;
     }
 
     public function getCourseTaskLearnData($tasks, $courseId)
     {
         if (empty($tasks)) {
-            return array();
+            return [];
         }
 
         $course = $this->getCourseService()->getCourse($courseId);
         $studentNum = $course['studentNum'];
         foreach ($tasks as &$task) {
-            if ($task['status'] !== 'published') {
+            if ('published' !== $task['status']) {
                 $task['finishedNum'] = $task['learnNum'] = $task['notStartedNum'] = $task['rate'] = 0;
 
                 continue;
@@ -296,90 +335,17 @@ class ReportServiceImpl extends BaseService implements ReportService
         return $tasks;
     }
 
-    private function countMembersFinishedAllTasksByCourseId($courseId, $finishedTimeLessThan = '')
-    {
-        $course = $this->getCourseService()->getCourse($courseId);
-        $condition = array(
-            'role' => 'student',
-            'learnedCompulsoryTaskNumGreaterThan' => $course['compulsoryTaskNum'],
-            'courseId' => $courseId,
-        );
-
-        if (!empty($finishedTimeLessThan)) {
-            $condition['lastLearnTime_LE'] = $finishedTimeLessThan;
-        }
-        $memberCount = $this->getCourseMemberService()->countMembers($condition);
-
-        return $memberCount;
-    }
-
-    private function countStudentsData($courseId, $students, &$late30DaysStat)
-    {
-        $course = $this->getCourseService()->getCourse($courseId);
-        foreach ($students as $student) {
-            $student['createdDay'] = date('Y-m-d', $student['createdTime']);
-            $student['finishedDay'] = date('Y-m-d', $student['lastLearnTime']);
-
-            foreach ($late30DaysStat as $day => &$stat) {
-                if (strtotime($student['createdDay']) <= strtotime($day)) {
-                    ++$stat['studentNum'];
-                }
-
-                if ($student['learnedCompulsoryTaskNum'] >= $course['compulsoryTaskNum'] && ($student['lastLearnTime'] <= strtotime($day))) {
-                    ++$stat['finishedNum'];
-                }
-            }
-        }
-
-        foreach ($late30DaysStat as $day => &$stat) {
-            $stat['finishedRate'] = $this->getPercent($stat['finishedNum'], $stat['studentNum']);
-        }
-    }
-
-    private function countNotesData($notes, &$late30DaysStat)
-    {
-        foreach ($notes as $note) {
-            $note['createdDay'] = date('Y-m-d', $note['createdTime']);
-
-            foreach ($late30DaysStat as $day => &$stat) {
-                if (strtotime($note['createdDay']) <= strtotime($day)) {
-                    ++$stat['noteNum'];
-                }
-            }
-        }
-    }
-
-    private function countAsksData($asks, &$late30DaysStat)
-    {
-        foreach ($asks as $ask) {
-            $ask['createdDay'] = date('Y-m-d', $ask['createdTime']);
-
-            foreach ($late30DaysStat as $day => &$stat) {
-                if (strtotime($ask['createdDay']) <= strtotime($day)) {
-                    ++$stat['askNum'];
-                }
-            }
-        }
-    }
-
-    private function countDiscussionsData($discussions, &$late30DaysStat)
-    {
-        foreach ($discussions as $discussion) {
-            $discussion['createdDay'] = date('Y-m-d', $discussion['createdTime']);
-
-            foreach ($late30DaysStat as $day => &$stat) {
-                if (strtotime($discussion['createdDay']) <= strtotime($day)) {
-                    ++$stat['discussionNum'];
-                }
-            }
-        }
-    }
-
     private function getPercent($count, $total)
     {
-        $percent = $total == 0 ? 0 : round($count * 100 / $total, 3);
+        $percent = 0 == $total ? 0 : round($count * 100 / $total, 3);
 
         return $percent > 100 ? 100 : $percent;
+    }
+
+    //仅供单元测试
+    public function mockStartTime($mockStartTime)
+    {
+        self::$mockStartTime = $mockStartTime;
     }
 
     /**
@@ -436,14 +402,6 @@ class ReportServiceImpl extends BaseService implements ReportService
     protected function getTaskTryViewService()
     {
         return $this->createService('Task:TryViewLogService');
-    }
-
-    /**
-     * @return TestpaperService
-     */
-    protected function getTestpaperService()
-    {
-        return $this->createService('Testpaper:TestpaperService');
     }
 
     /**

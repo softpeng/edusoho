@@ -13,6 +13,8 @@ interface NotificationService
      */
     public function notify($userId, $type, $content);
 
+    public function batchNotify($userIds, $type, $content);
+
     /**
      * 获得用户最新的通知.
      *
@@ -23,6 +25,8 @@ interface NotificationService
      * @return array 用户最新的通知
      */
     public function searchNotificationsByUserId($userId, $start, $limit);
+
+    public function isSelectNotification($notifications, $id);
 
     public function countNotificationsByUserId($userId);
 

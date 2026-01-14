@@ -1,29 +1,9 @@
 @import './footer.less';
 @import './header.less';
 
-.type-hidden {
-  display: block !important;
-  height: 0px!important;
-  border:0;
-  .opacity(0);
-  padding: 0px!important;
-  margin: 0px!important;//用于隐藏又需要验证的的控件
-}
 
-// html,body {
-//   height: 100%;//导致任务创建的iframe样式问题
-// }
 
-.border-radius-none {
-  border-radius: 0!important;
-}
-
-.es-icon {
-  line-height: 1;
-}
-
-//before 2.0
-body { 
+body {
   background: @bg-new-color;
   word-wrap: break-word;
   text-rendering: optimizeLegibility;
@@ -48,6 +28,11 @@ html.nav-active body {
   height: 100%;
 }
 
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
 .es-wrap {
   &.nav-active {
     .es-transition();
@@ -55,6 +40,31 @@ html.nav-active body {
     -webkit-transform: translate3d(250px, 0, 0);
     -o-transform: translate3d(250px, 0, 0);
     -moz-transform: translate3d(250px, 0, 0);
+  }
+
+  .pc-course-list {
+    @media (max-width: @screen-xs-max) {
+      display: none !important;
+    }
+  }
+
+  .mobile-pagination-hide {
+    @media (max-width: @screen-xs-max) {
+      display: none !important;
+    }
+  }
+
+  .pc-es-filter {
+    @media (max-width: @screen-xs-max) {
+      display: none !important;
+    }
+  }
+
+  .mobile-category {
+    padding-bottom: 20px;
+    @media (min-width: @screen-sm-min) {
+      display: none !important;
+    }
   }
 }
 
@@ -73,13 +83,106 @@ html.nav-active body {
 #content-container {
   margin: 30px auto;
   min-height: 400px;
+  @media (max-width: @screen-xs-max) {
+    min-height: 0 !important;
+    margin: 0 !important;
+  }
+  .live-course-btn {
+    padding: 6px 16px;
+    color: @brand-primary !important;
+    border: 1px @brand-primary solid !important;
+    border-radius: 2px;
+  }
+  .search-form {
+    @media (min-width: @screen-sm-min) {
+      display: inline-block;
+      position: relative;
+    }
+    @media (max-width: @screen-xs-max) {
+      display: none;
+    }
+  }
+
+  .search-input-content {
+    width: 260px;
+    padding: 4px 12px;
+    height: 32px;
+    border: 1px solid #E1E3E5;
+    border-right: none;
+    border-top-left-radius: 4px !important;
+    border-bottom-left-radius: 4px !important;
+    font-size: 14px;
+
+  }
+
+  .search-input-content::placeholder {
+    color: #D2D3D4;
+   }
+
+  .search-input-content:focus {
+    outline: none !important;
+  }
+
+  .searchCourseBtn {
+    position: absolute;
+    left: 260px;
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    height: 32px;
+    padding: 8px !important;
+    color: #919399;
+    background: white;
+    border-top-right-radius: 4px !important;
+    border-bottom-right-radius: 4px !important;
+    border: 1px solid #E1E3E5;
+  }
+
+  .searchEmptyCourse {
+    margin-top: 10px;
+    height: 705px;
+    text-align: center;
+
+    .searchEmptyCourseImg {
+      width: 142px;
+      height: 116px;
+    }
+
+    .searchEmptyCourseContent {
+      margin-top: 12px;
+      color: #919399;
+      line-height: 22px;
+    }
+  }
+
   @media(max-width:@screen-xs-max) {
     min-height: 250px;
   }
 }
 
-// input:-webkit-autofill, 
-// textarea:-webkit-autofill, 
+//用于隐藏又需要验证的的控件
+.type-hidden {
+  display: block !important;
+  height: 0px !important;
+  border:0;
+  .opacity(0);
+  padding: 0px !important;
+  margin: 0px !important;
+}
+
+// html,body {
+//   height: 100%;//导致任务创建的iframe样式问题
+// }
+
+.border-radius-none {
+  border-radius: 0 !important;
+}
+
+.es-icon {
+  line-height: 1;
+}
+
+// input:-webkit-autofill,
+// textarea:-webkit-autofill,
 // select:-webkit-autofill {
 //   -webkit-box-shadow: 0 0 0 100px @bg-color inset;
 // }
@@ -97,11 +200,68 @@ html.nav-active body {
   z-index: 1;
 }
 
+// 富文本
+.cke_inner {
+  border-radius: 4px;
+}
+
+.cke_top {
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
+
+.cke_reset {
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
 // 富文本编辑器
 .cke_chrome {
   .border-radius();
   border-color: @gray-light !important;
   .box-shadow(none) !important;
+}
+
+.cke_bottom {
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+// 富文本编辑器blockquote样式
+.cke_editable {
+  font-size: 13px;
+  line-height: 1.6;
+  word-wrap: break-word;
+  img {
+    max-width: 100%;
+  }
+
+  blockquote {
+    padding: 2px 0;
+    font-style: italic;
+    font-family: Georgia, Times, "Times New Roman", serif;
+    font-size: 13px;
+    border-style: solid;
+    border-color: #ccc;
+    border-width: 0;
+    p {
+      margin: 10px 0;
+    }
+  }
+
+  &.cke_contents_ltr blockquote {
+    font-size: 13px;
+    color: #000;
+    padding-left: 20px;
+    padding-right: 8px;
+    border-left-width: 5px;
+  }
+
+  &.cke_contents_rtl blockquote {
+    padding-left: 8px;
+    padding-right: 20px;
+    border-right-width: 5px;
+  }
 }
 
 // 富文本编辑器样式统一处理
@@ -128,15 +288,7 @@ html.nav-active body {
   display: none;
 }
 
-//上传文件
-// input[type=file] {
-//     display: none;
-// }
-
-
-
 //for minx
-
 .section-gray {
   background-color: @bg-new-color !important;
   .text-line h5 > span {
@@ -179,7 +331,7 @@ html.nav-active body {
 
 a {
   color: @brand-primary;
-  &:focus, 
+  &:focus,
   &:hover {
     color: darken(@brand-primary, 10%);
   }
@@ -209,4 +361,15 @@ a.transition {
   text-overflow: ellipsis;
   white-space: nowrap;
   word-wrap: normal;
-} 
+}
+
+.main_hover_item:hover .item-hover {
+  display: inline;
+}
+.item-hover {
+  display: none;
+}
+
+.viewer-backdrop {
+  background: rgba(255, 255, 255, 0.85) !important;
+}

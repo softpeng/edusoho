@@ -29,7 +29,7 @@ define(function(require, exports, module) {
             var illegalMatch = value.match(/>\s*\w{1,}|^\w{1,}\s*</gm);
             var legalMatch = value.match(/^<(meta|link|script)(.*)?(\/*)>$/gm);
             return (illegalMatch == null ) && (legalMatch && legalMatch.length >0 )
-        }, "{{display}}应该为HTML meta标签");
+        }, Translator.trans('validate_old.html_tag.message', {display:'{{display}}'}));
 
         var hideOrShowTimeAndMinutes = function() {
             if ($('[name=temporary_lock_enabled]').filter(':checked').attr("value") == 1) {
@@ -80,6 +80,21 @@ define(function(require, exports, module) {
             template: '<div class="popover help-popover" role="tooltip"><div class="arrow"></div><h3 class="popover-title"></h3><div class="popover-content"></div></div>'
         });
 
+        $('[name=mobile_bind_mode]').change(function() {
+            if ($(this).val() == 'constraint') {
+                $('.constraint-tip').removeClass('hidden');
+                $('.option-tip').addClass('hidden');
+                $('.close-tip').addClass('hidden');
+            } else if ($(this).val() == 'option') {
+                $('.constraint-tip').addClass('hidden');
+                $('.option-tip').removeClass('hidden');
+                $('.close-tip').addClass('hidden');
+            } else {
+                $('.constraint-tip').addClass('hidden');
+                $('.option-tip').addClass('hidden');
+                $('.close-tip').removeClass('hidden');
+            };
+        });
     };
 
 });

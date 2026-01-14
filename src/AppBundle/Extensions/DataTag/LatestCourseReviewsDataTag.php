@@ -18,12 +18,23 @@ class LatestCourseReviewsDataTag extends CourseBaseDataTag implements DataTag
     public function getData(array $arguments)
     {
         $this->checkCount($arguments);
+
         $conditions = $this->checkCourseArguments($arguments);
-        $conditions = array(
-            'private' => 0,
+
+        $defaultConditions = [
             'parentId' => 0,
-        );
-        $courseReviews = $this->getReviewService()->searchReviews($conditions, $sort = 'latest', 0, $arguments['count']);
+            'targetType' => 'course',
+        ];
+
+        if (isset($conditions['courseId'])) {
+            $conditions['targetId'] = $conditions['courseId'];
+            unset($conditions['courseId']);
+            $conditions = array_merge($defaultConditions, $conditions);
+        } else {
+            $conditions = array_merge($defaultConditions, $conditions);
+        }
+
+        $courseReviews = $this->getReviewService()->searchReviews($conditions, ['createdTime' => 'DESC'], 0, $arguments['count']);
 
         return $this->getCoursesAndUsers($courseReviews);
     }

@@ -2,13 +2,17 @@
 
 namespace AppBundle\Controller;
 
+use AppBundle\Common\LiveWatermarkToolkit;
 use Biz\Accessor\AccessorInterface;
-use Biz\Activity\Service\ActivityService;
-use Biz\Task\Service\TaskService;
+use Biz\Activity\Service\LiveActivityService;
+use Biz\Course\LiveReplayException;
 use Biz\Course\Service\CourseService;
-use Biz\CloudPlatform\CloudAPIFactory;
 use Biz\Course\Service\LiveReplayService;
+use Biz\Live\Service\LiveService;
 use Biz\OpenCourse\Service\OpenCourseService;
+use Biz\S2B2C\Service\S2B2CFacadeService;
+use Biz\Task\Service\TaskService;
+use Biz\Task\TaskException;
 use Symfony\Component\HttpFoundation\Request;
 
 class LiveroomController extends BaseController
@@ -16,7 +20,7 @@ class LiveroomController extends BaseController
     const LIVE_OPEN_COURSE_TYPE = 'open_course';
     const LIVE_COURSE_TYPE = 'course';
 
-    public function _entryAction(Request $request, $roomId, $params = array())
+    public function _entryAction(Request $request, $roomId, $params = [])
     {
         $user = $request->query->all();
         $user['device'] = $this->getDevice($request);
@@ -33,13 +37,51 @@ class LiveroomController extends BaseController
         $biz = $this->getBiz();
         $user['hostname'] = $biz['env']['base_url'];
 
-        $ticket = CloudAPIFactory::create('leaf')->post("/liverooms/{$roomId}/tickets", $user);
+        if (in_array($user['role'], ['speaker', 'teacher'])) {
+            $schemeAndHost = $request->getSchemeAndHttpHost();
+            $user['callbackUrl'] = $this->generateCallbackUrl($schemeAndHost, $params);
+        }
 
-        return $this->render('liveroom/entry.html.twig', array(
+        $liveActivity = $this->getLiveActivityService()->getBySyncIdGTAndLiveId($roomId);
+        if (!empty($liveActivity)) {
+            $ticket = $this->getS2B2CFacadeService()->getS2B2CService()->getLiveEntryTicket($roomId, $user);
+        } else {
+            $ticket = $this->getLiveService()->createLiveTicket($roomId, $user);
+        }
+        $isEsLive = $this->getLiveService()->isESLive($params['provider'] ?? 0);
+        if ($isEsLive) {
+            $params['watermark'] = LiveWatermarkToolkit::build();
+        }
+
+        return $this->render($isEsLive ? 'liveroom/eslive-entry.html.twig' : 'liveroom/entry.html.twig', [
             'roomId' => $roomId,
             'params' => $params,
             'ticket' => $ticket,
-        ));
+            'liveRole' => !empty($user['role']) ? $user['role'] : 'student',
+        ]);
+    }
+
+    protected function generateCallbackUrl($host, $params)
+    {
+        $callbackArgs = [
+            'sources' => ['course', 'my', 'public'], //支持课程资料读取，公共资料读取，还有我的资料库读取
+            'userId' => $this->getCurrentUser()->getId(),
+        ];
+
+        if (!empty($params['courseId'])) {
+            $callbackArgs['courseId'] = $params['courseId'];
+        }
+
+        $options = [];
+        if (!empty($params['startTime']) && !empty($params['endTime'])) {
+            //直播前后六小时有效
+            $options['exp'] = $params['endTime'] + 60 * 60 * 6;
+            $options['iat'] = $params['startTime'] - 60 * 60 * 6;
+        }
+
+        $token = $this->getJWTAuth()->auth($callbackArgs, $options);
+
+        return "{$host}/callback/ESLive?ac=callback.fetch&token={$token}";
     }
 
     /**
@@ -49,20 +91,25 @@ class LiveroomController extends BaseController
     {
         $replay = $this->getLiveReplayService()->getReplay($replayId);
         if (empty($replay)) {
-            throw $this->createNotFoundException();
+            $this->createNewException(LiveReplayException::NOTFOUND_LIVE_REPLAY());
         }
 
         if ($this->canTakeReplay($targetType, $targetId, $lessonId, $replayId)) {
-            return $this->forward('AppBundle:MaterialLib/GlobalFilePlayer:player', array('globalId' => $replay['globalId']));
+            return $this->forward('AppBundle:MaterialLib/GlobalFilePlayer:player', ['globalId' => $replay['globalId']]);
         }
 
-        throw $this->createNotFoundException();
+        $this->createNewException(LiveReplayException::NOTFOUND_LIVE_REPLAY());
     }
 
     public function ticketAction(Request $request, $roomId)
     {
         $ticketNo = $request->query->get('ticket');
-        $ticket = CloudAPIFactory::create('leaf')->get("/liverooms/{$roomId}/tickets/{$ticketNo}");
+        $liveActivity = $this->getLiveActivityService()->getBySyncIdGTAndLiveId($roomId);
+        if (!empty($liveActivity)) {
+            $ticket = $this->getS2B2CFacadeService()->getS2B2CService()->consumeLiveEntryTicket($roomId, $ticketNo);
+        } else {
+            $ticket = $this->getLiveService()->getLiveTicket($roomId, $ticketNo);
+        }
 
         return $this->createJsonResponse($ticket);
     }
@@ -72,25 +119,25 @@ class LiveroomController extends BaseController
         $openCourse = $this->getOpenCourseService()->getCourse($courseId);
         $replay = $this->getLiveReplayService()->getReplay($replayId);
 
-        return $openCourse['status'] == 'published' && $openCourse['id'] == $replay['courseId'] && $openCourse['type'] == $replay['type'];
+        return 'published' == $openCourse['status'] && $openCourse['id'] == $replay['courseId'] && $openCourse['type'] == $replay['type'];
     }
 
     protected function canTakeCourseReplay($courseId, $activityId, $replayId)
     {
         $task = $this->getTaskService()->getTaskByCourseIdAndActivityId($courseId, $activityId);
         if (!$task) {
-            throw $this->createNotFoundException();
+            $this->createNewException(TaskException::NOTFOUND_TASK());
         }
         $access = $this->getCourseService()->canLearnTask($task['id']);
 
-        return $access['code'] == AccessorInterface::SUCCESS;
+        return AccessorInterface::SUCCESS == $access['code'];
     }
 
     protected function canTakeReplay($targetType, $targetId, $lessonId, $replayId)
     {
-        if ($targetType === self::LIVE_OPEN_COURSE_TYPE) {
+        if (self::LIVE_OPEN_COURSE_TYPE === $targetType) {
             return $this->canTakeOpenCourseReplay($targetId, $replayId);
-        } elseif ($targetType === self::LIVE_COURSE_TYPE) {
+        } elseif (self::LIVE_COURSE_TYPE === $targetType) {
             return $this->canTakeCourseReplay($targetId, $lessonId, $replayId);
         }
 
@@ -104,6 +151,14 @@ class LiveroomController extends BaseController
         } else {
             return 'desktop';
         }
+    }
+
+    /**
+     * @return LiveService
+     */
+    protected function getLiveService()
+    {
+        return $this->createService('Live:LiveService');
     }
 
     /**
@@ -138,16 +193,19 @@ class LiveroomController extends BaseController
         return $this->createService('Task:TaskService');
     }
 
-    protected function getWebExtension()
+    /**
+     * @return LiveActivityService
+     */
+    protected function getLiveActivityService()
     {
-        return $this->container->get('web.twig.extension');
+        return $this->createService('Activity:LiveActivityService');
     }
 
     /**
-     * @return ActivityService
+     * @return S2B2CFacadeService
      */
-    protected function getActivityService()
+    protected function getS2B2CFacadeService()
     {
-        return $this->createService('Activity:ActivityService');
+        return $this->createService('S2B2C:S2B2CFacadeService');
     }
 }

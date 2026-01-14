@@ -26,15 +26,21 @@ class JobPool
             return static::POOL_FULL;
         }
 
+        $result = '';
         try {
-            $job->execute();
+            $result = $job->execute();
         } catch (\Exception $e) {
-            $this->getTargetlogService()->log(TargetlogService::ERROR, 'job', $this->id, $e->getMessage());
+            $this->release($job);
+            throw $e;
         }
 
         $this->release($job);
 
-        return static::SUCCESS;
+        if (empty($result)) {
+            return static::SUCCESS;
+        }
+
+        return $result;
     }
 
     public function getJobPool($name = 'default')
@@ -42,7 +48,7 @@ class JobPool
         return $this->getJobPoolDao()->getByName($name);
     }
 
-    protected function release($job)
+    public function release($job)
     {
         $jobPool = $this->getJobPool($job['pool']);
 
@@ -88,19 +94,17 @@ class JobPool
     {
         $ids = array($id);
         $diff = array('num' => $diff);
-        $this->getJobPoolDao()->wave($ids, $diff);
+        $jobPool = $this->getJobPoolDao()->get($id);
+        if (!(0 == $jobPool['num'] && $diff['num'] < 0)) {
+            $this->getJobPoolDao()->wave($ids, $diff);
+        }
     }
 
     protected function getJobPoolDao()
     {
         return $this->biz->dao('Scheduler:JobPoolDao');
     }
-
-    protected function getTargetlogService()
-    {
-        return $this->biz->service('Targetlog:TargetlogService');
-    }
-
+    
     public function __get($name)
     {
         return empty($this->data[$name]) ? '' : $this->data[$name];

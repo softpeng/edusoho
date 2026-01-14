@@ -1,0 +1,33 @@
+{% extends 'layout.html.twig' %}
+
+{% do script(['libs/vue.js', 'app/js/answer-engine/review/index.js']) %}
+
+{% block title %}{{ assessment.name }} - {{ parent() }}{% endblock %}
+
+{% block stylesheets %}
+  {{ parent() }}
+  {% include 'item-bank-css-loader.html.twig' %}
+{% endblock %}
+
+{% block body %}
+  {% block header %}
+    {% if showHeader|default(1) %}{{ parent() }}{% endif %}
+  {% endblock %}
+
+  {% include 'answer-engine/common.html.twig' %}
+  {% include 'attachment-upload/upload-data.html.twig' %}
+  <input type="hidden" name="answer_record_id" value='{{ answerRecordId }}'>
+  <input type="hidden" name="success_goto_url" value='{{ successGotoUrl }}'>
+  <input type="hidden" name="success_continue_goto_url" value='{{ successContinueGotoUrl }}'>
+  <input type="hidden" name="goto_back_url" value='{{ goBackUrl }}'>
+  <input type="hidden" name="role" value='{{ role }}'>
+  <input type="hidden" name="question_bank_attachment_setting" value="{{ setting('question_bank_attachment_setting')|json_encode }}">
+  {% if activity %}
+    <input type="hidden" name="media_type" value='{{ activity.mediaType }}'>
+    <input type="hidden" name="finishType" value='{{ activity.finishType }}'>
+  {% endif %}
+
+  {% block footer %}
+    {% if showHeader|default(1) %}{{ parent() }}{% endif %}
+  {% endblock %}
+{% endblock %}

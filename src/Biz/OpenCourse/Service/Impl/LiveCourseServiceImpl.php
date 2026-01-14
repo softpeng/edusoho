@@ -3,86 +3,174 @@
 namespace Biz\OpenCourse\Service\Impl;
 
 use AppBundle\Common\ArrayToolkit;
-use AppBundle\Common\AthenaLiveToolkit;
+use Biz\Activity\LiveActivityException;
 use Biz\BaseService;
+use Biz\Live\Constant\LiveStatus;
+use Biz\Live\Service\LiveService;
+use Biz\OpenCourse\OpenCourseException;
 use Biz\OpenCourse\Service\LiveCourseService;
+use Biz\System\Service\SettingService;
+use Biz\User\UserException;
 use Biz\Util\EdusohoLiveClient;
 use Topxia\Service\Common\ServiceKernel;
 
 class LiveCourseServiceImpl extends BaseService implements LiveCourseService
 {
+    const LIVE_STARTTIME_DIFF_SECONDS = 7200;
+
     private $liveClient = null;
 
-    public function createLiveRoom($course, $lesson, $container)
+    public function createLiveRoom($course, $lesson, $routes)
     {
-        $liveParams = $this->_filterParams($course['teacherIds'], $lesson, $container, 'add');
+        $liveParams = $this->_filterParams($course, $lesson, $routes, 'add');
 
         $live = $this->createLiveClient()->createLive($liveParams);
 
         if (empty($live)) {
-            throw $this->createServiceException('Create liveroom failed, please try again');
+            $this->createNewException(LiveActivityException::CREATE_LIVEROOM_FAILED());
         }
 
         if (isset($live['error'])) {
-            throw $this->createServiceException($live['error']);
+            throw $this->createServiceException($live['error'], 500);
         }
 
         return $live;
     }
 
-    public function editLiveRoom($course, $lesson, $container)
+    private function _filterParams($course, $lesson, $routes, $actionType = 'add')
     {
-        $liveParams = $this->_filterParams($course['teacherIds'], $lesson, $container, 'update');
+        $courseTeacherIds = $course['teacherIds'];
+        $params = [
+            'summary' => $lesson['summary'] ?? '',
+            'title' => $lesson['title'],
+            'type' => $lesson['type'],
+            'speaker' => $this->_getSpeaker($courseTeacherIds),
+            'authUrl' => $routes['authUrl'],
+            'jumpUrl' => $routes['jumpUrl'],
+        ];
+
+        if ('add' == $actionType) {
+            $params['liveLogoUrl'] = $this->_getLiveLogo();
+            $params['startTime'] = $lesson['startTime'].'';
+            $params['endTime'] = ($lesson['startTime'] + $lesson['length'] * 60).'';
+        } elseif ('update' == $actionType) {
+            $params['liveId'] = $lesson['mediaId'];
+            $params['provider'] = $lesson['liveProvider'];
+
+            if (isset($lesson['startTime']) && !empty($lesson['startTime'])) {
+                $params['startTime'] = $lesson['startTime'];
+
+                if (isset($lesson['length']) && !empty($lesson['length'])) {
+                    $params['endTime'] = ($lesson['startTime'] + $lesson['length'] * 60).'';
+                }
+            }
+        }
+        $speakerId = current($courseTeacherIds) ?: $course['userId'];
+        $liveAccount = $this->createLiveClient()->getLiveAccount();
+        $params['teacherId'] = $this->getLiveService()->getLiveProviderTeacherId($speakerId, $liveAccount['provider']);
+
+        return $params;
+    }
+
+    private function _getSpeaker($courseTeachers)
+    {
+        $speakerId = current($courseTeachers);
+        $speaker = $speakerId ? $this->getUserService()->getUser($speakerId) : null;
+
+        return $speaker ? $speaker['nickname'] : '老师';
+    }
+
+    protected function getUserService()
+    {
+        return $this->createService('User:UserService');
+    }
+
+    private function _getLiveLogo()
+    {
+        $liveLogo = $this->getSettingService()->get('course');
+        $liveLogoUrl = '';
+
+        if (!empty($liveLogo) && !empty($liveLogo['live_logo'])) {
+            $liveLogoUrl = ServiceKernel::instance()->getEnvVariable('baseUrl').'/'.$liveLogo['live_logo'];
+        }
+
+        return $liveLogoUrl;
+    }
+
+    /**
+     * @return SettingService
+     */
+    protected function getSettingService()
+    {
+        return $this->createService('System:SettingService');
+    }
+
+    protected function createLiveClient()
+    {
+        if (empty($this->liveClient)) {
+            $this->liveClient = new EdusohoLiveClient();
+        }
+
+        return $this->liveClient;
+    }
+
+    /**
+     * @return LiveService
+     */
+    protected function getLiveService()
+    {
+        return $this->createService('Live:LiveService');
+    }
+
+    public function editLiveRoom($course, $lesson, $routes)
+    {
+        $liveParams = $this->_filterParams($course, $lesson, $routes, 'update');
 
         return $this->createLiveClient()->updateLive($liveParams);
     }
 
     public function entryLive($params)
     {
-        //$lesson = $this->getOpenCourseService()->getLesson($lessonId);
         return $this->createLiveClient()->entryLive($params);
     }
 
     public function checkLessonStatus($lesson)
     {
         if (empty($lesson)) {
-            return array('result' => false, 'message' => '课时不存在！');
-            //throw $this->createServiceException("课时不存在！");
+            return ['result' => false, 'message' => '课时不存在！'];
         }
 
         if (empty($lesson['mediaId'])) {
-            return array('result' => false, 'message' => '直播教室不存在！');
-            //throw $this->createServiceException("直播教室不存在！");
+            return ['result' => false, 'message' => '直播教室不存在！'];
         }
 
-        if ($lesson['startTime'] - time() > 7200) {
-            return array('result' => false, 'message' => '直播还没开始!');
-            //throw $this->createServiceException("直播还没开始!");
+        if ($lesson['startTime'] - time() > self::LIVE_STARTTIME_DIFF_SECONDS) {
+            return ['result' => false, 'message' => '直播还没开始!'];
         }
 
-        if ($lesson['endTime'] < time()) {
-            return array('result' => false, 'message' => '直播已结束!');
-            //throw $this->createServiceException("直播已结束!");
+        if (LiveStatus::CLOSED == $lesson['progressStatus']) {
+            return ['result' => false, 'message' => '直播已结束!'];
         }
 
-        return array('result' => true, 'message' => '');
+        return ['result' => true, 'message' => ''];
     }
 
     public function checkCourseUserRole($course, $lesson)
     {
-        $role = '';
         $user = $this->getCurrentUser();
-
-        if (!$user->isLogin() && $lesson['type'] == 'liveOpen') {
-            return 'student';
-        } elseif (!$user->isLogin() && $lesson['type'] != 'liveOpen') {
-            throw $this->createServiceException('您还未登录，不能参加直播！');
+        if (!$user->isLogin()) {
+            if ('liveOpen' == $lesson['type']) {
+                return 'student';
+            }
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         $courseMember = $this->getOpenCourseService()->getCourseMember($lesson['courseId'], $user['id']);
-
         if (!$courseMember) {
-            throw $this->createServiceException('您不是课程学员，不能参加直播！');
+            if ('liveOpen' == $lesson['type']) {
+                return 'student';
+            }
+            $this->createNewException(OpenCourseException::IS_NOT_MEMBER());
         }
 
         $role = 'student';
@@ -103,28 +191,24 @@ class LiveCourseServiceImpl extends BaseService implements LiveCourseService
         return $role;
     }
 
-    public function findBeginingLiveCourse($afterSecond)
+    protected function getOpenCourseService()
     {
-        $currentUser = $this->getCurrentUser();
-        if (!$currentUser->isLogin()) {
-            return array();
+        return $this->createService('OpenCourse:OpenCourseService');
+    }
+
+    public function isLiveFinished($lessonId)
+    {
+        $lesson = $this->getOpenCourseService()->getLesson($lessonId);
+
+        if (empty($lesson) || 'liveOpen' != $lesson['type']) {
+            return true;
         }
 
-        $lessons = $this->getLessonDao()->findBeginningLiveCoures($afterSecond, 10);
-
-        foreach ($lessons as $key => $lesson) {
-            $member = $this->getCourseMemberService()->getCourseMember($lesson['courseId'], $currentUser['id']);
-            if (!empty($member)) {
-                $lesson['course'] = $this->getCourseService()->getCourse($lesson['courseId']);
-                $teacherMembers = $this->getCourseMemberService()->findCourseTeachers($lesson['courseId']);
-                $teacherIds = ArrayToolkit::column($teacherMembers, 'userId');
-                $lesson['teachers'] = $this->getUserService()->findUsersByIds($teacherIds);
-
-                return $lesson;
-            }
+        if (LiveStatus::CLOSED == $lesson['progressStatus']) {
+            return true;
         }
 
-        return array();
+        return false;
     }
 
     /**
@@ -135,123 +219,5 @@ class LiveCourseServiceImpl extends BaseService implements LiveCourseService
     public function setLiveClient($liveClient)
     {
         return $this->liveClient = $liveClient;
-    }
-
-    protected function createLiveClient()
-    {
-        if (empty($this->liveClient)) {
-            $this->liveClient = new EdusohoLiveClient();
-        }
-
-        return $this->liveClient;
-    }
-
-    private function _getSpeaker($courseTeachers)
-    {
-        $speakerId = current($courseTeachers);
-        $speaker = $speakerId ? $this->getUserService()->getUser($speakerId) : null;
-
-        return $speaker ? $speaker['nickname'] : '老师';
-    }
-
-    private function _filterParams($courseTeacherIds, $lesson, $container, $actionType = 'add')
-    {
-        $params = array(
-            'summary' => isset($lesson['summary']) ? $lesson['summary'] : '',
-            'title' => $lesson['title'],
-            'type' => $lesson['type'],
-            'speaker' => $this->_getSpeaker($courseTeacherIds),
-            'authUrl' => $container->get('router')->generate('live_auth', array(), true),
-            'jumpUrl' => $container->get('router')->generate('live_jump', array('id' => $lesson['courseId']), true),
-            'callback' => $this->buildCallbackUrl($lesson),
-        );
-
-        if ($actionType == 'add') {
-            $params['liveLogoUrl'] = $this->_getLiveLogo();
-            $params['startTime'] = $lesson['startTime'].'';
-            $params['endTime'] = ($lesson['startTime'] + $lesson['length'] * 60).'';
-        } elseif ($actionType == 'update') {
-            $params['liveId'] = $lesson['mediaId'];
-            $params['provider'] = $lesson['liveProvider'];
-
-            if (isset($lesson['startTime']) && !empty($lesson['startTime'])) {
-                $params['startTime'] = $lesson['startTime'];
-
-                if (isset($lesson['length']) && !empty($lesson['length'])) {
-                    $params['endTime'] = ($lesson['startTime'] + $lesson['length'] * 60).'';
-                }
-            }
-        }
-
-        return $params;
-    }
-
-    private function _getLiveLogo()
-    {
-        $liveLogo = $this->getSettingService()->get('course');
-        $liveLogoUrl = '';
-
-        if (!empty($liveLogo) && isset($liveLogo['live_logo']) && !empty($liveLogo['live_logo'])) {
-            $liveLogoUrl = ServiceKernel::instance()->getEnvVariable('baseUrl').'/'.$liveLogo['live_logo'];
-        }
-
-        return $liveLogoUrl;
-    }
-
-    protected function buildCallbackUrl($lesson)
-    {
-        $baseUrl = $this->biz['env']['base_url'];
-
-        $duration = $lesson['startTime'] + $lesson['length'] * 60 + 86400 - time();
-        $args = array(
-            'duration' => $duration,
-            'data' => array(
-                'courseId' => $lesson['courseId'],
-                'type' => 'open_course',
-            ),
-        );
-        $token = $this->getTokenService()->makeToken('live.callback', $args);
-
-        return AthenaLiveToolkit::generateCallback($baseUrl, $token['token'], $lesson['courseId']);
-    }
-
-    protected function getOpenCourseService()
-    {
-        return $this->createService('OpenCourse:OpenCourseService');
-    }
-
-    protected function getUserService()
-    {
-        return $this->createService('User:UserService');
-    }
-
-    protected function getLogService()
-    {
-        return $this->createService('System:LogService');
-    }
-
-    protected function getLessonDao()
-    {
-        return $this->createDao('OpenCourse:OpenCourseLessonDao');
-    }
-
-    protected function getCourseMemberService()
-    {
-        return $this->createService('Course:MemberService');
-    }
-
-    protected function getSettingService()
-    {
-        return $this->createService('System:SettingService');
-    }
-
-    protected function getLiveReplayService()
-    {
-        return $this->createService('Course:LiveReplayService');
-    }
-
-    protected function getTokenService()
-    {
-        return $this->createService('User:TokenService');
     }
 }

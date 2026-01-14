@@ -2,116 +2,63 @@
 
 namespace AppBundle\Controller;
 
+use AppBundle\Common\SmsToolkit;
 use Biz\System\Service\LogService;
 use Biz\User\Service\AuthService;
 use Biz\User\Service\TokenService;
-use AppBundle\Common\SmsToolkit;
+use Biz\User\Support\RoleHelper;
+use Symfony\Component\Form\Extension\Core\Type\PasswordType;
 use Symfony\Component\HttpFoundation\Request;
 
 class PasswordResetController extends BaseController
 {
     public function indexAction(Request $request)
     {
-        $user = $this->getCurrentUser();
+        return $this->render('password-reset/index.html.twig');
+    }
 
-        $data = array('email' => '');
-
-        if ($user->isLogin()) {
-            if (!$user['setup'] || stripos($user['email'], '@edusoho.net') != false) {
-                return $this->redirect($this->generateUrl('settings_setup'));
-            }
-            $data['email'] = $user['email'];
+    public function emailResetSuccessAction(Request $request)
+    {
+        $email = $request->query->get('email');
+        $mobile = $request->query->get('mobile');
+        if (!empty($email)) {
+            $user = $this->getUserService()->getUserByEmail($email);
+        } else {
+            $user = $this->getUserService()->getUserByVerifiedMobile($mobile);
         }
 
-        $form = $this->createFormBuilder($data)
-            ->add('email', 'email')
-            ->getForm();
-
-        $error = null;
-
-        if ($request->getMethod() === 'POST') {
-            $form->bind($request);
-
-            if ($form->isValid()) {
-                $data = $form->getData();
-                $user = $this->getUserService()->getUserByEmail($data['email']);
-
-                if (empty($user)) {
-                    list($result, $message) = $this->getAuthService()->checkEmail($data['email']);
-
-                    if ($result === 'error_duplicate') {
-                        $error = '请通过论坛找回密码';
-
-                        return $this->render('password-reset/index.html.twig', array(
-                            'form' => $form->createView(),
-                            'error' => $error,
-                        ));
-                    }
-                }
-
-                if ($user) {
-                    $token = $this->getUserService()->makeToken('password-reset', $user['id'], strtotime('+1 day'));
-                    try {
-                        $site = $this->setting('site', array());
-                        $mailOptions = array(
-                            'to' => $user['email'],
-                            'template' => 'email_reset_password',
-                            'format' => 'html',
-                            'params' => array(
-                                'nickname' => $user['nickname'],
-                                'verifyurl' => $this->generateUrl('password_reset_update', array('token' => $token), true),
-                                'sitename' => $site['name'],
-                                'siteurl' => $site['url'],
-                            ),
-                        );
-
-                        $mailFactory = $this->getBiz()->offsetGet('mail_factory');
-                        $mail = $mailFactory($mailOptions);
-                        $mail->send();
-                    } catch (\Exception $e) {
-                        $this->getLogService()->error('user', 'password-reset', '重设密码邮件发送失败:'.$e->getMessage());
-
-                        return $this->createMessageResponse('error', '重设密码邮件发送失败，请联系管理员。');
-                    }
-
-                    $this->getLogService()->info('user', 'password-reset', "{$user['email']}向发送了找回密码邮件。");
-
-                    return $this->render('password-reset/sent.html.twig', array(
-                        'user' => $user,
-                        'emailLoginUrl' => $this->getEmailLoginUrl($user['email']),
-                    ));
-                } else {
-                    $error = '该邮箱地址没有注册过帐号';
-                }
-            }
-        }
-
-        return $this->render('password-reset/index.html.twig', array(
-            'form' => $form->createView(),
-            'error' => $error,
-        ));
+        return $this->render('password-reset/sent.html.twig', [
+            'user' => $user,
+            'email' => $email,
+            'mobile' => $mobile,
+        ]);
     }
 
     public function updateAction(Request $request)
     {
         $token = $this->getUserService()->getToken('password-reset', $request->query->get('token') ?: $request->request->get('token'));
-
         if (empty($token)) {
             return $this->render('password-reset/error.html.twig');
         }
 
-        $form = $this->createFormBuilder()
-            ->add('password', 'password')
-            ->add('confirmPassword', 'password')
+        $user = $this->getUserService()->getUser($token['userId']);
+        if (empty($user)) {
+            return $this->render('password-reset/error.html.twig');
+        }
+
+        $form = $this->createFormBuilder(null, [
+            'csrf_protection' => false])
+            ->add('password', PasswordType::class)
+            ->add('confirmPassword', PasswordType::class)
             ->getForm();
 
-        if ($request->getMethod() === 'POST') {
-            $form->bind($request);
+        if ('POST' === $request->getMethod()) {
+            $form->handleRequest($request);
 
             if ($form->isValid()) {
                 $data = $form->getData();
 
-                $this->getAuthService()->changePassword($token['userId'], null, $data['password']);
+                $this->getUserService()->changePassword($token['userId'], $data['password']);
 
                 $this->getUserService()->deleteToken('password-reset', $token['token']);
 
@@ -119,9 +66,10 @@ class PasswordResetController extends BaseController
             }
         }
 
-        return $this->render('password-reset/update.html.twig', array(
+        return $this->render('password-reset/update.html.twig', [
             'form' => $form->createView(),
-        ));
+            'needStrongPassword' => RoleHelper::isStaff($user['roles']),
+        ]);
     }
 
     public function changeRawPasswordAction(Request $request)
@@ -139,7 +87,7 @@ class PasswordResetController extends BaseController
 
     public function resetBySmsAction(Request $request)
     {
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             list($result, $sessionField, $requestField) = SmsToolkit::smsCheck($request, $scenario = 'sms_forget_password');
 
             if ($result) {
@@ -152,9 +100,9 @@ class PasswordResetController extends BaseController
                 $token = $this->getUserService()->makeToken('password-reset', $targetUser['id'], strtotime('+1 day'));
                 $request->request->set('token', $token);
 
-                return $this->redirect($this->generateUrl('password_reset_update', array(
+                return $this->redirect($this->generateUrl('password_reset_update', [
                     'token' => $token,
-                )));
+                ]));
             }
 
             return $this->createMessageResponse('error', '手机短信验证错误，请重新找回');
@@ -163,30 +111,15 @@ class PasswordResetController extends BaseController
         return $this->createJsonResponse('GET method');
     }
 
-    public function getEmailLoginUrl($email)
-    {
-        $host = substr($email, strpos($email, '@') + 1);
-
-        if ($host === 'hotmail.com') {
-            return 'http://www.'.$host;
-        }
-
-        if ($host === 'gmail.com') {
-            return 'http://mail.google.com';
-        }
-
-        return 'http://mail.'.$host;
-    }
-
     public function checkMobileExistsAction(Request $request)
     {
         $mobile = $request->query->get('value');
         list($result, $message) = $this->getAuthService()->checkMobile($mobile);
 
-        if ($result === 'success') {
-            $response = array('success' => false, 'message' => '该手机号码不存在');
+        if ('success' === $result) {
+            $response = ['success' => false, 'message' => '该手机号码不存在'];
         } else {
-            $response = array('success' => true, 'message' => '');
+            $response = ['success' => true, 'message' => ''];
         }
 
         return $this->createJsonResponse($response);

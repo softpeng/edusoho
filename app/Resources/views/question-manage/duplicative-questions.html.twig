@@ -1,0 +1,29 @@
+{% extends 'layout.html.twig' %}
+{% do script(['libs/vue.js', 'libs/jquery-intro.js', 'app/js/question-bank/duplicative-questions/index.js'])  %}
+
+{% set currentTheme = current_theme() %}
+{% set themeConfig = app.request.get('themeEditing')|default(false) ? currentTheme.config  : currentTheme.confirmConfig %}
+{% set maincolor = themeConfig.maincolor|default('default') %}
+{% if maincolor != 'default' and setting('theme.code', 'jianmo') == 'jianmo' %}
+  {% do css(['app/css/item-bank-' ~ maincolor ~ '.css']) %}
+  {% do css(['app/css/item-bank-antdv-' ~ maincolor ~ '.css']) %}
+{% else %}
+  {% do css(['app/css/item-bank.css']) %}
+  {% do css(['app/css/item-bank-antdv.css']) %}
+{% endif %}
+{% do css(['app/css/main-ant.css']) %}
+
+{% block body %}
+
+  {% verbatim %}
+    <div id="app">
+    </div>
+  {% endverbatim %}
+
+  <input type="hidden" name="page_type" value="{{ app.request.query.get('type')|default('') }}">
+  <input type="hidden" name="question_bank_attachment_setting" value="{{ setting('question_bank_attachment_setting')|json_encode }}">
+  <input type="hidden" name="questionBankId" value="{{ questionBankId }}">
+  <input type="hidden" name="categoryId" value="{{ categoryId }}">
+  <input type="hidden" name="categoryName" value="{{ categoryName }}">
+  {% include 'attachment-upload/upload-data.html.twig' %}
+{% endblock %}

@@ -1,30 +1,14 @@
-import EsImageCrop from 'common/es-image-crop.js';
+import LocalImageCrop from 'app/common/local-image/crop';
 
-let imageCrop = new EsImageCrop({
-  element: "#classroom-picture-crop",
-  group: "course",
-  cropedWidth: 525,
-  cropedHeight: 350
+new LocalImageCrop({
+  cropImg: '#classroom-crop',
+  saveBtn: '#save-btn',
+  selectBtn: '#select-btn',
+  group: 'course',
+  imgs: {
+    large: [540, 304],
+    middle: [354, 200],
+    small: [219, 124],
+  }
 });
 
-imageCrop.afterCrop = function(response) {
-  let url = $("#upload-picture-btn").data("url");
-  $.post(url, {images: response}, function(){
-      document.location.href=$("#upload-picture-btn").data("gotoUrl");
-  });
-};
-
-$("#upload-picture-btn").click(function(e) {
-  e.stopPropagation();
-  imageCrop.crop({
-      imgs: {
-          large: [525, 350],
-          middle: [345, 230],
-          small: [213, 142],
-      }
-  });
-})
-
-$('.go-back').click(function(){
-    history.go(-1);
-});

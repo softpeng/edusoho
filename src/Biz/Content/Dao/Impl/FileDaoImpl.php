@@ -3,22 +3,25 @@
 namespace Biz\Content\Dao\Impl;
 
 use Biz\Content\Dao\FileDao;
-use Codeages\Biz\Framework\Dao\GeneralDaoImpl;
+use Codeages\Biz\Framework\Dao\AdvancedDaoImpl;
 
-class FileDaoImpl extends GeneralDaoImpl implements FileDao
+class FileDaoImpl extends AdvancedDaoImpl implements FileDao
 {
     protected $table = 'file';
 
     public function declares()
     {
-        return array(
-            'orderbys' => array(
+        return [
+            'timestamps' => [
                 'createdTime',
-            ),
-            'conditions' => array(
+            ],
+            'orderbys' => [
+                'createdTime',
+            ],
+            'conditions' => [
                 'groupId = :groupId',
-            ),
-        );
+            ],
+        ];
     }
 
     public function findByIds(array $ids)
@@ -29,10 +32,10 @@ class FileDaoImpl extends GeneralDaoImpl implements FileDao
     public function find($start, $limit)
     {
         return $this->search(
-            array(),
-            array(
+            [],
+            [
                 'createdTime' => 'DESC',
-            ),
+            ],
             $start,
             $limit
         );
@@ -40,18 +43,18 @@ class FileDaoImpl extends GeneralDaoImpl implements FileDao
 
     public function countAll()
     {
-        return $this->count(array());
+        return $this->count([]);
     }
 
     public function findByGroupId($groupId, $start, $limit)
     {
         return $this->search(
-            array(
+            [
                 'groupId' => $groupId,
-            ),
-            array(
+            ],
+            [
                 'createdTime' => 'DESC',
-            ),
+            ],
             $start,
             $limit
         );
@@ -59,13 +62,18 @@ class FileDaoImpl extends GeneralDaoImpl implements FileDao
 
     public function countByGroupId($groupId)
     {
-        return $this->count(array(
+        return $this->count([
             'groupId' => $groupId,
-        ));
+        ]);
     }
 
     public function deleteByUri($uri)
     {
-        return $this->db()->delete($this->table, array('uri' => $uri));
+        return $this->db()->delete($this->table, ['uri' => $uri]);
+    }
+
+    public function findByUris(array $uris)
+    {
+        return $this->findInField('uri', $uris);
     }
 }

@@ -1,20 +1,21 @@
 import '../tab-manage';
-import notify from 'common/notify';
 
 let ids = [];
 let $searchForm = $('.form-search');
+let $sure = $('#sure');
 
-$('#sure').on('click', function () {
-  $('#sure').button('submiting').addClass('disabled');
+$sure.on('click', function () {
+  $sure.button('submiting').addClass('disabled');
 
   $.ajax({
-    type: "post",
+    type: 'post',
     url: $('#sure').data('url'),
     data: { 'ids': ids },
     async: false,
     success: function (response) {
       if (!response['result']) {
-	      notify('danger',response['message']);
+        $sure.removeClass('disabled');
+        cd.message({ type: 'danger', message: response['message']});
       } else {
         $('.modal').modal('hide');
         window.location.reload();
@@ -52,8 +53,15 @@ $('#all-courses').on('click', function () {
 
 
 });
-
-$('.row').on('click', ".course-item ", function () {
+ids = localStorage.getItem('ids') ? localStorage.getItem('ids').split(',') : [];
+$('.js-course-wide-list .js-course-item').each(function (i, element){
+	const id = element.getAttribute('data-id');
+	if (ids.includes(id)) {
+		element.className += ' select'
+    $('.js-course-metas-' + id).show();
+	}
+});
+$('.row').on('click', '.course-item ', function () {
 
   let id = $(this).data('id');
 
@@ -70,11 +78,13 @@ $('.row').on('click', ".course-item ", function () {
       if (val != id)
         return true;
     }, false);
+		localStorage.setItem('ids', ids);
 
   } else {
     $(this).addClass('select');
     $('.course-metas-' + id).show();
     ids.push(id);
+		localStorage.setItem('ids', ids)
   }
 });
 

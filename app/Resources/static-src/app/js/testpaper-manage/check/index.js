@@ -1,9 +1,8 @@
-import QuestionTypeBuilder from '../../testpaper/widget/question-type-builder';
 import {
   testpaperCardFixed,
 } from 'app/js/testpaper/widget/part';
 
-$.validator.addMethod("score",function(value,element){ 
+$.validator.addMethod('score',function(value,element){
   let isFloat = /^\d+(\.\d)?$/.test(value);
   if (!isFloat){
     return false;
@@ -14,7 +13,7 @@ $.validator.addMethod("score",function(value,element){
   } else {
     return false;
   }
-  
+
 }, $.validator.format(Translator.trans('activity.testpaper_manage.marking_validate_error_hint')));
 
 class CheckTest
@@ -30,6 +29,8 @@ class CheckTest
     this._init();
     this._initValidate();
     testpaperCardFixed();
+    this.isContinue = false;
+    this.passStatus = 'passed';
   }
 
   _initEvent() {
@@ -37,6 +38,7 @@ class CheckTest
     this.$container.on('click','[data-role="check-submit"]',event=>this._submitValidate(event));
     this.$container.on('click','*[data-anchor]',event=>this._quick2Question(event));
     this.$dialog.on('click','[data-role="finish-check"]',event=>this._submit(event));
+    this.$dialog.on('click','.js-next-check',event=>this._continue(event));
     this.$dialog.on('change','select',event=>this._teacherSayFill(event));
   }
 
@@ -48,7 +50,7 @@ class CheckTest
     let $shortTextarea = $(event.currentTarget);
 
     if ($shortTextarea.hasClass('essay-teacher-say-short')) {
-      
+
       event.preventDefault();
       event.stopPropagation();
       $(this).blur();
@@ -61,10 +63,11 @@ class CheckTest
 
       let editor = CKEDITOR.replace($longTextarea.attr('id'), {
         toolbar: 'Minimal',
+        fileSingleSizeLimit: app.fileSingleSizeLimit,
         filebrowserImageUploadUrl: $longTextarea.data('imageUploadUrl')
       });
 
-      editor.on('blur', function(e) {
+      editor.on('blur', function() {
         editor.updateElement();
         setTimeout(function() {
           $longTextarea.val(editor.getData());
@@ -72,7 +75,7 @@ class CheckTest
         }, 1);
       });
 
-      editor.on('instanceReady', function(e) {
+      editor.on('instanceReady', function() {
         this.focus();
 
         $textareaBtn.one('click', function() {
@@ -92,7 +95,7 @@ class CheckTest
         }, 1);
       });
 
-      editor.on('insertHtml', function(e) {
+      editor.on('insertHtml', function() {
         editor.updateElement();
         setTimeout(function() {
           $longTextarea.val(editor.getData());
@@ -100,35 +103,34 @@ class CheckTest
         }, 1);
       });
     }
-    
+
   }
 
-  _initValidate(event) {
+  _initValidate() {
     this.validator = this.$form.validate();
 
     if ($('*[data-score]:visible').length > 0) {
-      $('*[data-score]:visible').each(function(index){
+      $('*[data-score]:visible').each(function(){
         $(this).rules('add',{
           required:true,
           score:true,
           min:0,
-          messages: {    
-            required: Translator.trans('activity.testpaper_manage.required_error_hint'),    
-          } 
-        })
-      })
+          messages: {
+            required: Translator.trans('activity.testpaper_manage.required_error_hint'),
+          }
+        });
+      });
     }
 
   }
 
   _quick2Question(event) {
-    let $target = $(event.currentTarget); 
+    let $target = $(event.currentTarget);
     let position = $($target.data('anchor')).offset();
     $(document).scrollTop(position.top - 55);
   }
 
-  _submitValidate(event) {
-    let $target = $(event.currentTarget);
+  _submitValidate() {
     let scoreTotal = 0;
 
     if (this.validator == undefined || this.validator.form()) {
@@ -136,34 +138,57 @@ class CheckTest
       $('*[data-score]').each(function(){
         let content = {};
         let questionId = $(this).data('id');
-        
+
         content['score'] = Number($(this).val());
         content['teacherSay'] = $('[name="teacherSay_'+questionId+'"]').val();
 
         self.checkContent[questionId] = content;
         scoreTotal = scoreTotal + Number($(this).val());
-      })
+      });
 
-      let subjectiveScore = Number(this.$dialog.find('[name="objectiveScore"]').val());
-      let totalScore = Number(scoreTotal) + subjectiveScore;
+      let $scoreItem = this.$dialog.find('.js-student-score');
+      let passScore = this.$dialog.find('.js-pass-score').data('passScore');
+      let objectiveScore = Number($scoreItem.data('objectiveScore'));
+      let totalScore = Number(scoreTotal) + objectiveScore;
 
-      this.$dialog.find('#totalScore').html(totalScore);
+      $scoreItem.html(totalScore);
+      if (totalScore >= passScore) {
+        $scoreItem.removeClass('color-danger').addClass('color-success');
+        this.passStatus = 'passed';
+      } else {
+        $scoreItem.removeClass('color-success').addClass('color-danger');
+        this.passStatus = 'unpassed';
+      }
       this.$dialog.modal('show');
     }
 
 
   }
 
+  _continue(event) {
+    this.isContinue = true;
+    this._submit(event);
+  }
+
   _submit(event) {
 
     let $target = $(event.currentTarget);
     let teacherSay = this.$dialog.find('textarea').val();
-    let passedStatus = this.$dialog.find('[name="passedStatus"]:checked').val();
+    let passedStatus = '';
+    if (this.$dialog.find('[name="passedStatus"]:checked').length > 0) {
+      passedStatus = this.$dialog.find('[name="passedStatus"]:checked').val();
+    } else {
+      passedStatus = this.passStatus;
+    }
 
     $target.button('loading');
-    $.post($target.data('postUrl'), {result:this.checkContent,teacherSay:teacherSay,passedStatus:passedStatus}, function(response) {
+    $.post($target.data('postUrl'), {result:JSON.stringify(this.checkContent),teacherSay:teacherSay,passedStatus:passedStatus,isContinue:this.isContinue}, function(response) {
+      if (response.goto != '') {
+        window.location.href = response.goto;
+      } else {
         window.location.reload();
-    })
+      }
+    });
   }
 
   _teacherSayFill(event) {
@@ -178,4 +203,4 @@ class CheckTest
   }
 }
 
-new CheckTest($('.container'));
+new CheckTest($('.js-testpaper-container'));

@@ -2,8 +2,13 @@
 
 namespace Biz\OpenCourse\Service;
 
+use Biz\System\Annotation\Log;
+
 interface OpenCourseService
 {
+    const LIVE_OPEN_TYPE = 'liveOpen';
+    const OPEN_TYPE = 'open';
+
     /**
      * open_course.
      */
@@ -11,7 +16,7 @@ interface OpenCourseService
 
     public function findCoursesByIds(array $ids);
 
-    public function searchCourses($conditions, $orderBy, $start, $limit);
+    public function searchCourses($conditions, $orderBy, $start, $limit, $columns = []);
 
     /**
      * @param $conditions
@@ -21,24 +26,56 @@ interface OpenCourseService
      */
     public function countCourses($conditions);
 
+    /**
+     * @param $course
+     *
+     * @return mixed
+     * @Log(module="open_course",action="create_course")
+     */
     public function createCourse($course);
 
+    /**
+     * @param $id
+     * @param $fields
+     *
+     * @return mixed
+     * @Log(module="open_course",action="update_course",param="id")
+     */
     public function updateCourse($id, $fields);
 
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="open_course",action="delete_course")
+     */
     public function deleteCourse($id);
 
     public function waveCourse($id, $field, $diff);
 
-    public function favoriteCourse($courseId);
-
-    public function unFavoriteCourse($courseId);
-
+    /**
+     * @param $courseId
+     * @param $data
+     *
+     * @return mixed
+     * @Log(module="open_course",action="update_picture",funcName="getCourse",param="courseId")
+     */
     public function changeCoursePicture($courseId, $data);
 
-    public function getFavoriteByUserIdAndCourseId($userId, $courseId, $type);
-
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="open_course",action="pulish_course",funcName="getCourse")
+     */
     public function publishCourse($id);
 
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="open_course",action="close_course",funcName="getCourse")
+     */
     public function closeCourse($id);
 
     public function tryManageOpenCourse($courseId);
@@ -51,6 +88,8 @@ interface OpenCourseService
     public function getLesson($id);
 
     public function getCourseLesson($courseId, $lessonId);
+
+    public function getLiveOpenLessonByLiveId($liveId);
 
     public function findLessonsByIds(array $ids);
 
@@ -66,12 +105,32 @@ interface OpenCourseService
      */
     public function countLessons($conditions);
 
+    /**
+     * @param $lesson
+     *
+     * @return mixed
+     * @Log(module="open_course",action="add_lesson")
+     */
     public function createLesson($lesson);
 
+    /**
+     * @param $courseId
+     * @param $lessonId
+     * @param $fields
+     *
+     * @return mixed
+     * @Log(module="open_course",action="update_lesson",funcName="getCourseLesson",param="courseId,lessonId")
+     */
     public function updateLesson($courseId, $lessonId, $fields);
 
     public function waveCourseLesson($id, $field, $diff);
 
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="open_course",action="delete_lesson")
+     */
     public function deleteLesson($id);
 
     public function getLessonItems($courseId);
@@ -89,6 +148,10 @@ interface OpenCourseService
     public function getNextLesson($courseId, $lessonId);
 
     public function generateLessonVideoReplay($courseId, $lessonId, $fileId);
+
+    public function startLive($liveId, $startTime);
+
+    public function closeLive($liveId, $closeTime);
 
     /**
      * open_course_member.
@@ -111,7 +174,7 @@ interface OpenCourseService
      */
     public function countMembers($conditions);
 
-    public function searchMembers($conditions, $orderBy, $start, $limit);
+    public function searchMembers($conditions, $orderBy, $start, $limit, $columns = []);
 
     public function createMember($member);
 
@@ -119,5 +182,20 @@ interface OpenCourseService
 
     public function deleteMember($id);
 
+    /**
+     * @param $courseId
+     * @param $teachers
+     *
+     * @return mixed
+     * @Log(module="open_course",action="update_teacher",funcName="getCourse",param="courseId")
+     */
     public function setCourseTeachers($courseId, $teachers);
+
+    public function getTodayOpenLiveCourseNumber();
+
+    public function findOpenLiveCourse($conditions, $userId);
+
+    public function countLiveCourses($conditions = []);
+
+    public function searchAndSortLiveCourses($conditions = [], $start, $limit);
 }

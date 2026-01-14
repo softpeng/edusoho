@@ -1,13 +1,21 @@
 searchResultType:
     course: 课程
+    classroom: 班级
+    itemBankExercise: 题库练习
     teacher: 教师
     thread: 小组话题
     article: 资讯
 
 courseStatus:
     draft: 未发布
+    unpublished: 已下架
     published: 已发布
     closed: 已关闭
+
+goodsStatus:
+  created: 未发布
+  published: 已发布
+  unpublished: 已关闭
 
 courseType:
     live: 直播课程
@@ -15,8 +23,17 @@ courseType:
     liveOpen: 直播公开课
     normal: 普通课程
 
+nonOpenCourseCateogry:
+    live: 直播课程
+    normal: 普通课程
+
+openCourseCategory:
+    liveOpen: 直播公开课
+    open: 录播公开课
+
 classroomStatus:
     draft: 未发布
+    unpublished: 已下架
     published: 已发布
     closed: 已关闭
 
@@ -26,8 +43,8 @@ couponType:
 
 couponStatus:
     used: 已使用
-    unused: 未使用
     receive: 已领取
+    unused: 未使用
 
 fileType:
     video: 视频
@@ -35,35 +52,100 @@ fileType:
     document: 文档
     image: 图片
     ppt: PPT
-    flash: Flash
+    flash: 其他
     other: 其他
-    
+
 orderStatus:
     created: 未付款
+    paying: 付款中
     paid: 已付款
     refunding: 退款中
     refunded: 已退款
-    cancelled: 已关闭
+    success: 购买成功
+    fail: 交易失败
+    finished: 交易成功
+    closed: 已关闭
+
+orderItemType:
+    course: 教学计划
+    classroom: 班级
+    vip: 会员
+    item_bank_exercise: 题库
+
+refundItemType:
+    course: 教学计划
+    classroom: 班级
+    item_bank_exercise: 题库
+
+orderDisplayStatus:
+    notPaid: 未付款
+    paid: 已付款
+    closed: 交易关闭
+    finished: 交易成功
+    refunded: 已退款
+
+orderLogStatus:
+    order.created: 未付款
+    order.paying: 付款中
+    order.paid: 已付款
+    order.refunding: 退款中
+    order.refunded: 已退款
+    order.finished: 交易成功
+    order.fail: 交易失败
+    order.closed: 已关闭
+    order_refund.auditing: 退款审核中
+    order_refund.cancel: 退款被拒绝
+    order.adjust_price: 改价
 
 refundStatus:
-    created: 已申请
-    success: 退款成功
-    failed: 退款失败
-    cancelled: 已取消
+    auditing: 已申请
+    refunding: 退款中
+    refunded: 退款成功
+    refused: 退款关闭
+    cancel: 已取消
+
+refundDisplayStatus:
+    auditing: 退款待处理
+    refunded: 退款成功
+    refused: 退款关闭
+    cancel: 退款撤销
 
 payment:
-    none: --
     alipay: 支付宝
-    wxpay: 微信支付
-    heepay: 网银支付
-    quickpay: 快捷支付
-    iosiap: 苹果应用内支付
-    outside: 站外支付
+    wechat: 微信
+    heepay: 网银支付（汇付宝）
+    quickpay: 快捷支付（汇付宝）
+    iap: 苹果应用内支付
+    lianlianpay: 连连支付
     coin: 虚拟币
-    llpay: 连连支付
-    marketing: 营销平台
-   
-    
+    wechat_app: 微信小程序
+    none: 其他
+
+paymentSelect:
+    alipay: 支付宝
+    wechat: 微信
+    iap: 苹果应用内支付
+    lianlianpay: 连连支付
+    coin: 虚拟币
+    wechat_app: 微信小程序
+    none: 其他
+
+orderSource:
+    self: 站内支付
+    marketing: 微营销支付
+    outside: 站外支付
+
+orderDeductType:
+    discount: 打折
+    coupon: 优惠券
+    paidCourse: 班级课程抵扣
+    adjust_price: 改价
+
+source:
+    self: 本站
+    outside: 站外
+    marketing: 微营销
+    scrm: 销客助手
 
 moneyRecordType:
     income: 充值
@@ -143,19 +225,31 @@ memberLevel:
 duration_unit:
     month: 个月
     year: 年
+    day: 天
 
 boughtType:
     new: 购买
     renew: 续费
     upgrade: 升级
-    edit: 编辑
+    admin: 添加会员
     cancel: 取消会员
+    edit: 编辑会员
 
 userKeyWordType:
-    nickname: 用户名
+    nickname: 学员名
+    wechatNickname: 微信昵称
     verifiedMobile: 手机号
     email: 邮件地址
     loginIp: 登录IP
+    idcard: 身份证号
+
+staffKeyWordType:
+  nickname: 员工名
+  wechatNickname: 微信昵称
+  verifiedMobile: 手机号
+  email: 邮件地址
+  loginIp: 登录IP
+  idcard: 身份证号
 
 jobCycle:
     once: 一次
@@ -201,13 +295,29 @@ userType:
     web_email: 网站邮箱注册
     web_mobile: 网站手机注册
     import: 手动导入
-    renren: 人人连接
     qq: QQ登录
     weixin: 微信登录
+    apple: Apple登录
+    marketing: 微营销
+    distributor: 分销
+    marketing_mall: 网校商城注册
+
+userStatus:
+    all: 全部
+    locked: 封禁
+    unlock: 未封禁
 
 userKeyWordTypes:
     nickname: 用户名
     email: 邮件地址
+
+staffKeyWordTypes:
+  nickname: 员工名
+  email: 邮件地址
+
+userStatisticsTypes:
+  nickname: 学员名
+  mobile: 手机号
 
 questionType:
     single_choice: 单选题
@@ -217,6 +327,14 @@ questionType:
     determine: 判断题
     essay: 问答题
     material: 材料题
+
+itemQuestionType:
+    single_choice: 单选题
+    choice: 多选题
+    uncertain_choice: 不定项选择题
+    text: 填空题
+    true_false: 判断题
+    rich_text: 问答题
 
 difficulty:
     simple: 简单
@@ -302,6 +420,10 @@ searchCourseType:
     free: 免费课程
     live: 直播课程
 
+searchClassroomType:
+    all: 全部班级
+    free: 免费班级
+
 userInfoFields:
     email: 邮箱地址
     truename: 真实姓名
@@ -315,6 +437,7 @@ userInfoFields:
     weixin: 微信
 
 passedStatus:
+    none: 不合格
     excellent: 优秀
     good: 良好
     passed: 合格
@@ -324,6 +447,7 @@ processStatus:
     none: 未转码
     waiting: 转码中
     processing: 转码中
+    doing: 转码中
     ok: 转码成功
     error: 转码失败
 
@@ -333,6 +457,13 @@ convertStatus:
     doing: 正在转码
     success: 转码成功
     error: 转码失败
+
+audioConvertStatus:
+    none: 未转音频
+    waiting: 等待转音频
+    doing: 音频转码中
+    success: 转音频成功
+    error: 转音频失败
 
 state:
     banned: 禁用
@@ -352,10 +483,22 @@ courseSerializeMode:
     finished: 已完结
 
 refund_reason:
-    select_reason: --请选择退学原因--
     bad_content: 课程内容质量差
     bad_teacher_attitude: 老师服务态度不好
     other: 其他
+
+exit_reason:
+    refund: 退款成功
+    remove: 移除
+    exit: 主动退出
+
+join_reason:
+    vip_join: 会员加入
+    free_join: 免费加入
+    buy_join: 购买加入
+    import_join: 导入用户
+    assistant_join: 助教加入
+    auditor_join: 旁听加入
 
 exchangeType:
     nickName: 用户名
@@ -369,3 +512,196 @@ exchangeStatus:
 rewardPointUserType:
     nickname: 用户名
     truename: 姓名
+
+waveType:
+    plus: 增加
+    minus: 减少
+
+#选项
+questionOption:
+    0: A
+    1: B
+    2: C
+    3: D
+    4: E
+    5: F
+    6: G
+    7: H
+    8: I
+    9: J
+
+weChatFansType:
+    all: 所有粉丝
+    user: 网校学员
+    notUser: 非网校学员
+
+weChatFansKeywordType:
+    nickname: 网校用户名
+    wechatNickname: 微信昵称
+
+weekDays:
+    Mon: 周一
+    Tue: 周二
+    Wed: 周三
+    Thu: 周四
+    Fri: 周五
+    Sat: 周六
+    Sun: 周日
+
+adminCourseTypes:
+    normal: 普通课程
+    classroom: 班级课程
+
+adminPlumberStatus:
+    executing: 正在运行中
+    stopped: 已停止
+
+s2b2cSettlementOrderStatus:
+  paid: 待支付
+  success: 已支付
+  finished: 交易完成
+  refunded: 已退款
+
+certificateTypes:
+    course: 课程
+    classroom: 班级
+
+certificateStatus:
+    valid: 有效
+    expired: 过期
+    cancelled: 作废
+
+certificateSearchTypes:
+    truename: 姓名
+    nickname: 用户名
+    verifiedMobile: 手机号
+    email: 邮箱
+    batch: 证书批次
+    code: 证书编号
+
+certificateAuditStatus:
+    valid: 已发送
+    cancelled: 已发送
+    expired: 已发送
+    reject: 驳回
+    none: 未审核
+
+certificateAuditSearchTypes:
+    truename: 姓名
+    nickname: 用户名
+    verifiedMobile: 手机号
+    email: 邮箱
+
+WechatNotificationType:
+  serviceFollow: 服务号关注
+  messageSubscribe: 消息订阅
+
+#用户内容审核类型
+userAuditTargetType:
+  course_review: 课程评价
+  course_review_reply: 课程评价回复
+  classroom_review: 班级评价
+  classroom_review_reply: 班级评价回复
+  item_bank_exercise_review: 题库练习评价
+  item_bank_exercise_review_reply: 题库练习评价回复
+  open_course_review: 公开课评价
+  open_course_review_reply: 公开课评价回复
+  article_review: 资讯评价
+  article_review_reply: 资讯评价回复
+  course_note: 课程笔记
+  course_thread: 课程话题
+  course_thread_post: 课程话题回复
+  classroom_thread: 班级话题
+  classroom_thread_reply: 班级话题回复
+  group_thread: 小组话题
+  group_thread_post: 小组话题回复
+  course_question: 课程问答
+  course_question_post: 课程问答回复
+  classroom_question: 班级问答
+  classroom_question_reply: 班级问答回复
+  classroom_event: 班级活动
+  classroom_event_reply: 班级活动回复
+
+userSelectedAuditTargetType:
+  course_review: 课程评价
+  classroom_review: 班级评价
+  item_bank_exercise_review: 题库练习评价
+  open_course_review: 公开课评价
+  article_review: 资讯评价
+  course_note: 课程笔记
+  course_thread: 课程话题
+  classroom_thread: 班级话题
+  group_thread: 小组话题
+  course_question: 课程问答
+  classroom_question: 班级问答
+#  classroom_event: 班级活动
+
+#用户内容审核状态
+userAuditStatus:
+  none_checked: 未审核
+  pass: 正常
+  illegal: 违规
+#用户内容审核状态
+selectUserAuditStatus:
+  sys_checked: 系统已审
+  none_checked: 未审核
+  pass: 正常
+  illegal: 违规
+
+#用户内容审核 敏感词
+sensitiveWordsFilter:
+  1: 含敏感词
+  2: 不含敏感词
+
+#用户举报原因标签
+reportTags:
+    1: 垃圾广告信息
+    2: 政治敏感信息
+    3: 色情低俗信息
+    4: 违法违规信息
+    5: 辱骂、人身攻击等不友善行为
+
+#用户举报目标类型标签
+reportTargetType:
+    1: 课程评价
+    2: 班级评价
+    3: 题库练习评价
+    4: 公开课评价
+    5: 资讯评价
+    6: 课程笔记
+    7: 班级笔记
+    8: 课程话题
+    9: 班级话题
+    10: 小组话题
+    11: 课程问答
+    12: 班级问答
+
+reportModule:
+  1: 课程评价
+  2: 班级评价
+  3: 题库练习评价
+  4: 公开课评价
+  5: 资讯评价
+  6: 课程笔记
+  7: 课程话题
+  8: 班级话题
+  9: 小组话题
+  10: 课程问答
+  11: 班级问答
+
+#用户举报内容审核状态
+reportAuditStatus:
+    none_checked: 未审核
+    pass: 正常
+    illegal: 违规
+
+multiClassStatus:
+    not_start: 未开始
+    live: 开课中
+    end: 已结束
+
+replayKeyWordType:
+    activityTitle: 直播名称
+    anchor: 主讲人
+    courseTitle: 课程名称
+

@@ -24,7 +24,7 @@ class VideoImport extends Chooser {
       return;
     }
 
-    if (!/^[a-zA-z]+:\/\/[^\s]*$/.test(url)) {
+    if (!/^<iframe[\s\S]*$/.test(url) && !/^[a-zA-z]+:\/\/[^\s]*$/.test(url)) {
       alert(Translator.trans('activity.video_manage.true_address_input'));
       return;
     }
@@ -32,27 +32,22 @@ class VideoImport extends Chooser {
     $btn.button('loading');
 
     $.get($btn.data('url'), { url: url }, function(video) {
-      var media = {
+      const media = {
         status: 'none',
         type: video.type,
         source: video.source,
         name: video.name,
-        uri: video.files[0].url
+        uri: video.files[0].url,
+        content: video
       };
       self._onChange(media);
       $urlInput.val('');
-    }, 'json').error(function(jqXHR, textStatus, errorThrown) {
-      alert(Translator.trans('activity.video_manage.video_validate_error_hint'));
-    }).always(function() {
+    }, 'json').always(function() {
       $btn.button('reset');
     });
-
-    return;
   }
 
   _onChange(file) {
-    // this._close();
-    var value = file ? JSON.stringify(file) : '';
     this.emit('file.select', file);
     $('[data-role="placeholder"]').html(file.name);
   }

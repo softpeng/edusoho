@@ -2,9 +2,11 @@
 
 namespace Biz\Course\Service;
 
-use Codeages\Biz\Framework\Service\Exception\AccessDeniedException;
-use Codeages\Biz\Framework\Service\Exception\InvalidArgumentException;
-use Codeages\Biz\Framework\Service\Exception\NotFoundException;
+use Biz\Common\CommonException;
+use Biz\Course\CourseException;
+use Biz\Course\CourseNoteException;
+use Biz\Task\TaskException;
+use Biz\User\UserException;
 
 interface CourseNoteService
 {
@@ -83,11 +85,10 @@ interface CourseNoteService
     /**
      * create note or update exist note.
      *
-     * @param array $note
-     *
-     * @throws InvalidArgumentException
-     * @throws NotFoundException
-     * @throws AccessDeniedException
+     * @throws CommonException
+     * @throws UserException
+     * @throws TaskException
+     * @throws CourseException
      *
      * @return array
      */
@@ -98,18 +99,14 @@ interface CourseNoteService
      *
      * @param $id
      *
-     * @throws AccessDeniedException
-     * @throws NotFoundException
+     * @throws CourseNoteException
      */
     public function deleteNote($id);
 
     /**
      * delete notes.
      *
-     * @param array $ids
-     *
-     * @throws AccessDeniedException
-     * @throws NotFoundException
+     * @throws CourseNoteException
      */
     public function deleteNotes(array $ids);
 
@@ -124,8 +121,8 @@ interface CourseNoteService
     /**
      * @param int $noteId
      *
-     * @throws NotFoundException
-     * @throws AccessDeniedException
+     * @throws UserException
+     * @throws CourseNoteException
      *
      * @return bool
      */
@@ -134,8 +131,8 @@ interface CourseNoteService
     /**
      * @param int $noteId
      *
-     * @throws NotFoundException
-     * @throws AccessDeniedException
+     * @throws UserException
+     * @throws CourseNoteException
      *
      * @return bool
      */
@@ -164,15 +161,12 @@ interface CourseNoteService
     public function findNoteLikesByNoteId($noteId);
 
     /**
-     * @param array $noteIds
-     *
      * @return array[]
      */
     public function findNoteLikesByNoteIds(array $noteIds);
 
     /**
-     * @param array $noteIds
-     * @param       $userId
+     * @param $userId
      *
      * @return array[]
      */
@@ -192,4 +186,6 @@ interface CourseNoteService
      * @return int
      */
     public function countCourseNoteByCourseSetId($courseSetId);
+
+    public function deleteNotesByUserId($userId);
 }

@@ -14,7 +14,7 @@
     {% endif %}
   {% endif %}
 
-  var CLOUD_FILE_SERVER = "{{ setting('developer.cloud_file_server', '') }}"; 
+  var CLOUD_FILE_SERVER = "{{ setting('developer.cloud_file_server', '') }}";
 
   app.config = {{
     {
@@ -35,19 +35,29 @@
   {% if script_arguments is defined %}
     app.arguments = {{ script_arguments|json_encode|raw }};
   {% endif %}
-  
+
   app.scripts = {{ export_scripts()|default(null)|json_encode|raw }};
 
+  app.fileSingleSizeLimit = {{ setting("magic.file_single_size_limit", 10) }};
   app.uploadUrl = '{{ path("file_upload") }}';
   app.imgCropUrl = '{{ path("file_img_crop") }}';
   app.lessonCopyEnabled = '{{ setting("course.copy_enabled","0") }}';
-  app.cloudSdkCdn = '{{ setting("developer.cloud_sdk_cdn") }}';
+  app.cloudSdkBaseUri = '{{ setting("developer.cloud_sdk_cdn", "") ? "//"~setting("developer.cloud_sdk_cdn", "") : "" }}';
+  app.cloudDisableLogReport = {{ setting("developer.disable_log_report", 0) }};
+  app.cloudPlayerSdkUrl = '{{ cloud_sdk_url("player") }}';
+  app.cloudPlayServer = '{{ setting("developer.cloud_play_server", "play1.qiqiuyun.net") }}';
+  app.cloudVideoPlayerSdkUrl = '{{ cloud_sdk_url("resource_player") }}';
+  app.cloudOldUploaderSdkUrl = '{{ cloud_sdk_url("old_uploader") }}';
+  app.cloudOldDocumentSdkUrl = '{{ cloud_sdk_url("old_document") }}';
+  app.aiApiServer = '{{ setting("developer.ai_api_server", "") }}';
+  app.aiSignalServer = '{{ setting("developer.ai_signal_server", "") }}';
   app.lang = '{{ app.request.locale }}';
+  app.mainColor = '{{ current_theme().confirmConfig.maincolor|default('default') }}';
 </script>
 
-<script src="{{ asset('bundles/bazingajstranslation/js/translator.min.js') }}"></script>
-<script src="{{ url('jstranslation_js', {'domain': 'js'}) }}?locales={{ app.request.session.get('_locale', app.request.getLocale()) }}"></script>
-
+{% include 'script/translation.html.twig' %}
+{% block translation %}
+{% endblock %}
 {% include 'js_loader.html.twig' %}
 
 <script type="text/javascript">

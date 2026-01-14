@@ -1,11 +1,11 @@
-$('body').on('click', '.js-social-share', function() {
+$('.js-es-share').on('click', '.js-social-share', function() {
   var $btn = $(this);
   var type = $btn.data('share');
   var params = $btn.parents('.js-social-share-params').data();
 
   var url = '';
-  if ($(".point-share-url").length > 0) {
-    $.post($(".point-share-url").val(), function() {});
+  if ($('.point-share-url').length > 0) {
+    $.post($('.point-share-url').val(), function() {});
   }
   switch (type) {
   case 'weibo':
@@ -56,7 +56,6 @@ function makeWeixinModal(params) {
   html += '      <div class="modal-body">';
   html += '        <p class="weixin-share-loading" style="text-align:center;">' + Translator.trans('share.qr_code_load_hint') + '</p>';
   html += '        <p class="weixin-share-qrcode text-center"></p>';
-  html += '        <p class="text-muted text-center"><small>' + Translator.trans('share.wechat_share_usage_hint') + '</small></p>';
   html += '      </div>';
   html += '    </div>';
   html += '  </div>';
@@ -85,7 +84,7 @@ function qzone(params) {
   var query = {};
   query.url = params.url;
   query.title = params.title;
-  query.summary = params.summary;
+  query.summary = params.summary ? params.summary.substring(0, 100) : '';
   query.desc = params.message;
   if (params.picture != '') {
     query.pics = params.picture;

@@ -9,12 +9,64 @@ class ClassroomMemberDaoImpl extends AdvancedDaoImpl implements ClassroomMemberD
 {
     protected $table = 'classroom_member';
 
+    public function searchMembersByClassroomId($classroomId, $conditions, $start, $limit)
+    {
+        $sql = "SELECT * FROM {$this->table} WHERE classroomId = ?";
+        list($sql, $conditions) = $this->filterSql($sql, $conditions);
+        $sql .= " ORDER BY createdTime DESC LIMIT {$start}, {$limit};";
+
+        return $this->db()->fetchAll($sql, array_merge([$classroomId], $conditions)) ?: [];
+    }
+
+    public function countMembersByClassroomId($classroomId, $conditions)
+    {
+        $sql = "SELECT COUNT(*) FROM {$this->table} WHERE classroomId = ?";
+        list($sql, $conditions) = $this->filterSql($sql, $conditions);
+        $sql .= ';';
+
+        return $this->db()->fetchColumn($sql, array_merge([$classroomId], $conditions));
+    }
+
+    protected function filterSql($sql, $conditions)
+    {
+        $params = [];
+        if (isset($conditions['role'])) {
+            $params[] = $conditions['role'];
+            $sql .= ' AND role LIKE ?';
+        }
+        if (isset($conditions['userIds'])) {
+            $userIds = empty($conditions['userIds']) ? [-1] : $conditions['userIds'];
+            $params = array_merge($params, $userIds);
+            $marks = str_repeat('?,', count($conditions['userIds']) - 1).'?';
+            $sql .= " AND userId IN ({$marks})";
+        }
+        if (isset($conditions['in_validity'])) {
+            $params[] = $conditions['in_validity']['deadline_GT'];
+            $params[] = $conditions['in_validity']['deadline_EQ'];
+            $sql .= ' AND (deadline > ? OR deadline = ?)';
+        }
+        if (isset($conditions['out_validity'])) {
+            $params[] = $conditions['out_validity']['deadline_LE'];
+            $params[] = $conditions['out_validity']['deadline_GT'];
+            $sql .= ' AND deadline <= ? AND deadline > ?';
+        }
+
+        return [$sql, $params];
+    }
+
+    public function changeMembersDeadlineByClassroomId($classroomId, $day)
+    {
+        $sql = "UPDATE classroom_member SET deadline = deadline {$day} WHERE classroomId = {$classroomId};";
+
+        return $this->db()->executeUpdate($sql);
+    }
+
     public function updateByClassroomIdAndRole($classroomId, $role, array $fields)
     {
-        $conditions = array(
+        $conditions = [
             'classroomId' => $classroomId,
             'role' => $role,
-        );
+        ];
 
         return $this->update($conditions, $fields);
     }
@@ -22,19 +74,19 @@ class ClassroomMemberDaoImpl extends AdvancedDaoImpl implements ClassroomMemberD
     public function findMembersByUserIdAndClassroomIds($userId, array $classroomIds)
     {
         if (empty($classroomIds)) {
-            return array();
+            return [];
         }
 
         $marks = str_repeat('?,', count($classroomIds) - 1).'?';
         $sql = "SELECT * FROM {$this->table} WHERE userId = ? AND classroomId IN ({$marks});";
 
-        return $this->db()->fetchAll($sql, array_merge(array($userId), $classroomIds)) ?: array();
+        return $this->db()->fetchAll($sql, array_merge([$userId], $classroomIds)) ?: [];
     }
 
     public function findMembersByUserId($userId)
     {
         return $this->findByFields(
-            array('userId' => $userId)
+            ['userId' => $userId]
         );
     }
 
@@ -42,67 +94,67 @@ class ClassroomMemberDaoImpl extends AdvancedDaoImpl implements ClassroomMemberD
     {
         $sql = "SELECT count(*) FROM {$this->table()} WHERE classroomId = ? AND role LIKE '%|student|%' LIMIT 1";
 
-        return $this->db()->fetchColumn($sql, array($classroomId));
+        return $this->db()->fetchColumn($sql, [$classroomId]);
     }
 
     public function countAuditors($classroomId)
     {
         $sql = "SELECT count(*) FROM {$this->table()} WHERE classroomId = ? AND role LIKE '%|auditor|%' LIMIT 1";
 
-        return $this->db()->fetchColumn($sql, array($classroomId));
+        return $this->db()->fetchColumn($sql, [$classroomId]);
     }
 
     public function findAssistantsByClassroomId($classroomId)
     {
         $sql = "SELECT * FROM {$this->table()} WHERE classroomId = ? AND role LIKE ('%|assistant|%')";
 
-        return $this->db()->fetchAll($sql, array($classroomId)) ?: array();
+        return $this->db()->fetchAll($sql, [$classroomId]) ?: [];
     }
 
     public function findTeachersByClassroomId($classroomId)
     {
         $sql = "SELECT * FROM {$this->table()} WHERE classroomId = ? AND role LIKE ('%|teacher|%')";
 
-        return $this->db()->fetchAll($sql, array($classroomId)) ?: array();
+        return $this->db()->fetchAll($sql, [$classroomId]) ?: [];
     }
 
     public function findByUserIdAndClassroomIds($userId, array $classroomIds)
     {
         if (empty($classroomIds)) {
-            return array();
+            return [];
         }
 
         $marks = str_repeat('?,', count($classroomIds) - 1).'?';
         $sql = "SELECT * FROM {$this->table} WHERE userId = {$userId} AND classroomId IN ({$marks});";
 
-        return $this->db()->fetchAll($sql, $classroomIds) ?: array();
+        return $this->db()->fetchAll($sql, $classroomIds) ?: [];
     }
 
     public function getByClassroomIdAndUserId($classroomId, $userId)
     {
         $sql = "SELECT * FROM {$this->table()} WHERE userId = ? AND classroomId = ? LIMIT 1";
 
-        return $this->db()->fetchAssoc($sql, array($userId, $classroomId)) ?: null;
+        return $this->db()->fetchAssoc($sql, [$userId, $classroomId]) ?: null;
     }
 
     public function findByClassroomIdAndUserIds($classroomId, $userIds)
     {
         if (empty($userIds)) {
-            return array();
+            return [];
         }
 
         $marks = str_repeat('?,', count($userIds) - 1).'?';
 
         $sql = "SELECT * FROM {$this->table} WHERE classroomId = ? AND userId IN ({$marks});";
 
-        $userIds = array_merge(array($classroomId), $userIds);
+        $userIds = array_merge([$classroomId], $userIds);
 
-        return $this->db()->fetchAll($sql, $userIds) ?: array();
+        return $this->db()->fetchAll($sql, $userIds) ?: [];
     }
 
     public function deleteByClassroomIdAndUserId($classroomId, $userId)
     {
-        $result = $this->db()->delete($this->table, array('classroomId' => $classroomId, 'userId' => $userId));
+        $result = $this->db()->delete($this->table, ['classroomId' => $classroomId, 'userId' => $userId]);
 
         return $result;
     }
@@ -114,56 +166,126 @@ class ClassroomMemberDaoImpl extends AdvancedDaoImpl implements ClassroomMemberD
             $sql .= ' AND u.locked != 1';
         }
 
-        return $this->db()->fetchColumn($sql, array($classroomId));
+        return $this->db()->fetchColumn($sql, [$classroomId]);
     }
 
     public function findByClassroomIdAndRole($classroomId, $role, $start, $limit)
     {
         $role = '%|'.$role.'|%';
         $sql = "SELECT * FROM {$this->table} WHERE classroomId = ? AND role LIKE ? ORDER BY createdTime DESC";
-        $sql = $this->sql($sql, array(), $start, $limit);
+        $sql = $this->sql($sql, [], $start, $limit);
 
-        return $this->db()->fetchAll($sql, array($classroomId, $role));
-    }
-
-    public function findMemberIdsByClassroomId($classroomId)
-    {
-        $sql = "SELECT userId FROM {$this->table} WHERE classroomId = ?";
-
-        return $this->db()->executeQuery($sql, array($classroomId))->fetchAll(\PDO::FETCH_COLUMN);
+        return $this->db()->fetchAll($sql, [$classroomId, $role]);
     }
 
     public function findByUserId($userId)
     {
-        return $this->findByFields(array(
+        return $this->findByFields([
             'userId' => $userId,
-        ));
+        ]);
+    }
+
+    public function searchMemberCountGroupByFields($conditions, $groupBy, $start, $limit)
+    {
+        $this->filterStartLimit($start, $limit);
+        $builder = $this->createQueryBuilder($conditions)
+            ->select("{$groupBy}, COUNT(id) AS count")
+            ->groupBy($groupBy)
+            ->orderBy('count', 'DESC')
+            ->setFirstResult($start)
+            ->setMaxResults($limit);
+
+        return $builder->execute()->fetchAll() ?: [];
+    }
+
+    public function searchSignStatisticsByClassroomId($classroomId, array $conditions, array $orderBys, $start, $limit)
+    {
+        $this->filterStartLimit($start, $limit);
+        $userIds = $this->db()->fetchAll("SELECT userId FROM {$this->table} WHERE classroomId = ?", [$classroomId]);
+        if (empty($userIds)) {
+            return [];
+        }
+
+        $conditions['classroomId'] = empty($conditions['classroomId']) ? $classroomId : $conditions['classroomId'];
+        $userIdsMarks = implode(',', array_column($userIds, 'userId'));
+
+        $builder = $this->createQueryBuilder($conditions)
+            ->select("{$this->table}.*, 
+                IF(m.signDays, m.signDays, 0) AS signDays, 
+                IF(m.keepDays, m.keepDays, 0) AS keepDays,
+                IF(m.lastSignTime, m.lastSignTime, 0) AS lastSignTime
+            ")->leftJoin(
+                $this->table,
+                "(SELECT * FROM sign_user_statistics WHERE userId IN ({$userIdsMarks}) AND targetType = 'classroom_sign' AND targetId = :target_id)",
+                'm',
+                "m.userId = {$this->table}.userId"
+            )->setFirstResult($start)
+            ->setMaxResults($limit);
+        $builder->setParameter(':target_id', $classroomId);
+
+        foreach ($orderBys as $sort => $order) {
+            if (in_array($sort, ['keepDays', 'signDays'])) {
+                $builder->addOrderBy($sort, $order);
+            }
+        }
+
+        return $builder->execute()->fetchAll();
+    }
+
+    public function findDailyIncreaseDataByClassroomIdAndRoleWithTimeRange($classroomId, $role, $startTime, $endTime, $format = '%Y-%m-%d')
+    {
+        $sql = "SELECT count(*) as count, from_unixtime(createdTime, '{$format}') as date
+                FROM {$this->table} WHERE `classroomId` = ? AND `role` LIKE ? AND createdTime > ? AND createdTime <= ? 
+                GROUP BY date ORDER BY date ASC;";
+
+        return $this->db()->fetchAll($sql, [$classroomId, "%|{$role}|%", $startTime, $endTime]);
     }
 
     public function declares()
     {
-        return array(
-            'timestamps' => array('createdTime', 'updatedTime'),
-            'serializes' => array(
+        return [
+            'timestamps' => ['createdTime', 'updatedTime'],
+            'serializes' => [
                 'role' => 'delimiter',
                 'assistantIds' => 'json',
                 'teacherIds' => 'json',
                 'service' => 'json',
-            ),
-            'orderbys' => array('name', 'createdTime', 'updatedTime', 'id'),
-            'conditions' => array(
+            ],
+            'orderbys' => ['name', 'createdTime', 'updatedTime', 'id', 'deadline', 'learnedCompulsoryTaskNum', 'lastLearnTime'],
+            'conditions' => [
+                'id in (:ids)',
                 'userId = :userId',
                 'classroomId = :classroomId',
+                'classroomId IN (:classroomIds)',
                 'noteNum > :noteNumGreaterThan',
                 'role LIKE :role',
                 'role IN (:roles)',
-                'userId IN ( :userIds)',
+                "{$this->table}.userId IN ( :userIds)",
                 'createdTime >= :startTimeGreaterThan',
                 'createdTime >= :createdTime_GE',
+                'createdTime <= :createdTime_LTE',
+                'createdTime < :createdTime_LT',
                 'createdTime < :startTimeLessThan',
                 'updatedTime >= :updatedTime_GE',
-            ),
-        );
+                'userId NOT IN ( :excludeUserIds )',
+                'isFinished = :isFinished',
+                'lastLearnTime >= :lastLearnTime_GTE',
+                'lastLearnTime <= :lastLearnTime_LTE',
+                'lastLearnTime > :lastLearnTime_GT',
+                'lastLearnTime < :lastLearnTime_LT',
+                'learnedCompulsoryTaskNum = :learnedCompulsoryTaskNum',
+                'learnedCompulsoryTaskNum > :learnedCompulsoryTaskNum_GT',
+                'learnedCompulsoryTaskNum < :learnedCompulsoryTaskNum_LT',
+                'learnedCompulsoryTaskNum >= :learnedCompulsoryTaskNum_GTE',
+                'learnedCompulsoryTaskNum <= :learnedCompulsoryTaskNum_LTE',
+                'deadline <= :deadline_LE',
+                'deadline >= :deadline_GE',
+                'deadline > :deadline_GT',
+                'deadline = 0 or deadline > :deadlineAfter',
+                'deadline > 0 and deadline <= :deadlineBefore',
+                'joinedChannel = :joinedChannel',
+            ],
+        ];
     }
 
     protected function createQueryBuilder($conditions)

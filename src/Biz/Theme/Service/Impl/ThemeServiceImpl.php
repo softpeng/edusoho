@@ -2,8 +2,10 @@
 
 namespace Biz\Theme\Service\Impl;
 
+use AppBundle\System;
 use Biz\BaseService;
 use Biz\Theme\Service\ThemeService;
+use Codeages\PluginBundle\System\PluginConfigurationManager;
 use Topxia\Service\Common\ServiceKernel;
 
 class ThemeServiceImpl extends BaseService implements ThemeService
@@ -16,11 +18,17 @@ class ThemeServiceImpl extends BaseService implements ThemeService
     {
         parent::__construct(ServiceKernel::instance()->getBiz());
         $currentTheme = $this->getSettingService()->get('theme');
-
         try {
-            $this->defaultConfig = $this->getKernel()->getParameter("theme_{$currentTheme['uri']}_default");
-            $this->allConfig = $this->getKernel()->getParameter("theme_{$currentTheme['uri']}_all");
-            $this->themeName = $this->getKernel()->getParameter("theme_{$currentTheme['uri']}_name");
+            $uri = $currentTheme['uri'] ?? 'jianmo';
+            $this->defaultConfig = $this->getKernel()->getParameter("theme_{$uri}_default");
+            $this->allConfig = $this->getKernel()->getParameter("theme_{$uri}_all");
+
+            if ($this->getKernel()->hasParameter("theme_{$uri}_extend")) {
+                $allConfigExtend = $this->getKernel()->getParameter("theme_{$uri}_extend");
+                $this->allConfig = array_merge_recursive($this->allConfig, $allConfigExtend["theme_{$uri}_all"]);
+            }
+
+            $this->themeName = $this->getKernel()->getParameter("theme_{$uri}_name");
         } catch (\Exception $e) {
             $this->setConfigAndNameByThemeConfig($currentTheme);
         }
@@ -38,7 +46,7 @@ class ThemeServiceImpl extends BaseService implements ThemeService
             return false;
         }
 
-        if (in_array($currentTheme['name'], array($this->themeName))) {
+        if (in_array($currentTheme['name'], [$this->themeName])) {
             return true;
         }
 
@@ -47,13 +55,13 @@ class ThemeServiceImpl extends BaseService implements ThemeService
 
     public function createThemeConfig($name, $config)
     {
-        return $this->getThemeConfigDao()->create(array(
+        return $this->getThemeConfigDao()->create([
             'name' => $name,
             'config' => $config,
             'updatedTime' => time(),
             'createdTime' => time(),
             'updatedUserId' => $this->getCurrentUser()->id,
-        ));
+        ]);
     }
 
     public function editThemeConfig($name, $config)
@@ -121,28 +129,22 @@ class ThemeServiceImpl extends BaseService implements ThemeService
             return $this->createThemeConfig($currentTheme['name'], $config);
         }
 
-        return $this->editThemeConfig($currentTheme['name'], array(
+        return $this->editThemeConfig($currentTheme['name'], [
             'config' => $config,
-        ));
+        ]);
     }
 
     public function saveConfirmConfig()
     {
         $currentTheme = $this->getCurrentThemeConfig();
 
-        return $this->editThemeConfig($currentTheme['name'], array(
+        return $this->editThemeConfig($currentTheme['name'], [
             'confirmConfig' => $currentTheme['config'],
-        ));
+        ]);
     }
 
     public function resetConfig()
     {
-        $currentTheme = $this->getSettingService()->get('theme');
-
-        if (!isset($currentTheme['name'])) {
-            $currentTheme['name'] = '简墨';
-        }
-
         return $this->saveCurrentThemeConfig($this->defaultConfig);
     }
 
@@ -171,14 +173,55 @@ class ThemeServiceImpl extends BaseService implements ThemeService
         return $this->editThemeConfig($currentTheme['name'], $config);
     }
 
+    public function cancelConfirmConfigByName($name, $id)
+    {
+        $theme = $this->getThemeConfigDao()->getThemeConfigByName($name);
+        $confirmConfig = $theme['confirmConfig'] ?: [];
+
+        if (isset($confirmConfig['blocks']['left'][$id])) {
+            unset($confirmConfig['blocks']['left'][$id]);
+        }
+        $theme['confirmConfig'] = $confirmConfig;
+        $theme['updatedTime'] = time();
+        $theme['updatedUserId'] = $this->getCurrentUser()->id;
+
+        return $this->getThemeConfigDao()->updateThemeConfigByName($name, $theme);
+    }
+
+    public function changeTheme($theme)
+    {
+        if (empty($theme)) {
+            return false;
+        }
+        if (!$this->isThemeSupportEs($theme)) {
+            return false;
+        }
+
+        $this->getSettingService()->set('theme', $theme);
+        $pluginConfigurationManager = new PluginConfigurationManager($this->biz['kernel.root_dir']);
+
+        $pluginConfigurationManager->setActiveThemeName($theme['code'])->save();
+
+        return true;
+    }
+
+    private function isThemeSupportEs($theme)
+    {
+        if ($theme['protocol'] < 3 || version_compare(rtrim($theme['support_version'], '+'), System::VERSION, '>')) {
+            return false;
+        }
+
+        return true;
+    }
+
     private function setConfigAndNameByThemeConfig($currentTheme)
     {
         $rootDir = dirname($this->biz['kernel.root_dir']);
         $code = empty($currentTheme['code']) ? '' : $currentTheme['code'];
         $parameters = $rootDir."/web/themes/{$code}/config/parameter.json";
         if (!is_file($parameters)) {
-            $this->defaultConfig = array();
-            $this->allConfig = array();
+            $this->defaultConfig = [];
+            $this->allConfig = [];
             $this->themeName = null;
         } else {
             $parameters = file_get_contents($parameters);

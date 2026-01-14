@@ -2,17 +2,32 @@
 
 namespace Biz\CloudFile\Service\Impl;
 
+use AppBundle\Common\ArrayToolkit;
+use AppBundle\Common\TimeMachine;
 use Biz\BaseService;
+use Biz\CloudFile\Service\CloudFileService;
 use Biz\File\Service\FileImplementor;
 use Biz\File\Service\UploadFileService;
 use Biz\File\Service\UploadFileTagService;
+use Biz\System\Service\LogService;
+use Biz\System\Service\SettingService;
+use Biz\Taxonomy\Service\CategoryService;
 use Biz\User\Service\UserService;
-use AppBundle\Common\ArrayToolkit;
-use Biz\CloudFile\Service\CloudFileService;
-use Topxia\Service\Common\ServiceKernel;
 
 class CloudFileServiceImpl extends BaseService implements CloudFileService
 {
+    public function count($conditions)
+    {
+        if (empty($conditions['resType'])) {
+            $conditions['noTargetType'] = 'attachment';
+            $conditions = $this->filterConditions($conditions);
+        } else {
+            $conditions['targetType'] = $conditions['resType'];
+        }
+
+        return $this->getUploadFileService()->countCloudFilesFromLocal($conditions);
+    }
+
     public function search($conditions, $start, $limit)
     {
         if (empty($conditions['resType'])) {
@@ -22,11 +37,12 @@ class CloudFileServiceImpl extends BaseService implements CloudFileService
             $conditions['targetType'] = $conditions['resType'];
         }
 
-        $result['count'] = $this->getUploadFileService()->searchFileCount($conditions);
-        $result['data'] = $this->getUploadFileService()->searchFiles($conditions, array('id' => 'DESC'), $start, $limit);
+        $result['count'] = $this->getUploadFileService()->countCloudFilesFromLocal($conditions);
+        $result['data'] = $this->getUploadFileService()->searchCloudFilesFromLocal($conditions, ['id' => 'DESC'], $start, $limit);
 
         $createdUserIds = ArrayToolkit::column($result['data'], 'createdUserId');
         $result['createdUsers'] = $this->getUserService()->findUsersByIds($createdUserIds);
+        $result['categories'] = $this->getCategoryService()->findCategoriesByIds(array_column($result['data'], 'categoryId'));
 
         $result['data'] = array_map(function ($file) {
             $file['no'] = $file['globalId'];
@@ -61,7 +77,7 @@ class CloudFileServiceImpl extends BaseService implements CloudFileService
 
     protected function findGlobalIdByUsedCount(&$conditions)
     {
-        if ($conditions['useStatus'] == 'used') {
+        if ('used' == $conditions['useStatus']) {
             $conditions['startCount'] = 1;
         } else {
             $conditions['endCount'] = 1;
@@ -73,7 +89,7 @@ class CloudFileServiceImpl extends BaseService implements CloudFileService
     {
         $filesInTags = $this->getUploadFileTagService()->findByTagId($conditions['tags']);
         $fileIds = ArrayToolkit::column($filesInTags, 'fileId');
-        $conditions['ids'] = empty($fileIds) ? array(-1) : $fileIds;
+        $conditions['ids'] = empty($fileIds) ? [-1] : $fileIds;
         unset($conditions['tags']);
     }
 
@@ -82,28 +98,27 @@ class CloudFileServiceImpl extends BaseService implements CloudFileService
         $searchType = $conditions['searchType'];
         $keywords = $conditions['keywords'];
 
-        if (!in_array($conditions['searchType'], array('course', 'title', 'user'))) {
+        if (!in_array($conditions['searchType'], ['course', 'title', 'user'])) {
             return;
         }
         $unavailableSearch = isset($conditions['ids']) && in_array(-1, $conditions['ids']);
         if ($unavailableSearch) {
             return;
         }
-        if ($searchType == 'course') {
+        if ('course' == $searchType) {
             $courseSets = $this->getCourseSetService()->findCourseSetsLikeTitle($keywords);
             if (empty($courseSets)) {
-                $conditions['ids'] = array(-1);
+                $conditions['ids'] = [-1];
             } else {
                 $courseSetIds = ArrayToolkit::column($courseSets, 'id');
                 $courseMaterials = $this->getMaterialService()->searchMaterials(
-                    array('courseSetIds' => $courseSetIds),
-                    array('createdTime' => 'DESC'),
+                    ['courseSetIds' => $courseSetIds],
+                    ['createdTime' => 'DESC'],
                     0,
                     PHP_INT_MAX
                 );
-
                 $fileIds = ArrayToolkit::column($courseMaterials, 'fileId');
-                $fileIds = empty($fileIds) ? array(-1) : $fileIds;
+                $fileIds = empty($fileIds) ? [-1] : $fileIds;
                 if (isset($conditions['ids'])) {
                     $conditions['ids'] = array_merge($conditions['ids'], $fileIds);
                 } else {
@@ -112,12 +127,12 @@ class CloudFileServiceImpl extends BaseService implements CloudFileService
             }
 
             $conditions['ids'] = array_unique($conditions['ids']);
-        } elseif ($searchType == 'user') {
-            $users = $this->getUserService()->searchUsers(array('nickname' => $keywords), array('id' => 'DESC'), 0, PHP_INT_MAX);
+        } elseif ('user' == $searchType) {
+            $users = $this->getUserService()->searchUsers(['nickname' => $keywords], ['id' => 'DESC'], 0, PHP_INT_MAX);
 
             $userIds = ArrayToolkit::column($users, 'id');
 
-            $conditions['createdUserIds'] = empty($userIds) ? array(-1) : $userIds;
+            $conditions['createdUserIds'] = empty($userIds) ? [-1] : $userIds;
         } else {
             $conditions['filename'] = $conditions['keywords'];
         }
@@ -136,29 +151,39 @@ class CloudFileServiceImpl extends BaseService implements CloudFileService
         if (!empty($file)) {
             $this->getUploadFileService()->update($file['id'], $fields);
 
-            return array('success' => true);
+            return ['success' => true];
         }
 
-        $cloudFields = ArrayToolkit::parts($fields, array('name', 'tags', 'description'));
+        $cloudFields = ArrayToolkit::parts($fields, ['name', 'tags', 'description']);
 
         return $this->getCloudFileImplementor()->updateFile($globalId, $cloudFields);
     }
 
     public function delete($globalId)
     {
+        $user = $this->getCurrentUser();
         if (empty($globalId)) {
             return false;
         }
 
         $file = $this->getUploadFileService()->getFileByGlobalId($globalId);
+        $attachmentFile = $this->getAttachmentService()->getAttachmentByGlobalId($globalId);
 
         if (!empty($file)) {
             $this->getUploadFileService()->deleteFile($file['id']);
 
-            return array('success' => true);
+            return ['success' => true];
         }
 
-        return $this->getCloudFileImplementor()->deleteFile(array('globalId' => $globalId));
+        if (!empty($attachmentFile)) {
+            $this->getAttachmentService()->deleteAttachment($attachmentFile['id']);
+            $this->getLogService()->info('question_bank', 'delete_attachment', "管理员 {$user['nickname']}删除了附件《{$attachmentFile['file_name']}》");
+            $this->getCloudFileImplementor()->deleteFile(['globalId' => $globalId]);
+
+            return ['success' => true];
+        }
+
+        return $this->getCloudFileImplementor()->deleteFile(['globalId' => $globalId]);
     }
 
     public function batchDelete($globalIds)
@@ -174,36 +199,58 @@ class CloudFileServiceImpl extends BaseService implements CloudFileService
         return true;
     }
 
-    public function getByGlobalId($globalId)
+    public function getByGlobalId($globalId, $ssl = false)
     {
-        return $this->getCloudFileImplementor()->getFileByGlobalId($globalId);
+        $file = $this->getCloudFileImplementor()->getFileByGlobalId($globalId, $ssl);
+        $questionFile = empty($file['id']) ? $this->getByGlobalIdFromItemAttachment($globalId) : [];
+        if (!empty($questionFile)) {
+            $file['type'] = $questionFile['file_type'];
+            $file['convertStatus'] = 'success';
+            $file['globalId'] = $file['no'] = $questionFile['global_id'];
+            $file['id'] = $questionFile['id'];
+            $file['itemAttachement'] = 1;
+        }
+
+        return $file;
+    }
+
+    public function getByGlobalIdFromItemAttachment($globalId)
+    {
+        return $this->getAttachmentDao()->getByGlobalId($globalId);
     }
 
     public function player($globalId, $ssl = false)
     {
-        return $this->getCloudFileImplementor()->player($globalId, $ssl);
+        $result = $this->getCloudFileImplementor()->player($globalId, $ssl);
+        if (!empty($result) && is_array($result)) {
+            $result['token'] = $this->biz['qiQiuYunSdk.play']->makePlayToken($globalId);
+        }
+
+        return $result;
     }
 
-    public function download($globalId)
+    public function download($globalId, $ssl = false)
     {
-        return $this->getCloudFileImplementor()->download($globalId);
+        $this->getLogService()->info('upload_file', 'download', "下载文件 globalId #{$globalId}");
+
+        return $this->getCloudFileImplementor()->download($globalId, $ssl);
     }
 
-    public function reconvert($globalId, $options = array())
+    public function reconvert($globalId, $options = [])
     {
         $this->getCloudFileImplementor()->reconvert($globalId, $options);
         $file = $this->getUploadFileService()->getFileByGlobalId($globalId);
 
         if (empty($file)) {
-            $file = array('globalId' => $globalId);
+            $file = ['globalId' => $globalId];
         }
 
         return $this->getCloudFileImplementor()->getFile($file);
     }
 
-    public function getDefaultHumbnails($globalId)
+    public function getDefaultHumbnails($globalId, $ssl = false)
     {
-        return $this->getCloudFileImplementor()->getDefaultHumbnails($globalId);
+        return $this->getCloudFileImplementor()->getDefaultHumbnails($globalId, $ssl);
     }
 
     public function getThumbnail($globalId, $options)
@@ -211,9 +258,56 @@ class CloudFileServiceImpl extends BaseService implements CloudFileService
         return $this->getCloudFileImplementor()->getThumbnail($globalId, $options);
     }
 
-    public function getStatistics($options = array())
+    public function getStatistics($options = [])
     {
         return $this->getCloudFileImplementor()->getStatistics($options);
+    }
+
+    public function deleteCloudMP4Files($userId, $callback)
+    {
+        $tokenFields = [
+            'userId' => $userId,
+            'duration' => TimeMachine::ONE_MONTH,
+            'times' => 1,
+        ];
+        $token = $this->getTokenService()->makeToken('mp4_delete.callback', $tokenFields);
+
+        $callback = $callback.'&token='.$token['token'];
+
+        return $this->getCloudFileImplementor()->deleteMP4Files($callback);
+    }
+
+    public function hasMp4Video()
+    {
+        $conditions = [
+            'mcStatus' => 'yes',
+            'page' => 1,
+            'start' => 0,
+            'limit' => 1,
+        ];
+        $result = $this->getCloudFileImplementor()->search($conditions);
+
+        if (!empty($result['data'])) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @return CategoryService
+     */
+    protected function getCategoryService()
+    {
+        return $this->createService('Taxonomy:CategoryService');
+    }
+
+    /**
+     * @return SettingService
+     */
+    protected function getSettingService()
+    {
+        return $this->createService('System:SettingService');
     }
 
     /**
@@ -253,8 +347,34 @@ class CloudFileServiceImpl extends BaseService implements CloudFileService
         return $this->createService('File:CloudFileImplementor');
     }
 
+    /**
+     * @return \Biz\Course\Service\MaterialService
+     */
     protected function getMaterialService()
     {
-        return ServiceKernel::instance()->createService('Course:MaterialService');
+        return $this->createService('Course:MaterialService');
+    }
+
+    protected function getTokenService()
+    {
+        return $this->createService('User:TokenService');
+    }
+
+    /**
+     * @return LogService
+     */
+    protected function getLogService()
+    {
+        return $this->createService('System:LogService');
+    }
+
+    protected function getAttachmentService()
+    {
+        return $this->createService('ItemBank:Item:AttachmentService');
+    }
+
+    protected function getAttachmentDao()
+    {
+        return $this->createDao('ItemBank:Item:AttachmentDao');
     }
 }

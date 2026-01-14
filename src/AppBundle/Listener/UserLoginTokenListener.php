@@ -2,13 +2,22 @@
 
 namespace AppBundle\Listener;
 
-use Topxia\Service\Common\ServiceKernel;
-use Symfony\Component\HttpFoundation\Cookie;
-use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\RedirectResponse;
-use Symfony\Component\HttpKernel\Event\GetResponseEvent;
+use Biz\System\Service\SettingService;
+use Biz\User\AnonymousUser;
+use Biz\User\Service\TokenService;
+use Biz\User\Service\UserService;
+use Biz\User\Support\PasswordValidator;
+use Biz\User\Support\RoleHelper;
+use Biz\User\UserException;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpFoundation\Cookie;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Event\GetResponseEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
+use Symfony\Component\Security\Core\Authentication\Token\AnonymousToken;
+use Topxia\MobileBundleV2\Controller\MobileBaseController;
 
 class UserLoginTokenListener
 {
@@ -19,28 +28,39 @@ class UserLoginTokenListener
 
     public function onGetUserLoginListener(GetResponseEvent $event)
     {
-        if ($event->getRequestType() != HttpKernelInterface::MASTER_REQUEST) {
+        if (HttpKernelInterface::MASTER_REQUEST != $event->getRequestType()) {
             return;
         }
 
         $request = $event->getRequest();
+        $token = $this->container->get('security.token_storage')->getToken();
+        if ($token instanceof AnonymousToken) {
+            $biz = $this->getBiz();
+            $biz['user'] = new AnonymousUser([
+                'currentIp' => $request->getClientIp(),
+                'isSecure' => $request->isSecure(),
+            ]);
+        }
         $session = $request->getSession();
-
         if (empty($session)) {
             return;
         }
 
-        $userLoginToken = $request->getSession()->getId();
-        $user = ServiceKernel::instance()->getCurrentUser();
-
-        if (isset($user['locked']) && $user['locked'] == 1) {
-            $this->container->get('security.token_storage')->setToken(null);
-            setcookie('REMEMBERME');
-
+        $user = $this->getUser();
+        if (!$user->islogin()) {
             return;
         }
 
-        if (!$user->islogin()) {
+        if (isset($user['passwordChanged']) && 1 == $user['passwordChanged']) {
+            $request->getSession()->invalidate();
+            $response = $this->logout('密码已修改，请您重新登录');
+            $event->setResponse($response);
+        }
+
+        if (isset($user['locked']) && 1 == $user['locked']) {
+            $this->container->get('security.token_storage')->setToken(null);
+            setcookie('REMEMBERME');
+
             return;
         }
 
@@ -48,49 +68,76 @@ class UserLoginTokenListener
         $route = $request->get('_route');
 
         if ($auth
-            && $auth['register_mode'] != 'mobile'
+            && 'mobile' != $auth['register_mode']
             && array_key_exists('email_enabled', $auth)
             && $user['createdTime'] > $auth['setting_time']
-            && $user['emailVerified'] == 0
-            && ($user['type'] == 'default' || $user['type'] == 'web_email' || $user['type'] == 'web_mobile' || $user['type'] == 'discuz' || $user['type'] == 'phpwind' || $user['type'] == 'import')
-            && ($auth['email_enabled'] == 'opened' && empty($user['verifiedMobile']))
+            && 0 == $user['emailVerified']
+            && ('default' == $user['type'] || 'web_email' == $user['type'] || 'web_mobile' == $user['type'] || 'import' == $user['type'])
+            && ('opened' == $auth['email_enabled'] && empty($user['verifiedMobile']))
             && (isset($route))
-            && ($route != '')
-            && ($route != 'register_email_verify')
-            && ($route != 'register_submited')
-            && ($route != 'register')
-            && ($request->getMethod() != 'POST')
+            && ('' != $route)
+            && ('register_email_verify' != $route)
+            && ('register_submited' != $route)
+            && ('register' != $route)
+            && ('POST' != $request->getMethod())
         ) {
             $request->getSession()->invalidate();
             $this->container->get('security.token_storage')->setToken(null);
 
-            $goto = $this->container->get('router')->generate('register_submited', array(
+            $goto = $this->container->get('router')->generate('register_submited', [
                 'id' => $user['id'], 'hash' => $this->makeHash($user),
-            ));
+            ]);
 
             $response = new RedirectResponse($goto, '302');
             $response->headers->setCookie(new Cookie('REMEMBERME', ''));
             $event->setResponse($response);
+
+            return;
         }
 
         $loginBind = $this->getSettingService()->get('login_bind');
+
+        if (!empty($loginBind['client_login_limit'])) {
+            $tokens = $this->getTokenService()->findTokensByUserIdAndType($user['id'], MobileBaseController::TOKEN_TYPE);
+            foreach ($tokens as $token) {
+                if (!isset($token['data']['client']) || 'app' == $token['data']['client']) {
+                    $request->getSession()->invalidate();
+                    $response = $this->logout('此帐号已在别处登录，请重新登录', $request->isXmlHttpRequest());
+                    $event->setResponse($response);
+
+                    return;
+                }
+            }
+        }
+
+        $user = $this->getUserService()->getUser($user['id']);
+
+        // 员工账号如果没有升级密码到最强级别(即等级 1），则每次页面刷新后自动退出
+        if (RoleHelper::isStaff($user['roles']) && !PasswordValidator::isStrongLevel($user['passwordUpgraded']) && empty($request->getSession()->get('needUpgradePassword')) && $request->isMethod('GET')) {
+            if (!strstr($request->getPathInfo(), '/app/package_update')) {
+                $request->getSession()->invalidate();
+                $response = $this->logout('', $request->isXmlHttpRequest());
+                $event->setResponse($response);
+
+                return;
+            }
+        }
 
         if (empty($loginBind['login_limit'])) {
             return;
         }
 
-        $user = $this->getUserService()->getUser($user['id']);
-
         if (empty($user['loginSessionId']) || strlen($user['loginSessionId']) <= 0) {
             $sessionId = $request->getSession()->getId();
+            $this->getUserService()->markLoginInfo($request->get('type'));
             $this->getUserService()->rememberLoginSessionId($user['id'], $sessionId);
-            $this->getUserService()->markLoginSuccess($user['id'], $request->getClientIp());
 
             return;
         }
 
         $REMEMBERME = $request->cookies->get('REMEMBERME');
 
+        $userLoginToken = $session->getId();
         if (empty($userLoginToken) && !empty($REMEMBERME)) {
             return;
         }
@@ -99,22 +146,30 @@ class UserLoginTokenListener
             $magic = $this->getSettingService()->get('magic');
 
             if ((!empty($magic['login_limit'])) && ($request->isXmlHttpRequest())) {
-                $response = new Response('LoginLimit', 403);
+                $response = new Response(['error' => ['code' => UserException::LIMIT_LOGIN]], 403);
                 $response->headers->clearCookie('REMEMBERME');
                 $response->send();
             }
             $request->getSession()->invalidate();
-
-            $this->container->get('security.token_storage')->setToken(null);
-
-            $goto = $this->container->get('router')->generate('login');
-
-            $response = new RedirectResponse($goto, '302');
-            setcookie('REMEMBERME', '', -1);
-            $this->container->get('session')->getFlashBag()->add('danger', $this->getServiceKernel()->trans('此帐号已在别处登录，请重新登录'));
+            $response = $this->logout('此帐号已在别处登录，请重新登录');
 
             $event->setResponse($response);
         }
+    }
+
+    protected function logout($content, $isXmlHttpRequest = false)
+    {
+        $this->container->get('security.token_storage')->setToken(null);
+
+        if (!empty($content)) {
+            $this->container->get('session')->getFlashBag()->add('danger', $content);
+        }
+
+        $goto = $this->container->get('router')->generate('login');
+        $response = $isXmlHttpRequest ? new JsonResponse(['goto' => $goto], 403) : new RedirectResponse($goto, '302');
+        $response->headers->clearCookie('REMEMBERME');
+
+        return $response;
     }
 
     private function makeHash($user)
@@ -124,23 +179,39 @@ class UserLoginTokenListener
         return md5($string);
     }
 
+    /**
+     * @return UserService
+     */
     protected function getUserService()
     {
-        return ServiceKernel::instance()->createService('User:UserService');
+        return $this->getBiz()->service('User:UserService');
     }
 
+    /**
+     * @return TokenService
+     */
+    protected function getTokenService()
+    {
+        return $this->getBiz()->service('User:TokenService');
+    }
+
+    /**
+     * @return SettingService
+     */
     protected function getSettingService()
     {
-        return ServiceKernel::instance()->createService('System:SettingService');
+        return $this->getBiz()->service('System:SettingService');
     }
 
-    protected function getAuthService()
+    protected function getBiz()
     {
-        return ServiceKernel::instance()->createService('User:AuthService');
+        return $this->container->get('biz');
     }
 
-    protected function getServiceKernel()
+    protected function getUser()
     {
-        return ServiceKernel::instance();
+        $biz = $this->getBiz();
+
+        return $biz['user'];
     }
 }

@@ -20,13 +20,21 @@ interface CourseDao extends GeneralDaoInterface
 
     public function findCoursesByIds($ids);
 
+    public function findCoursesByIdsAndCourseSetTitleLike($ids, $title);
+
+    public function findCoursesByCategoryIds($categoryIds);
+
     public function findCourseSetIncomesByCourseSetIds(array $courseSetIds);
+
+    public function sumTotalIncomeByIds(array $ids);
 
     public function analysisCourseDataByTime($startTime, $endTime);
 
     public function findCoursesByParentIdAndLocked($parentId, $locked);
 
     public function findCoursesByParentIds($parentIds);
+
+    public function findProductIdAndGoodsIdAndSpecsIdByIds($ids);
 
     public function getMinAndMaxPublishedCoursePriceByCourseSetId($courseSetId);
 
@@ -36,7 +44,23 @@ interface CourseDao extends GeneralDaoInterface
 
     public function updateCategoryByCourseSetId($courseSetId, $fields);
 
-    public function countCreatedCoursesLessThanEndTimeByGroupDate($endTime);
+    public function updateByCourseSetId($courseSetId, $fields);
+
+    public function canLearningByCourseSetId($courseSetId);
 
     public function countGroupByCourseSetIds($courseSetIds);
+
+    public function searchWithJoinCourseSet($conditions, $orderBys, $start, $limit);
+
+    public function searchByStudentNumAndTimeZone($conditions, $start, $limit);
+
+    public function searchByRatingAndTimeZone($conditions, $start, $limit);
+
+    public function countWithJoinCourseSet($conditions);
+
+    public function findCourseByCourseSetTitleLike($courseSetTitle);
+
+    public function canLearningByCourseSetIds($courseSetIds);
+
+    public function banLearningByCourseSetIds($courseSetIds);
 }

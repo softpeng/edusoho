@@ -4,11 +4,15 @@ namespace AppBundle\Controller;
 
 use AppBundle\Common\ArrayToolkit;
 use AppBundle\Common\Paginator;
+use Biz\Article\ArticleException;
+use Biz\Article\CategoryException;
 use Biz\Article\Service\ArticleService;
 use Biz\Article\Service\CategoryService;
 use Biz\System\Service\SettingService;
 use Biz\Taxonomy\Service\TagService;
+use Biz\Taxonomy\TagException;
 use Biz\Thread\Service\ThreadService;
+use Biz\User\UserException;
 use Symfony\Component\HttpFoundation\Request;
 
 class ArticleController extends BaseController
@@ -17,9 +21,9 @@ class ArticleController extends BaseController
     {
         $categoryTree = $this->getCategoryService()->getCategoryTree();
         $conditions = $this->fillOrgCode(
-            array(
+            [
                 'status' => 'published',
-            )
+            ]
         );
 
         $paginator = new Paginator(
@@ -40,10 +44,10 @@ class ArticleController extends BaseController
         $categories = $this->getCategoryService()->findCategoriesByIds($categoryIds);
 
         $featuredConditions = $this->fillOrgCode(
-            array(
+            [
                 'status' => 'published',
                 'featured' => 1,
-            )
+            ]
         );
 
         $featuredArticles = $this->getArticleService()->searchArticles(
@@ -53,17 +57,17 @@ class ArticleController extends BaseController
             5
         );
 
-        $featuredCategories = array();
+        $featuredCategories = [];
 
         foreach ($featuredArticles as $key => $value) {
             $featuredCategories[$value['id']] = $this->getCategoryService()->getCategory($value['categoryId']);
         }
 
         $promotedConditions = $this->fillOrgCode(
-            array(
+            [
                 'status' => 'published',
                 'promoted' => 1,
-            )
+            ]
         );
 
         $promotedArticles = $this->getArticleService()->searchArticles(
@@ -73,7 +77,7 @@ class ArticleController extends BaseController
             2
         );
 
-        $promotedCategories = array();
+        $promotedCategories = [];
 
         foreach ($promotedArticles as $key => $value) {
             $promotedCategories[$value['id']] = $this->getCategoryService()->getCategory($value['categoryId']);
@@ -81,7 +85,7 @@ class ArticleController extends BaseController
 
         return $this->render(
             'article/index.html.twig',
-            array(
+            [
                 'categoryTree' => $categoryTree,
                 'latestArticles' => $latestArticles,
                'featuredArticles' => $featuredArticles,
@@ -90,7 +94,7 @@ class ArticleController extends BaseController
                 'promotedCategories' => $promotedCategories,
                 'paginator' => $paginator,
                 'categories' => $categories,
-            )
+            ]
         );
     }
 
@@ -100,12 +104,12 @@ class ArticleController extends BaseController
 
         return $this->render(
             'article/part/category.html.twig',
-            array(
+            [
                 'rootCategories' => $rootCategories,
                 'categories' => $categories,
                 'categoryCode' => $categoryCode,
                 'activeIds' => $activeIds,
-            )
+            ]
         );
     }
 
@@ -114,14 +118,14 @@ class ArticleController extends BaseController
         $category = $this->getCategoryService()->getCategoryByCode($categoryCode);
 
         if (empty($category)) {
-            throw $this->createNotFoundException('资讯栏目页面不存在');
+            $this->createNewException(CategoryException::NOTFOUND_CATEGORY());
         }
 
-        $conditions = array(
+        $conditions = [
             'categoryId' => $category['id'],
             'includeChildren' => true,
             'status' => 'published',
-        );
+        ];
 
         $paginator = new Paginator(
             $this->get('request'),
@@ -142,13 +146,13 @@ class ArticleController extends BaseController
 
         return $this->render(
             'article/list.html.twig',
-            array(
+            [
                 'categoryCode' => $categoryCode,
                 'category' => $category,
                 'articles' => $articles,
                 'paginator' => $paginator,
                 'categories' => $categories,
-            )
+            ]
         );
     }
 
@@ -157,10 +161,10 @@ class ArticleController extends BaseController
         $article = $this->getArticleService()->getArticle($id);
 
         if (empty($article)) {
-            throw $this->createNotFoundException('文章已删除或者未发布！');
+            $this->createNewException(ArticleException::NOTFOUND());
         }
 
-        if ($article['status'] != 'published') {
+        if ('published' != $article['status']) {
             return $this->createMessageResponse('error', '文章不是发布状态，请查看！');
         }
 
@@ -168,7 +172,7 @@ class ArticleController extends BaseController
 
         $category = $this->getCategoryService()->getCategory($article['categoryId']);
 
-        $tags = $this->getTagService()->findTagsByOwner(array('ownerType' => 'article', 'ownerId' => $id));
+        $tags = $this->getTagService()->findTagsByOwner(['ownerType' => 'article', 'ownerId' => $id]);
 
         $tagNames = ArrayToolkit::column($tags, 'name');
 
@@ -181,11 +185,12 @@ class ArticleController extends BaseController
 
         $breadcrumbs = $this->getCategoryService()->findCategoryBreadcrumbs($category['id']);
 
-        $conditions = array(
+        $conditions = [
             'targetId' => $id,
             'targetType' => 'article',
             'parentId' => 0,
-        );
+            'excludeAuditStatus' => 'illegal',
+        ];
 
         $paginator = new Paginator(
             $request,
@@ -195,7 +200,7 @@ class ArticleController extends BaseController
 
         $posts = $this->getThreadService()->searchPosts(
             $conditions,
-            array('createdTime' => 'DESC'),
+            ['createdTime' => 'DESC'],
             $paginator->getOffsetCount(),
             $paginator->getPerPageCount()
         );
@@ -214,7 +219,7 @@ class ArticleController extends BaseController
 
         return $this->render(
             'article/detail.html.twig',
-            array(
+            [
                 'article' => $article,
                 'tags' => $tags,
                 'seoKeyword' => $seoKeyword,
@@ -229,15 +234,19 @@ class ArticleController extends BaseController
                 'userLike' => $userLike,
                 'category' => $category,
                 'service' => $this->getThreadService(),
-            )
+            ]
         );
     }
 
     public function postAction(Request $request, $id)
     {
-        if ($request->getMethod() == 'POST') {
+        if ('POST' == $request->getMethod()) {
             $fields = $request->request->all();
-
+            if(!$this->checkDragCaptchaToken($request, $fields['_dragCaptchaToken'])){
+                return $this->createJsonResponse(['error' => ['code'=> 403, 'message' => $this->trans("exception.form..drag.expire")]], 403);
+            }
+            unset($fields['_dragCaptchaToken']);
+            $post = array();
             $post['content'] = $fields['content'];
             $post['targetType'] = 'article';
             $post['targetId'] = $id;
@@ -245,22 +254,22 @@ class ArticleController extends BaseController
             $user = $this->getCurrentUser();
 
             if (!$user->isLogin()) {
-                throw $this->createAccessDeniedException('用户没有登录,不能评论!');
+                $this->createNewException(UserException::UN_LOGIN());
             }
 
             $post = $this->getThreadService()->createPost($post);
 
             return $this->render(
                 'thread/part/post-item.html.twig',
-                array(
+                [
                     'post' => $post,
                     'author' => $user,
                     'service' => $this->getThreadService(),
                     'postReplyUrl' => $this->generateUrl(
                         'article_post_reply',
-                        array('articleId' => $id, 'postId' => $post['id'])
+                        ['articleId' => $id, 'postId' => $post['id']]
                     ),
-                )
+                ]
             );
         }
     }
@@ -268,6 +277,11 @@ class ArticleController extends BaseController
     public function postReplyAction(Request $request, $articleId, $postId)
     {
         $fields = $request->request->all();
+        if(!$this->checkDragCaptchaToken($request, $fields['_dragCaptchaToken'])){
+            return $this->createJsonResponse(['error' => ['code'=> 403, 'message' => $this->trans("exception.form..drag.expire")]], 403);
+        }
+        unset($fields['_dragCaptchaToken']);
+
         $fields['content'] = $this->autoParagraph($fields['content']);
         $fields['targetId'] = $articleId;
         $fields['targetType'] = 'article';
@@ -277,11 +291,11 @@ class ArticleController extends BaseController
 
         return $this->render(
             'thread/subpost-item.html.twig',
-            array(
+            [
                 'post' => $post,
                 'author' => $this->getCurrentUser(),
                 'service' => $this->getThreadService(),
-            )
+            ]
         );
     }
 
@@ -290,7 +304,7 @@ class ArticleController extends BaseController
         $article = $this->getArticleService()->getArticle($articleId);
 
         if (empty($article)) {
-            throw $this->createNotFoundException();
+            $this->createNewException(ArticleException::NOTFOUND());
         }
 
         $post = $this->getThreadService()->getPost($postId);
@@ -303,19 +317,19 @@ class ArticleController extends BaseController
             return $this->redirect(
                 $this->generateUrl(
                     'article_detail',
-                    array(
+                    [
                         'id' => $articleId,
-                    )
+                    ]
                 )
             );
         }
 
-        $conditions = array(
+        $conditions = [
             'targetType' => 'article',
             'targetId' => $article['id'],
             'parentId' => 0,
             'greaterThanId' => $post['id'],
-        );
+        ];
         $position = $this->getThreadService()->searchPostsCount($conditions);
 
         $page = ceil($position / 10);
@@ -323,19 +337,19 @@ class ArticleController extends BaseController
         return $this->redirect(
             $this->generateUrl(
                 'article_detail',
-                array(
+                [
                     'id' => $articleId,
                     'page' => $page,
-                )
+                ]
             )."#post-{$post['id']}"
         );
     }
 
     public function subpostsAction(Request $request, $targetId, $postId, $less = false)
     {
-        $conditions = array(
+        $conditions = [
             'parentId' => $postId,
-        );
+        ];
         $paginator = new Paginator(
             $request,
             $this->getThreadService()->searchPostsCount($conditions),
@@ -343,12 +357,12 @@ class ArticleController extends BaseController
         );
 
         $paginator->setBaseUrl(
-            $this->generateUrl('article_post_subposts', array('targetId' => $targetId, 'postId' => $postId))
+            $this->generateUrl('article_post_subposts', ['targetId' => $targetId, 'postId' => $postId])
         );
 
         $posts = $this->getThreadService()->searchPosts(
             $conditions,
-            array('createdTime' => 'ASC'),
+            ['createdTime' => 'ASC'],
             $paginator->getOffsetCount(),
             $paginator->getPerPageCount()
         );
@@ -357,7 +371,7 @@ class ArticleController extends BaseController
 
         return $this->render(
             'thread/subposts.html.twig',
-            array(
+            [
                 'parentId' => $postId,
                 'targetId' => $targetId,
                 'posts' => $posts,
@@ -365,44 +379,44 @@ class ArticleController extends BaseController
                 'paginator' => $paginator,
                 'less' => $less,
                 'service' => $this->getThreadService(),
-            )
+            ]
         );
     }
 
     public function popularArticlesBlockAction()
     {
         $conditions = $this->fillOrgCode(
-            array(
+            [
                 'type' => 'article',
                 'status' => 'published',
-            )
+            ]
         );
 
         $articles = $this->getArticleService()->searchArticles($conditions, 'popular', 0, 6);
 
         return $this->render(
             'article/popular-articles-block.html.twig',
-            array(
+            [
                 'articles' => $articles,
-            )
+            ]
         );
     }
 
     public function recommendArticlesBlockAction()
     {
-        $conditions = array(
+        $conditions = [
             'type' => 'article',
             'status' => 'published',
             'promoted' => 1,
-        );
+        ];
 
         $articles = $this->getArticleService()->searchArticles($conditions, 'normal', 0, 6);
 
         return $this->render(
             'article/recommend-articles-block.html.twig',
-            array(
+            [
                 'articles' => $articles,
-            )
+            ]
         );
     }
 
@@ -411,18 +425,18 @@ class ArticleController extends BaseController
         $tag = $this->getTagService()->getTagByName($name);
 
         if (empty($tag)) {
-            throw $this->createAccessDeniedException('标签不存在!');
+            $this->createNewException(TagException::NOTFOUND_TAG());
         }
 
         $tagOwnerRelations = $this->getTagService()->findTagOwnerRelationsByTagIdsAndOwnerType(
-            array($tag['id']),
+            [$tag['id']],
             'article'
         );
 
-        $conditions = array(
+        $conditions = [
             'status' => 'published',
             'articleIds' => ArrayToolkit::column($tagOwnerRelations, 'ownerId'),
-        );
+        ];
 
         $paginator = new Paginator(
             $this->get('request'),
@@ -443,20 +457,20 @@ class ArticleController extends BaseController
 
         return $this->render(
             'article/list-articles-by-tag.html.twig',
-            array(
+            [
                 'articles' => $articles,
                 'tag' => $tag,
                 'categories' => $categories,
                 'paginator' => $paginator,
-            )
+            ]
         );
     }
 
     protected function autoParagraph($text)
     {
-        if (trim($text) !== '') {
+        if ('' !== trim($text)) {
             $text = htmlspecialchars($text, ENT_NOQUOTES, 'UTF-8');
-            $text = preg_replace("/\n\n+/", "\n\n", str_replace(array("\r\n", "\r"), "\n", $text));
+            $text = preg_replace("/\n\n+/", "\n\n", str_replace(["\r\n", "\r"], "\n", $text));
             $texts = preg_split('/\n\s*\n/', $text, -1, PREG_SPLIT_NO_EMPTY);
             $text = '';
 
@@ -479,22 +493,22 @@ class ArticleController extends BaseController
                 $start = true;
             }
 
-            if ($start && $treeCategory['depth'] == 1) {
+            if ($start && 1 == $treeCategory['depth']) {
                 return $treeCategory;
             }
         }
 
-        return array();
+        return [];
     }
 
     protected function getSubCategories($categoryTree, $rootCategory)
     {
-        $categories = array();
+        $categories = [];
 
         $start = false;
 
         foreach ($categoryTree as $treeCategory) {
-            if ($start && ($treeCategory['depth'] == 1) && ($treeCategory['id'] != $rootCategory['id'])) {
+            if ($start && (1 == $treeCategory['depth']) && ($treeCategory['id'] != $rootCategory['id'])) {
                 break;
             }
 
@@ -502,7 +516,7 @@ class ArticleController extends BaseController
                 $start = true;
             }
 
-            if ($start == true) {
+            if (true == $start) {
                 $categories[] = $treeCategory;
             }
         }

@@ -1,12 +1,12 @@
 {
-    "Version": "2.1.27.99",
     "Names": {
         "Deva": "devanagari",
         "Gujr": "gujarati",
         "Hanb": "hanb",
+        "Hans": "idéogrammes han simplifiés",
+        "Hant": "idéogrammes han traditionnels",
         "Hrkt": "syllabaires japonais",
-        "Jamo": "jamo",
-        "Orya": "odia",
+        "Olck": "ol chiki",
         "Zsye": "zsye"
     }
 }

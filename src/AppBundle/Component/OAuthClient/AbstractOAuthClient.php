@@ -2,6 +2,8 @@
 
 namespace AppBundle\Component\OAuthClient;
 
+use Symfony\Component\HttpFoundation\Request;
+
 abstract class AbstractOAuthClient
 {
     protected $config;
@@ -12,16 +14,51 @@ abstract class AbstractOAuthClient
 
     protected $timeout = 30;
 
+    protected $request;
+
     public function __construct($config)
     {
         $this->config = $config;
     }
 
-    abstract public function getAuthorizeUrl($callbackUrl);
+    public function makeToken($type, $accessToken, $openid, $appid = '')
+    {
+        switch ($type) {
+            case 'weibo':
+                $token = [
+                    'userId' => $openid,
+                    'token' => $accessToken,
+                ];
+                break;
+            case 'qq':
+                $token = [
+                    'openid' => $openid,
+                    'access_token' => $accessToken,
+                    'key' => $appid,
+                ];
+                break;
+            case 'weixinmob':
+            case 'weixinweb':
+            case 'apple':
+                $token = [
+                    'openid' => $openid,
+                    'access_token' => $accessToken,
+                ];
+                break;
+            default:
+                throw new \InvalidArgumentException('Bad type');
+        }
+
+        return $token;
+    }
+
+    abstract public function getAuthorizeUrl($callbackUrl, $credential);
 
     abstract public function getAccessToken($code, $callbackUrl);
 
     abstract public function getUserInfo($token);
+
+    abstract public function verifyCredential(Request $request, $sessionCredential);
 
     /**
      * HTTP POST.
@@ -33,6 +70,10 @@ abstract class AbstractOAuthClient
      */
     public function postRequest($url, $params)
     {
+        if (isset($this->request)) {
+            return $this->request->postRequest($url, $params);
+        }
+
         $curl = curl_init();
 
         curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
@@ -56,6 +97,10 @@ abstract class AbstractOAuthClient
 
     public function getRequest($url, $params)
     {
+        if (isset($this->request)) {
+            return $this->request->getRequest($url, $params);
+        }
+
         $curl = curl_init();
 
         curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);

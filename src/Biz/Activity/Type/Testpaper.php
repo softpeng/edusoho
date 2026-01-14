@@ -2,79 +2,173 @@
 
 namespace Biz\Activity\Type;
 
-use Biz\Activity\Config\Activity;
 use AppBundle\Common\ArrayToolkit;
+use Biz\Activity\ActivityException;
+use Biz\Activity\Config\Activity;
 use Biz\Activity\Service\ActivityService;
-use Biz\Testpaper\Service\TestpaperService;
 use Biz\Activity\Service\TestpaperActivityService;
+use Biz\Testpaper\TestpaperException;
+use Codeages\Biz\Framework\Scheduler\Service\SchedulerService;
+use Codeages\Biz\ItemBank\Answer\Service\AnswerRecordService;
+use Codeages\Biz\ItemBank\Answer\Service\AnswerReportService;
+use Codeages\Biz\ItemBank\Answer\Service\AnswerSceneService;
+use Codeages\Biz\ItemBank\Answer\Service\AnswerService;
+use Codeages\Biz\ItemBank\Assessment\Service\AssessmentService;
 
 class Testpaper extends Activity
 {
+    // 考试及格后显示答案
+    const ANSWER_MODE_PASSED = 1;
+
+    const EXAM_MODE_SIMULATION = 0;
+
+    const EXAM_MODE_PRACTICE = 1;
+
+    const VALID_PERIOD_MODE_NO_LIMIT = 0;
+
+    const VALID_PERIOD_MODE_RANGE = 1;
+
+    const VALID_PERIOD_MODE_ONLY_START = 2;
+
+    const VALID_PERIOD_MODE_LIMIT = 3;
+
     protected function registerListeners()
     {
-        return array(
+        return [
             'activity.created' => 'Biz\Activity\Listener\TestpaperActivityCreateListener',
-        );
+        ];
     }
 
     public function get($targetId)
     {
-        return $this->getTestpaperActivityService()->getActivity($targetId);
+        $activity = $this->getTestpaperActivityService()->getActivity($targetId);
+        if ($activity) {
+            $testpaper = $this->getAssessmentService()->getAssessment($activity['mediaId']);
+            $activity['testpaper'] = $testpaper;
+            $activity['answerScene'] = $this->getAnswerSceneService()->get($activity['answerSceneId']);
+            if (3 == $activity['answerScene']['valid_period_mode']) {
+                $activity['answerScene']['canUpdate'] = 0 == $this->getAnswerRecordService()->count(['answer_scene_id' => $activity['answerSceneId']]);
+            }
+            $activity = $this->filterActivity($activity, $activity['answerScene']);
+        }
+
+        return $activity;
     }
 
-    public function find($ids)
+    public function find($ids, $showCloud = 1)
     {
         return $this->getTestpaperActivityService()->findActivitiesByIds($ids);
     }
 
     public function create($fields)
     {
+        $fields = $this->preFields($fields);
+        $this->checkFields($fields);
         $fields = $this->filterFields($fields);
 
-        return $this->getTestpaperActivityService()->createActivity($fields);
+        try {
+            $this->getBiz()['db']->beginTransaction();
+
+            $answerScene = $this->getAnswerSceneService()->create([
+                'name' => $fields['title'],
+                'limited_time' => $fields['limitedTime'],
+                'do_times' => $fields['doTimes'],
+                'redo_interval' => $fields['redoInterval'],
+                'need_score' => 1,
+                'start_time' => $fields['startTime'],
+                'valid_period_mode' => 3 == $fields['validPeriodMode'] ? $fields['validPeriodMode'] : 0,
+                'pass_score' => empty($fields['passScore']) ? 0 : $fields['passScore'],
+                'enable_facein' => empty($fields['enable_facein']) ? 0 : $fields['enable_facein'],
+                'exam_mode' => empty($fields['exam_mode']) ? self::EXAM_MODE_SIMULATION : $fields['exam_mode'],
+                'end_time' => empty($fields['endTime']) ? 0 : $fields['endTime'],
+                'is_items_seq_random' => empty($fields['isItemsSeqRandom']) ? 0 : $fields['isItemsSeqRandom'],
+                'is_options_seq_random' => empty($fields['isOptionsSeqRandom']) ? 0 : $fields['isOptionsSeqRandom'],
+            ]);
+
+            $testpaperActivity = $this->getTestpaperActivityService()->createActivity([
+                'mediaId' => $fields['mediaId'],
+                'checkType' => empty($fields['checkType']) ? '' : $fields['checkType'],
+                'requireCredit' => empty($fields['requireCredit']) ? 0 : $fields['requireCredit'],
+                'answerSceneId' => $answerScene['id'],
+                'finishCondition' => $fields['finishCondition'],
+                'answerMode' => $fields['answerMode'],
+                'customComments' => $fields['customComments'],
+            ]);
+
+            $this->getBiz()['db']->commit();
+            if (!empty($answerScene['end_time'])) {
+                $this->registerJob($answerScene);
+            }
+
+            return $testpaperActivity;
+        } catch (\Exception $e) {
+            $this->getBiz()['db']->rollback();
+            throw $e;
+        }
     }
 
-    public function copy($activity, $config = array())
+    public function copy($activity, $config = [])
     {
-        if ($activity['mediaType'] !== 'testpaper') {
+        if ('testpaper' !== $activity['mediaType']) {
             return null;
         }
 
-        $ext = $this->get($activity['mediaId']);
+        $testpaperActivity = $this->get($activity['mediaId']);
 
-        $newExt = array(
-            'mediaId' => $config['testId'],
-            'doTimes' => $ext['doTimes'],
-            'redoInterval' => $ext['redoInterval'],
-            'limitedTime' => $ext['limitedTime'],
-            'checkType' => $ext['checkType'],
-            'finishCondition' => $ext['finishCondition'],
-            'requireCredit' => $ext['requireCredit'],
-            'testMode' => $ext['testMode'],
-        );
+        $newExt = [
+            'title' => $activity['title'],
+            'startTime' => $activity['startTime'],
+            'finishData' => $activity['finishData'],
+            'testpaperId' => $testpaperActivity['mediaId'],
+            'doTimes' => $testpaperActivity['answerScene']['do_times'],
+            'redoInterval' => $testpaperActivity['answerScene']['redo_interval'],
+            'limitedTime' => $testpaperActivity['answerScene']['limited_time'],
+            'enable_facein' => $testpaperActivity['answerScene']['enable_facein'],
+            'exam_mode' => $testpaperActivity['answerScene']['exam_mode'],
+            'checkType' => $testpaperActivity['checkType'],
+            'requireCredit' => $testpaperActivity['requireCredit'],
+            'testMode' => $testpaperActivity['testMode'],
+            'finishCondition' => $testpaperActivity['finishCondition'],
+            'answerMode' => $testpaperActivity['answerMode'],
+            'endTime' => $testpaperActivity['answerScene']['end_time'],
+            'isItemsSeqRandom' => $testpaperActivity['answerScene']['is_items_seq_random'],
+            'isOptionsSeqRandom' => $testpaperActivity['answerScene']['is_options_seq_random'],
+            'isCopy' => 1,
+            'isLimitDoTimes' => $testpaperActivity['isLimitDoTimes'],
+            'customComments' => $testpaperActivity['customComments'],
+        ];
+        $newExt['validPeriodMode'] = $this->preValidPeriodMode($testpaperActivity['answerScene']);
 
         return $this->create($newExt);
     }
 
     public function sync($sourceActivity, $activity)
     {
-        $sourceExt = $this->getTestpaperActivityService()->getActivity($sourceActivity['mediaId']);
-        $ext = $this->getTestpaperActivityService()->getActivity($activity['mediaId']);
+        $sourceExt = $this->get($sourceActivity['mediaId']);
+        $ext = $this->get($activity['mediaId']);
 
-        $testPaper = $this->getTestpaperService()->getTestpaperByCopyIdAndCourseSetId(
-            $sourceExt['mediaId'],
-            $activity['fromCourseSetId']
-        );
-
-        $ext['mediaId'] = $testPaper['id'];
-        $ext['redoInterval'] = $sourceExt['redoInterval'];
-        $ext['limitedTime'] = $sourceExt['limitedTime'];
+        $ext['startTime'] = $sourceActivity['startTime'];
+        $ext['title'] = $sourceActivity['title'];
+        $ext['finishData'] = $sourceActivity['finishData'];
+        $ext['testpaperId'] = $sourceExt['mediaId'];
+        $ext['doTimes'] = $sourceExt['answerScene']['do_times'];
+        $ext['redoInterval'] = $sourceExt['answerScene']['redo_interval'];
+        $ext['limitedTime'] = $sourceExt['answerScene']['limited_time'];
+        $ext['enable_facein'] = $sourceExt['answerScene']['enable_facein'];
+        $ext['exam_mode'] = $sourceExt['answerScene']['exam_mode'];
         $ext['checkType'] = $sourceExt['checkType'];
-        $ext['finishCondition'] = $sourceExt['finishCondition'];
         $ext['requireCredit'] = $sourceExt['requireCredit'];
         $ext['testMode'] = $sourceExt['testMode'];
+        $ext['finishCondition'] = $sourceExt['finishCondition'];
+        $ext['answerMode'] = $sourceExt['answerMode'];
+        $ext['endTime'] = $sourceExt['answerScene']['end_time'];
+        $ext['isItemsSeqRandom'] = $sourceExt['answerScene']['is_items_seq_random'];
+        $ext['isOptionsSeqRandom'] = $sourceExt['answerScene']['is_options_seq_random'];
+        $ext['isSync'] = 1;
+        $ext['isLimitDoTimes'] = $sourceExt['isLimitDoTimes'];
+        $ext['customComments'] = $sourceExt['customComments'];
 
-        return $this->getTestpaperActivityService()->updateActivity($ext['id'], $ext);
+        return $this->update($ext['id'], $ext, $activity);
     }
 
     public function update($targetId, &$fields, $activity)
@@ -82,17 +176,77 @@ class Testpaper extends Activity
         $activity = $this->get($targetId);
 
         if (!$activity) {
-            throw $this->createNotFoundException('教学活动不存在');
+            throw ActivityException::NOTFOUND_ACTIVITY();
         }
 
-        //引用传递，当考试时间设置改变时，时间值也改变
-        if ($fields['doTimes'] == 0 || $fields['testMode'] == 'normal') {
-            $fields['startTime'] = 0;
-        }
-
+        $fields = $this->preFields($fields);
+        $this->checkFields($fields, $activity);
         $filterFields = $this->filterFields($fields);
 
-        return $this->getTestpaperActivityService()->updateActivity($activity['id'], $filterFields);
+        try {
+            $this->getBiz()['db']->beginTransaction();
+            $answerScene = $this->getAnswerSceneService()->get($activity['answerScene']['id']);
+            if (3 == $answerScene['valid_period_mode'] && $this->getAnswerRecordService()->count(['answer_scene_id' => $answerScene['id']]) > 0) {
+                // 忽略 title，仅比较其他字段是否有变更（对比最新的 $answerScene）
+                $hasOtherChanges = (
+                    $filterFields['limitedTime'] != $answerScene['limited_time'] ||
+                    $filterFields['doTimes'] != $answerScene['do_times'] ||
+                    $filterFields['redoInterval'] != $answerScene['redo_interval'] ||
+                    $filterFields['startTime'] != $answerScene['start_time'] ||
+                    (3 == $fields['validPeriodMode'] ? $fields['validPeriodMode'] : 0) != $answerScene['valid_period_mode'] ||
+                    (empty($filterFields['passScore']) ? 0 : $filterFields['passScore']) != $answerScene['pass_score'] ||
+                    (empty($filterFields['enable_facein']) ? 0 : $filterFields['enable_facein']) != $answerScene['enable_facein'] ||
+                    (empty($filterFields['exam_mode']) ? self::EXAM_MODE_SIMULATION : $filterFields['exam_mode']) != $answerScene['exam_mode'] ||
+                    (empty($filterFields['endTime']) ? 0 : $filterFields['endTime']) != $answerScene['end_time'] ||
+                    (empty($filterFields['isItemsSeqRandom']) ? 0 : $filterFields['isItemsSeqRandom']) != $answerScene['is_items_seq_random'] ||
+                    (empty($filterFields['isOptionsSeqRandom']) ? 0 : $filterFields['isOptionsSeqRandom']) != $answerScene['is_options_seq_random']
+                );
+                if (!$hasOtherChanges) {
+                    // 只更新 title
+                    $this->getAnswerSceneService()->update($answerScene['id'], [
+                        'name' => $filterFields['title'],
+                    ]);
+                    $this->getBiz()['db']->commit();
+
+                    return $this->getTestpaperActivityService()->getActivity($activity['id']);
+                } else {
+                    throw ActivityException::TESTPAPER_ANSWER_RECORD_EXISTED();
+                }
+            }
+            $answerScene = $this->getAnswerSceneService()->update($activity['answerScene']['id'], [
+                'name' => $filterFields['title'],
+                'limited_time' => $filterFields['limitedTime'],
+                'do_times' => $filterFields['doTimes'],
+                'redo_interval' => $filterFields['redoInterval'],
+                'start_time' => $filterFields['startTime'],
+                'valid_period_mode' => 3 == $fields['validPeriodMode'] ? $fields['validPeriodMode'] : 0,
+                'pass_score' => empty($filterFields['passScore']) ? 0 : $filterFields['passScore'],
+                'enable_facein' => empty($filterFields['enable_facein']) ? 0 : $filterFields['enable_facein'],
+                'exam_mode' => empty($filterFields['exam_mode']) ? self::EXAM_MODE_SIMULATION : $filterFields['exam_mode'],
+                'end_time' => empty($filterFields['endTime']) ? 0 : $filterFields['endTime'],
+                'is_items_seq_random' => empty($filterFields['isItemsSeqRandom']) ? 0 : $filterFields['isItemsSeqRandom'],
+                'is_options_seq_random' => empty($filterFields['isOptionsSeqRandom']) ? 0 : $filterFields['isOptionsSeqRandom'],
+            ]);
+
+            $testpaperActivity = $this->getTestpaperActivityService()->updateActivity($activity['id'], [
+                'mediaId' => $filterFields['mediaId'],
+                'checkType' => empty($filterFields['checkType']) ? '' : $filterFields['checkType'],
+                'requireCredit' => empty($filterFields['requireCredit']) ? 0 : $filterFields['requireCredit'],
+                'finishCondition' => $filterFields['finishCondition'],
+                'answerMode' => $filterFields['answerMode'],
+                'customComments' => $filterFields['customComments'],
+            ]);
+
+            $this->getBiz()['db']->commit();
+            if (!empty($filterFields['endTime']) && $filterFields['endTime'] != $activity['answerScene']['end_time']) {
+                $this->registerJob($answerScene);
+            }
+
+            return $testpaperActivity;
+        } catch (\Exception $e) {
+            $this->getBiz()['db']->rollback();
+            throw $e;
+        }
     }
 
     public function delete($targetId)
@@ -100,93 +254,201 @@ class Testpaper extends Activity
         return $this->getTestpaperActivityService()->deleteActivity($targetId);
     }
 
-    public function isFinished($activityId)
+    public function isFinished($activityId, $userId = 0)
     {
-        $biz = $this->getBiz();
-        $user = $biz['user'];
+        $userId = empty($userId) ? $this->getCurrentUser()->getId() : $userId;
 
-        $activity = $this->getActivityService()->getActivity($activityId);
-        $testpaperActivity = $this->getTestpaperActivityService()->getActivity($activity['mediaId']);
+        $activity = $this->getActivityService()->getActivity($activityId, true);
+        $testpaperActivity = $activity['ext'];
 
-        $result = $this->getTestpaperService()->getUserLatelyResultByTestId(
-            $user['id'],
-            $testpaperActivity['mediaId'],
-            $activity['fromCourseId'],
-            $activity['id'],
-            'testpaper'
+        $answerRecord = $this->getAnswerRecordService()->getLatestAnswerRecordByAnswerSceneIdAndUserId(
+            $testpaperActivity['answerScene']['id'],
+            $userId
         );
 
-        if (!$result || empty($testpaperActivity['finishCondition'])) {
+        if (empty($answerRecord)) {
+            return false;
+        }
+        if (!in_array(
+            $answerRecord['status'],
+            [AnswerService::ANSWER_RECORD_STATUS_REVIEWING, AnswerService::ANSWER_RECORD_STATUS_FINISHED]
+        )) {
             return false;
         }
 
-        if (in_array(
-                $result['status'],
-                array('reviewing', 'finished')
-            ) && $testpaperActivity['finishCondition']['type'] === 'submit'
-        ) {
+        if ('submit' === $activity['finishType']) {
             return true;
         }
 
-        if (in_array(
-                $result['status'],
-                array('reviewing', 'finished')
-            ) && $testpaperActivity['finishCondition']['type'] === 'score' && $result['score'] >= $testpaperActivity['finishCondition']['finishScore']
-        ) {
+        $answerReport = $this->getAnswerReportService()->getSimple($answerRecord['answer_report_id']);
+        if (AnswerService::ANSWER_RECORD_STATUS_FINISHED == $answerRecord['status'] && 'score' === $activity['finishType'] && $answerReport['score'] >= $testpaperActivity['finishCondition']['finishScore']) {
             return true;
         }
 
         return false;
     }
 
-    protected function getListeners()
+    protected function preFields($fields)
     {
-        return array();
+        if (isset($fields['validPeriodMode'])) {
+            if (self::VALID_PERIOD_MODE_ONLY_START == $fields['validPeriodMode']) {
+                $fields['endTime'] = 0;
+            } elseif (self::VALID_PERIOD_MODE_NO_LIMIT == $fields['validPeriodMode']) {
+                $fields['startTime'] = 0;
+                $fields['endTime'] = 0;
+            }
+        }
+
+        return $fields;
+    }
+
+    protected function checkFields($fields, $activity = null)
+    {
+        if (isset($fields['isCopy']) || isset($fields['isSync'])) {
+            return;
+        }
+
+        if (!empty($fields['isLimitDoTimes']) && !empty($fields['doTimes']) && $fields['doTimes'] > 100) {
+            throw TestpaperException::TESTPAPER_DOTIMES_LIMIT();
+        }
+
+        if (!empty($fields['endTime']) && $fields['endTime'] <= $fields['startTime']) {
+            throw TestpaperException::END_TIME_EARLIER();
+        }
+
+        if (!empty($activity) && !empty($fields['startTime']) && $fields['startTime'] == $activity['answerScene']['start_time']) {
+            return;
+        }
+        if (!empty($fields['startTime']) && $fields['startTime'] < time()) {
+            throw TestpaperException::START_TIME_EARLIER_THAN_CURRENT_TIME();
+        }
     }
 
     protected function filterFields($fields)
     {
+        $testPaper = $this->getAssessmentService()->getAssessment($fields['testpaperId']);
+        $fields['passScore'] = empty($fields['finishData']) ? 0 : round($testPaper['total_score'] * $fields['finishData']);
+
+        if (!empty($fields['finishType'])) {
+            $fields['finishCondition'] = [];
+            if ('score' == $fields['finishType']) {
+                $fields['finishCondition'] = [
+                    'type' => 'score',
+                    'finishScore' => $fields['passScore'],
+                ];
+            }
+        }
+
+        if (!isset($fields['customComments'])) {
+            $fields['customComments'] = [];
+            if (!empty($fields['start'])) {
+                foreach ($fields['start'] as $key => $val) {
+                    $fields['customComments'][] = [
+                        'start' => $val,
+                        'end' => $fields['end'][$key],
+                        'comment' => $fields['comment'][$key],
+                    ];
+                }
+            }
+        }
+
+        $fields['doTimes'] = empty($fields['isLimitDoTimes']) ? '0' : $fields['doTimes'];
+
         $filterFields = ArrayToolkit::parts(
             $fields,
-            array(
-                'mediaId',
+            [
+                'title',
+                'testpaperId',
                 'doTimes',
                 'redoInterval',
                 'length',
                 'limitedTime',
                 'checkType',
-                'finishCondition',
-                'condition',
-                'finishScore',
                 'requireCredit',
                 'testMode',
-            )
+                'finishCondition',
+                'startTime',
+                'passScore',
+                'enable_facein',
+                'answerMode',
+                'customComments',
+                'exam_mode',
+                'endTime',
+                'isItemsSeqRandom',
+                'isOptionsSeqRandom',
+                'validPeriodMode',
+            ]
         );
-
-        $finishCondition = array();
-
-        if (!empty($filterFields['condition'])) {
-            $finishCondition['type'] = $filterFields['condition'];
-            unset($filterFields['condition']);
-        }
-
-        if (isset($filterFields['finishScore'])) {
-            $finishCondition['finishScore'] = $filterFields['finishScore'];
-            unset($filterFields['finishScore']);
-        }
 
         if (isset($filterFields['length'])) {
             $filterFields['limitedTime'] = $filterFields['length'];
             unset($filterFields['length']);
         }
 
-        if (isset($filterFields['doTimes']) && $filterFields['doTimes'] == 0) {
-            $filterFields['testMode'] = 'normal';
-        }
+        $filterFields['answerMode'] = isset($fields['answerMode']) ? $fields['answerMode'] : 0;
 
-        $filterFields['finishCondition'] = empty($filterFields['finishCondition']) ? $finishCondition : $filterFields['finishCondition'];
+        $filterFields['mediaId'] = $filterFields['testpaperId'];
+        unset($filterFields['testpaperId']);
 
         return $filterFields;
+    }
+
+    protected function filterActivity($activity, $scene)
+    {
+        $userId = $this->getCurrentUser()->getId();
+        if (!empty($scene)) {
+            $activity['doTimes'] = $scene['do_times'];
+            $activity['redoInterval'] = $scene['redo_interval'];
+            $activity['limitedTime'] = $scene['limited_time'];
+            $activity['testMode'] = !empty($scene['start_time']) ? 'realTime' : 'normal';
+            $activity['isLimitDoTimes'] = empty($scene['do_times']) ? '0' : '1';
+            $activity['validPeriodMode'] = $this->preValidPeriodMode($scene);
+            $countTestpaperRecord = $this->getAnswerRecordService()->count(['answer_scene_id' => $scene['id'], 'user_id' => $userId]);
+            $activity['remainderDoTimes'] = max($scene['do_times'] - ($countTestpaperRecord ?: 0), 0);
+            $activity['canDoAgain'] = $this->getAnswerSceneService()->canStart($scene['id'], $userId) ? '1' : '0';
+        }
+
+        return $activity;
+    }
+
+    protected function preValidPeriodMode($scene)
+    {
+        if (!empty($scene['start_time']) && !empty($scene['end_time'])) {
+            $validPeriodMode = self::VALID_PERIOD_MODE_RANGE;
+        } elseif (!empty($scene['start_time']) && empty($scene['end_time'])) {
+            $validPeriodMode = self::VALID_PERIOD_MODE_ONLY_START;
+        } else {
+            $validPeriodMode = self::VALID_PERIOD_MODE_NO_LIMIT;
+        }
+        if (isset($scene['valid_period_mode']) && 3 == $scene['valid_period_mode']) {
+            $validPeriodMode = $scene['valid_period_mode'];
+        }
+
+        return $validPeriodMode;
+    }
+
+    private function registerJob($scene)
+    {
+        $this->getSchedulerService()->deleteJobByName('noAnswerAssessmentAutoSubmitJob_'.$scene['id']);
+
+        $executeTime = strtotime(date('Y-m-d H:i', $scene['end_time']));
+        $executeTime = $scene['end_time'] > $executeTime ? $executeTime + 60 : $executeTime;
+        $this->getSchedulerService()->register([
+            'name' => 'noAnswerAssessmentAutoSubmitJob_'.$scene['id'],
+            'expression' => intval($executeTime),
+            'class' => 'Biz\Testpaper\Job\NoAnswerAssessmentAutoSubmitJob',
+            'misfire_threshold' => 60 * 10,
+            'misfire_policy' => 'executing',
+            'args' => ['answerSceneId' => $scene['id']],
+        ]);
+    }
+
+    /**
+     * @return SchedulerService
+     */
+    protected function getSchedulerService()
+    {
+        return $this->getBiz()->service('Scheduler:SchedulerService');
     }
 
     /**
@@ -206,10 +468,39 @@ class Testpaper extends Activity
     }
 
     /**
-     * @return TestpaperService
+     * @return AssessmentService
      */
-    protected function getTestpaperService()
+    protected function getAssessmentService()
     {
-        return $this->getBiz()->service('Testpaper:TestpaperService');
+        return $this->getBiz()->service('ItemBank:Assessment:AssessmentService');
+    }
+
+    /**
+     * @return AnswerSceneService
+     */
+    protected function getAnswerSceneService()
+    {
+        return $this->getBiz()->service('ItemBank:Answer:AnswerSceneService');
+    }
+
+    /**
+     * @return AnswerRecordService
+     */
+    protected function getAnswerRecordService()
+    {
+        return $this->getBiz()->service('ItemBank:Answer:AnswerRecordService');
+    }
+
+    /**
+     * @return AnswerReportService
+     */
+    protected function getAnswerReportService()
+    {
+        return $this->getBiz()->service('ItemBank:Answer:AnswerReportService');
+    }
+
+    protected function getLogService()
+    {
+        return $this->getBiz()->service('System:LogService');
     }
 }

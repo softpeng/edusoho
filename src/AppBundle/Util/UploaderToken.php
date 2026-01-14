@@ -2,6 +2,10 @@
 
 namespace AppBundle\Util;
 
+use AppBundle\Common\TimeMachine;
+use Biz\System\Service\SettingService;
+use Biz\User\Service\UserService;
+use Firebase\JWT\JWT;
 use Topxia\Service\Common\ServiceKernel;
 
 /**
@@ -12,39 +16,37 @@ class UploaderToken
     public function make($targetType, $targetId, $bucket, $ttl = 86400)
     {
         $user = $this->getCurrentUser();
-        $deadline = time() + $ttl;
-        $key = "{$user['id']}|{$targetType}|{$targetId}|{$bucket}|{$deadline}";
-        $sign = md5("{$key}|{$user['salt']}");
+        $metas = "{$user['uuid']}|{$targetType}|{$targetId}|{$bucket}";
+        $payload = [
+            'iss' => 'EduSoho',
+            'aud' => 'EduSoho',
+            'exp' => TimeMachine::time() + $ttl,
+            'metas' => $metas,
+        ];
 
-        return $this->base64Encode("{$key}|{$sign}");
+        return JWT::encode($payload, $this->getKey(), 'HS256');
     }
 
     public function parse($token)
     {
-        $token = $this->base64Decode($token);
         if (empty($token)) {
             return null;
         }
+        $payload = JWT::decode($token, $this->getKey(), ['HS256']);
+        $metas = $payload->metas;
+        list($uuid, $targetType, $targetId, $bucket) = explode('|', $metas);
 
-        list($userId, $targetType, $targetId, $bucket, $deadline, $sign) = explode('|', $token);
-
-        if ($deadline < time()) {
+        $user = $this->getUserService()->getUserByUUID($uuid);
+        if (empty($user)) {
             return null;
         }
 
-        $user = $this->getCurrentUser();
-
-        $expectedSign = md5("{$userId}|{$targetType}|{$targetId}|{$bucket}|{$deadline}|{$user['salt']}");
-        if ($sign != $expectedSign) {
-            return null;
-        }
-
-        return array(
-            'userId' => $userId,
+        return [
+            'userId' => $user['id'],
             'targetType' => $targetType,
             'targetId' => $targetId,
             'bucket' => $bucket,
-        );
+        ];
     }
 
     private function base64Encode($data)
@@ -60,6 +62,31 @@ class UploaderToken
     private function getCurrentUser()
     {
         return ServiceKernel::instance()->getCurrentUser();
+    }
+
+    private function getKey()
+    {
+        $storage = $this->getSettingService()->get('storage', []);
+        $accessKey = empty($storage['cloud_access_key']) ? '' : $storage['cloud_access_key'];
+        $secretKey = empty($storage['cloud_secret_key']) ? '' : $storage['cloud_secret_key'];
+
+        return md5($accessKey.$secretKey);
+    }
+
+    /**
+     * @return SettingService
+     */
+    private function getSettingService()
+    {
+        return $this->getServiceKernel()->getBiz()->service('System:SettingService');
+    }
+
+    /**
+     * @return UserService
+     */
+    private function getUserService()
+    {
+        return $this->getServiceKernel()->getBiz()->service('User:UserService');
     }
 
     private function getServiceKernel()

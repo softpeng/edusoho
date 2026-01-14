@@ -2,10 +2,13 @@
 
 namespace AppBundle\Controller\My;
 
-use AppBundle\Controller\BaseController;
-use Symfony\Component\HttpFoundation\Request;
 use AppBundle\Common\ArrayToolkit;
 use AppBundle\Common\Paginator;
+use AppBundle\Controller\BaseController;
+use Biz\Favorite\Service\FavoriteService;
+use Biz\Group\Service\GroupService;
+use Biz\Group\Service\ThreadService;
+use Biz\User\Service\UserService;
 
 class GroupController extends BaseController
 {
@@ -13,81 +16,61 @@ class GroupController extends BaseController
     {
         $user = $this->getUser();
 
-        $groupsCount = $this->getGroupService()->countMembers(array('userId' => $user['id']));
-        $members = $this->getGroupService()->searchMembers(array('userId' => $user['id']), array('createdTime' => 'DESC'), 0,
+        $groupsCount = $this->getGroupService()->countMembers(['userId' => $user['id']]);
+        $members = $this->getGroupService()->searchMembers(['userId' => $user['id']], ['createdTime' => 'DESC'], 0,
             9);
 
         $groupIds = ArrayToolkit::column($members, 'groupId');
         $groups = $this->getGroupService()->getGroupsByIds($groupIds);
-        $ownThreads = $this->getThreadService()->searchThreads(array('userId' => $user['id']), array('createdTime' => 'DESC'), 0, 10);
+        $ownThreads = $this->getThreadService()->searchThreads(['userId' => $user['id']], ['createdTime' => 'DESC'], 0, 10);
 
         $groupIds = ArrayToolkit::column($ownThreads, 'groupId');
-        $threadsCount = $this->getThreadService()->countThreads(array('userId' => $user['id']));
+        $threadsCount = $this->getThreadService()->countThreads(['userId' => $user['id']]);
         $groupsAsOwnThreads = $this->getGroupService()->getGroupsByIds($groupIds);
 
-        $userIds = ArrayToolkit::column($ownThreads, 'lastPostMemberId');
-        $lastPostMembers = $this->getUserService()->findUsersByIds($userIds);
-        $collectThreadsIds = $this->getThreadService()->searchThreadCollects(array('userId' => $user['id']), array('id' => 'DESC'), 0, 10);
-        $collectThreads = array();
+        $collectSearchConditions = [
+            'userId' => $user['id'],
+            'targetType' => 'thread',
+        ];
+        $collectThreadsIds = $this->getFavoriteService()->searchFavorites(
+            $collectSearchConditions,
+            ['id' => 'DESC'],
+            0,
+            10
+        );
+        $collectThreads = $this->getThreadService()->getThreadsByIds(array_column($collectThreadsIds, 'targetId'));
 
-        foreach ($collectThreadsIds as $collectThreadsId) {
-            $collectThreads[] = $this->getThreadService()->getThread($collectThreadsId['threadId']);
-        }
+        $postThreadsIds = $this->getThreadService()->searchPostsThreadIds(['userId' => $user['id']], ['id' => 'DESC'], 0, 10);
 
-        $collectCount = $this->getThreadService()->countThreadCollects(array('userId' => $user['id']));
+        $threads = $this->getThreadService()->getThreadsByIds(array_column($postThreadsIds, 'threadId'));
 
-        $groupIdsAsCollectThreads = ArrayToolkit::column($collectThreads, 'groupId');
-        $groupsAsCollectThreads = $this->getGroupService()->getGroupsByIds($groupIdsAsCollectThreads);
-
-        $userIds = ArrayToolkit::column($collectThreads, 'lastPostMemberId');
-        $collectLastPostMembers = $this->getUserService()->findUsersByIds($userIds);
-
-        $userIds = ArrayToolkit::column($ownThreads, 'lastPostMemberId');
-        $lastPostMembers = $this->getUserService()->findUsersByIds($userIds);
-
-        $postThreadsIds = $this->getThreadService()->searchPostsThreadIds(array('userId' => $user['id']), array('id' => 'DESC'), 0, 10);
-
-        $threads = array();
-
-        foreach ($postThreadsIds as $postThreadsId) {
-            $threads[] = $this->getThreadService()->getThread($postThreadsId['threadId']);
-        }
-
-        $postsCount = $this->getThreadService()->countPostsThreadIds(array('userId' => $user['id']));
-
-        $groupIdsAsPostThreads = ArrayToolkit::column($threads, 'groupId');
-        $groupsAsPostThreads = $this->getGroupService()->getGroupsByIds($groupIdsAsPostThreads);
-
-        $userIds = ArrayToolkit::column($threads, 'lastPostMemberId');
-        $postLastPostMembers = $this->getUserService()->findUsersByIds($userIds);
-
-        return $this->render('my/learning/group/group-member-center.html.twig', array(
+        return $this->render('my/learning/group/group-member-center.html.twig', [
             'user' => $user,
             'groups' => $groups,
             'threads' => $threads,
             'threadsCount' => $threadsCount,
-            'postsCount' => $postsCount,
-            'collectCount' => $collectCount,
-            'groupsAsCollectThreads' => $groupsAsCollectThreads,
-            'collectLastPostMembers' => $collectLastPostMembers,
+            'postsCount' => $this->getThreadService()->countPostsThreadIds(['userId' => $user['id']]),
+            'collectCount' => $this->getFavoriteService()->countFavorites(['userId' => $user['id'], 'targetType' => 'thread', 'targetIds' => array_column($collectThreads, 'id') ?: [-1]]),
+            'groupsAsCollectThreads' => $this->getGroupService()->getGroupsByIds(array_column($collectThreads, 'groupId')),
+            'collectLastPostMembers' => $this->getUserService()->findUsersByIds(array_column($collectThreads, 'lastPostMemberId')),
             'collectThreads' => $collectThreads,
-            'postLastPostMembers' => $postLastPostMembers,
-            'groupsAsPostThreads' => $groupsAsPostThreads,
-            'lastPostMembers' => $lastPostMembers,
+            'postLastPostMembers' => $this->getUserService()->findUsersByIds(array_column($threads, 'lastPostMemberId')),
+            'groupsAsPostThreads' => $this->getGroupService()->getGroupsByIds(array_column($threads, 'groupId')),
+            'lastPostMembers' => $this->getUserService()->findUsersByIds(array_column($ownThreads, 'lastPostMemberId')),
             'groupsAsOwnThreads' => $groupsAsOwnThreads,
             'ownThreads' => $ownThreads,
-            'groupsCount' => $groupsCount, ));
+            'groupsCount' => $groupsCount, ]);
     }
 
-    public function memberJoinAction(Request $request)
+    public function memberJoinAction()
     {
         $user = $this->getUser();
 
-        $admins = $this->getGroupService()->searchMembers(array('userId' => $user['id'], 'role' => 'admin'),
-            array('createdTime' => 'DESC'), 0, 1000
+        $admins = $this->getGroupService()->searchMembers(['userId' => $user['id'], 'role' => 'admin'],
+            ['createdTime' => 'DESC'], 0, 1000
         );
-        $owners = $this->getGroupService()->searchMembers(array('userId' => $user['id'], 'role' => 'owner'),
-            array('createdTime' => 'DESC'), 0, 1000
+        $owners = $this->getGroupService()->searchMembers(['userId' => $user['id'], 'role' => 'owner'],
+            ['createdTime' => 'DESC'], 0, 1000
         );
         $members = array_merge($admins, $owners);
         $groupIds = ArrayToolkit::column($members, 'groupId');
@@ -95,21 +78,21 @@ class GroupController extends BaseController
 
         $paginator = new Paginator(
             $this->get('request'),
-            $this->getGroupService()->countMembers(array('userId' => $user['id'], 'role' => 'member')),
+            $this->getGroupService()->countMembers(['userId' => $user['id'], 'role' => 'member']),
             12
         );
 
-        $members = $this->getGroupService()->searchMembers(array('userId' => $user['id'], 'role' => 'member'), array('createdTime' => 'DESC'), $paginator->getOffsetCount(),
+        $members = $this->getGroupService()->searchMembers(['userId' => $user['id'], 'role' => 'member'], ['createdTime' => 'DESC'], $paginator->getOffsetCount(),
             $paginator->getPerPageCount());
 
         $groupIds = ArrayToolkit::column($members, 'groupId');
         $groups = $this->getGroupService()->getGroupsByIds($groupIds);
 
-        return $this->render('my/learning/group/group-member-join.html.twig', array(
+        return $this->render('my/learning/group/group-member-join.html.twig', [
             'user' => $user,
             'adminGroups' => $adminGroups,
             'paginator' => $paginator,
-            'groups' => $groups, ));
+            'groups' => $groups, ]);
     }
 
     public function memberThreadsAction()
@@ -118,11 +101,11 @@ class GroupController extends BaseController
 
         $paginator = new Paginator(
             $this->get('request'),
-            $this->getThreadService()->countThreads(array('userId' => $user['id'])),
+            $this->getThreadService()->countThreads(['userId' => $user['id']]),
             12
         );
 
-        $threads = $this->getThreadService()->searchThreads(array('userId' => $user['id']), array('createdTime' => 'DESC'), $paginator->getOffsetCount(),
+        $threads = $this->getThreadService()->searchThreads(['userId' => $user['id']], ['createdTime' => 'DESC'], $paginator->getOffsetCount(),
             $paginator->getPerPageCount());
 
         $groupIds = ArrayToolkit::column($threads, 'groupId');
@@ -131,26 +114,26 @@ class GroupController extends BaseController
         $lastPostMembers = $this->getUserService()->findUsersByIds($userIds);
         $groups = $this->getGroupService()->getGroupsByIds($groupIds);
 
-        return $this->render('my/learning/group/group-member-threads.html.twig', array(
+        return $this->render('my/learning/group/group-member-threads.html.twig', [
             'user' => $user,
             'paginator' => $paginator,
             'lastPostMembers' => $lastPostMembers,
             'threads' => $threads,
-            'groups' => $groups, ));
+            'groups' => $groups, ]);
     }
 
     public function memberPostsAction()
     {
         $user = $this->getUser();
-        $threads = array();
+        $threads = [];
         $paginator = new Paginator(
             $this->get('request'),
-            $this->getThreadService()->countPostsThreadIds(array('userId' => $user['id'])),
+            $this->getThreadService()->countPostsThreadIds(['userId' => $user['id']]),
             12
         );
 
-        $postThreadsIds = $this->getThreadService()->searchPostsThreadIds(array('userId' => $user['id']),
-            array('id' => 'DESC'),
+        $postThreadsIds = $this->getThreadService()->searchPostsThreadIds(['userId' => $user['id']],
+            ['id' => 'DESC'],
             $paginator->getOffsetCount(),
             $paginator->getPerPageCount());
 
@@ -164,35 +147,35 @@ class GroupController extends BaseController
         $userIds = ArrayToolkit::column($threads, 'lastPostMemberId');
         $lastPostMembers = $this->getUserService()->findUsersByIds($userIds);
 
-        return $this->render('my/learning/group/group-member-posts.html.twig', array(
+        return $this->render('my/learning/group/group-member-posts.html.twig', [
             'user' => $user,
             'paginator' => $paginator,
             'threads' => $threads,
             'lastPostMembers' => $lastPostMembers,
             'groups' => $groupsAsPostThreads,
-        ));
+        ]);
     }
 
     public function collectingAction()
     {
         $user = $this->getUser();
 
-        $threads = array();
+        $threads = [];
         $paginator = new Paginator(
             $this->get('request'),
-            $this->getThreadService()->countThreadCollects(array('userId' => $user['id'])),
+            $this->getFavoriteService()->countFavorites(['userId' => $user['id'], 'targetType' => 'thread']),
             12
         );
 
-        $collectThreadsIds = $this->getThreadService()->searchThreadCollects(
-            array('userId' => $user['id']),
-            array('id' => 'DESC'),
+        $collectThreadsIds = $this->getFavoriteService()->searchFavorites(
+            ['userId' => $user['id'], 'targetType' => 'thread'],
+            ['id' => 'DESC'],
             $paginator->getOffsetCount(),
             $paginator->getPerPageCount()
         );
 
         foreach ($collectThreadsIds as $collectThreadsId) {
-            $threads[] = $this->getThreadService()->getThread($collectThreadsId['threadId']);
+            $threads[] = $this->getThreadService()->getThread($collectThreadsId['targetId']);
         }
 
         $groupIdsAsPostThreads = ArrayToolkit::column($threads, 'groupId');
@@ -201,13 +184,13 @@ class GroupController extends BaseController
         $userIds = ArrayToolkit::column($threads, 'lastPostMemberId');
         $lastPostMembers = $this->getUserService()->findUsersByIds($userIds);
 
-        return $this->render('my/learning/group/group-member-collect.html.twig', array(
+        return $this->render('my/learning/group/group-member-collect.html.twig', [
             'user' => $user,
             'paginator' => $paginator,
             'threads' => $threads,
             'lastPostMembers' => $lastPostMembers,
             'groups' => $groupsAsPostThreads,
-        ));
+        ]);
     }
 
     /**
@@ -232,5 +215,13 @@ class GroupController extends BaseController
     protected function getUserService()
     {
         return $this->createService('User:UserService');
+    }
+
+    /**
+     * @return FavoriteService
+     */
+    protected function getFavoriteService()
+    {
+        return $this->createService('Favorite:FavoriteService');
     }
 }

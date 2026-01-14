@@ -3,6 +3,7 @@
 namespace AppBundle\Extensions\DataTag;
 
 use AppBundle\Common\ArrayToolkit;
+use Biz\Common\CommonException;
 use Topxia\Service\Common\ServiceKernel;
 
 abstract class BaseDataTag
@@ -10,6 +11,13 @@ abstract class BaseDataTag
     protected function getServiceKernel()
     {
         return ServiceKernel::instance();
+    }
+
+    protected function getWebExtension()
+    {
+        global $kernel;
+
+        return $kernel->getContainer()->get('web.twig.extension');
     }
 
     protected function fillOrgCode($conditions)
@@ -34,7 +42,7 @@ abstract class BaseDataTag
     protected function checkArguments(array $arguments, $requires)
     {
         if (!ArrayToolkit::requireds($arguments, $requires)) {
-            throw new \InvalidArgumentException('missing argument');
+            throw CommonException::ERROR_PARAMETER_MISSING();
         }
     }
 
@@ -43,8 +51,18 @@ abstract class BaseDataTag
         return ServiceKernel::instance()->getCurrentUser();
     }
 
-    protected function setting($name, $default = array())
+    protected function setting($name, $default = [])
     {
         return ServiceKernel::instance()->createService('System:SettingService')->get($name, $default);
+    }
+
+    protected function createService($alias)
+    {
+        return $this->getServiceKernel()->getBiz()->service($alias);
+    }
+
+    protected function createDao($alias)
+    {
+        return $this->getServiceKernel()->getBiz()->dao($alias);
     }
 }

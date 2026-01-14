@@ -1,0 +1,92 @@
+<?php
+
+namespace Codeages\Biz\ItemBank\Item\AnswerMode;
+
+use Codeages\Biz\ItemBank\ErrorCode;
+use Codeages\Biz\ItemBank\Item\Exception\QuestionException;
+use Codeages\Biz\ItemBank\Item\Type\Question;
+
+class TextAnswerMode extends AnswerMode
+{
+    const NAME = 'text';
+
+    const INPUT_TYPE = 'text';
+
+    const MATH_INPUT_TYPE = 'math';
+
+    const IS_SUBJECTIVE = false;
+
+    public function validate($responsePoints, $answer)
+    {
+        if (count($responsePoints) != count(array_merge(array_column($responsePoints, static::INPUT_TYPE), array_column($responsePoints, static::MATH_INPUT_TYPE)))) {
+            throw new QuestionException('Field response_points is invalid.', ErrorCode::QUESTION_ARGUMENT_INVALID);
+        }
+
+        if (count($responsePoints) != count($answer)) {
+            throw new QuestionException('Field response_points or answer is invalid.', ErrorCode::QUESTION_ARGUMENT_INVALID);
+        }
+    }
+
+    public function getAnswerSceneResponsePointsReport($question, $questionReports)
+    {
+        $reports = [];
+        foreach ($question['answer'] as $answer) {
+            $reports[] = ['val' => $answer, 'num' => 0];
+        }
+
+        foreach ($questionReports as $questionReport) {
+            foreach ($questionReport['response'] as $index => $response) {
+                if (!empty($question['answer'][$index])) {
+                    $pointAnswers = explode('|', $question['answer'][$index]);
+                }
+                if (in_array($response, $pointAnswers)) {
+                    ++$reports[$index]['num'];
+                }
+            }
+        }
+
+        return $reports;
+    }
+
+    public function parse($parsedQuestion, $question)
+    {
+        foreach ($question['answers'] as $answer) {
+            if (preg_match('/\$\$([^$]+)\$\$/', $answer)) {
+                $parsedQuestion['response_points'][] = [self::MATH_INPUT_TYPE => []];
+            } else {
+                $parsedQuestion['response_points'][] = [self::INPUT_TYPE => []];
+            }
+        }
+
+        $parsedQuestion['answer'] = $question['answers'];
+
+        return $parsedQuestion;
+    }
+
+    public function review($responsePoints, $answer, $response)
+    {
+        $responsePointsResult = [];
+        foreach ($responsePoints as $key => $responsePoint) {
+            $responsePointsResult[$key] = $this->reviewPoint($key, $responsePoint, $answer, $response);
+        }
+
+        return [
+            'result' => count($answer) == $this->getRightCount($responsePointsResult) && !$this->hasWrong($responsePointsResult) ? Question::REVIEW_RIGHT : Question::REVIEW_WRONG,
+            'response_points_result' => $responsePointsResult,
+        ];
+    }
+
+    protected function reviewPoint($key, $responsePoint, $answer, $response)
+    {
+        foreach ($answer as &$pointAnswer) {
+            $pointAnswer = explode('|', $pointAnswer);
+            unset($pointAnswer);
+        }
+
+        if (empty($response[$key]) && $response[$key] != '0') {
+            return self::POINT_NOANSWER;
+        }
+
+        return in_array($response[$key], $answer[$key]) ? self::POINT_RIGHT : self::POINT_WRONG;
+    }
+}

@@ -2,16 +2,28 @@
 
 namespace AppBundle\Component\MediaParser;
 
+use AppBundle\Component\MediaParser\ItemParser\AbstractItemParser;
 use Topxia\Service\Common\ServiceKernel;
 
 class ParserProxy
 {
+    private $mockedParser = null;
+
+    public function getParsers()
+    {
+        return [
+            'youku' => 'YoukuVideo',
+            'qqvideo' => 'QQVideo',
+            'NeteaseOpenCourse' => 'NeteaseOpenCourse',
+            'bilibili' => 'BiLiBiLiVideo',
+            'iqiyi' => 'IQiYiVideo',
+        ];
+    }
+
     public function parseItem($url)
     {
-        $parsers = array('YoukuVideo', 'QQVideo', 'NeteaseOpenCourse', 'TudouVideo');
-
         $kernel = ServiceKernel::instance();
-        $extras = array();
+        $extras = [];
 
         if ($kernel->hasParameter('media_parser')) {
             $extras = $kernel->getParameter('media_parser');
@@ -32,9 +44,9 @@ class ParserProxy
             }
         }
 
-        foreach ($parsers as $parserName) {
-            $class = __NAMESPACE__."\\ItemParser\\{$parserName}ItemParser";
-            $parser = new $class();
+        foreach ($this->getParsers() as $parserName) {
+            /** @var AbstractItemParser $parser */
+            $parser = $this->createParser("{$parserName}ItemParser");
 
             if (!$parser->detect($url)) {
                 continue;
@@ -43,29 +55,54 @@ class ParserProxy
             return $parser->parse($url);
         }
 
-        throw $this->createParserNotFoundException();
+        throw ParserException::PARSER_NOT_SUPPORT();
     }
 
-    public function parseAlbum($url)
+    public function prepareMediaUri($video)
     {
-        $parsers = array('YoukuVideo', 'QQVideo', 'NeteaseOpenCourse', 'SinaOpenCourse');
-
-        foreach ($parsers as $parserName) {
-            $class = __NAMESPACE__."\\AlbumParser\\{$parserName}AlbumParser";
-            $parser = new $class();
-
-            if (!$parser->detect($url)) {
-                continue;
-            }
-
-            return $parser->parse($url);
+        if ('self' == $video['mediaSource']) {
+            return $video;
         }
 
-        throw $this->createParserNotFoundException();
+        $parsers = $this->getParsers();
+        if (empty($parsers[$video['mediaSource']])) {
+            throw ParserException::PARSER_NOT_SUPPORT();
+        }
+        $parser = $this->createParser($parsers[$video['mediaSource']].'ItemParser');
+
+        return $parser->prepareMediaUri($video);
     }
 
-    protected function createParserNotFoundException($message = '')
+    public function prepareYoukuMediaUri($video)
     {
-        return new ParserNotFoundException($message);
+        if ('youku' == $video['mediaSource']) {
+            return $this->prepareMediaUri($video);
+        }
+
+        return $video;
+    }
+
+    public function prepareMediaUriForMobile($video, $httpSchema = '')
+    {
+        if ('youku' == $video['mediaSource']) {
+            $parser = $this->createParser('YoukuVideoItemParser');
+        } elseif ('qq' == $video['mediaSource']) {
+            $parser = $this->createParser('QQVideoItemParser');
+        } else {
+            return $video;
+        }
+
+        return $parser->prepareMediaUriForMobile($video, $httpSchema);
+    }
+
+    private function createParser($parserName)
+    {
+        if (empty($this->mockedParser)) {
+            $class = __NAMESPACE__.'\\ItemParser\\'.$parserName;
+
+            return new $class();
+        }
+
+        return $this->mockedParser;
     }
 }

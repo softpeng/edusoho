@@ -1,0 +1,77 @@
+{% set questionTypesDict = getQuestionTypes() %}
+{% set question = item.questions[0] %}
+
+<tr id="testpaper-item-{{ item.id }}" data-id="{{ item.id }}" data-question-id="{{ question.id|default(0) }}" data-type="{{ item.type }}" data-question-answer="{{ question.answer|json_encode }}" data-question-type="{{ question.answer_mode }}"
+    class="js-item is-question js-question-tr {% if item.type == 'material' %}have-sub-questions js-have-sub{% endif %}">
+  <td><span class="glyphicon glyphicon-resize-vertical sort-handle"/></td>
+  <td>
+    {% if item.type != 'material' %}
+      <input class="notMoveHandle" type="checkbox" value="{{item.id}}" data-role="batch-item" >
+    {% endif %}
+    <input type="hidden" name="itemIds[]" value="{{ item.id }}">
+  </td>
+  <td class="seq">{{ item.seq|default('') }}</td>
+  <td>
+    <a class="color-info" href="#modal" data-toggle="modal" data-url="{{ path('question_bank_manage_question_preview', {id: questionBank.id, questionId: item.id}) }}">
+      {% if item.includeImg|default('') %}<span class="glyphicon glyphicon-picture"/>{% endif %}
+      {{item.material|plain_text(40) }}
+    </a>
+    <br/>
+    <span class="color-gray text-sm">{{ 'category'|trans }}：
+      {% if item.category_id %}
+        {{ itemCategories[item.category_id].name }}
+      {% else %}
+        {{ 'site.data.empty'|trans }}
+      {% endif %}
+    </span>
+    <br/>
+    <div class="item-tag-list">
+      <div class="color-gray text-sm tag-label">{{ 'tag'|trans }}：</div>
+      <div class="item-tag-container">
+        {% if questionTags[item.id]|default([])|length > 0 %}
+          {% for tag in questionTags[item.id] %}
+            <div class="tag">{{ tag.name }}</div>
+          {% endfor %}
+        {% else %}
+          <apan class="color-gray">{{ '-' }}</apan>
+        {% endif %}
+      </div>
+    </div>
+  </td>
+  <td class="js-question-score js-question-item" data-score="{{ question.score|default(0)|score_text }}">
+    {% if item.type != 'material' and not (question.answer_mode == 'text') %}
+      <input type="text" class="form-control score-validate js-score" name="score[{{ question.id }}]" style="width: 120px"  value="{{ question.score|default(0)|score_text }}">
+    {% endif %}
+    {% if question.answer_mode == 'text' %}
+      <div class="input-group">
+        <div class="input-group-btn">
+          <select class="btn btn-default dropdown-toggle  js-score-type" name="scoreType[{{ question.id }}]" style="width: 60px;height: 34px; padding: 0px !important;">
+            <option value="question" {% if question.score_rule['scoreType']|default('question') == 'question' %}selected="selected" {% endif %}>{{ 'course.homework.score_set.select.question1'|trans }}</option><option value="option" {% if question.score_rule['scoreType']|default('question') == 'option' %}selected="selected" {% endif %}>{{ 'course.homework.score_set.select.option1'|trans }}</option>
+          </select>
+        </div>
+        <input type="text" class="form-control score-validate js-fill-score js-score" name="choiceScore[{{ question.id }}]" value="{{ question.score_rule['otherScore']|default(0)|score_text }}" style="width: 60px;" aria-label="...">
+      </div>
+    {% endif %}
+  </td>
+  {% if item.type in ['choice', 'uncertain_choice'] %}
+    <td class="js-miss-score js-question-item">
+      <div class="input-group">
+        <div class="input-group-btn">
+          <select class="btn btn-default dropdown-toggle js-score-type" name="scoreType[{{ question.id }}]" style="width: 60px;height: 34px; padding: 0px 5px !important;">
+            <option value="question" {% if question.score_rule['scoreType']|default('question') == 'question' %}selected="selected" {% endif %}>{{ 'course.homework.score_set.select.question2'|trans }}</option>
+            <option value="option" {% if question.score_rule['scoreType']|default('question') == 'option' %}selected="selected" {% endif %}>{{ 'course.homework.score_set.select.option2'|trans }}</option>
+          </select>
+        </div>
+        <input type="text" class="form-control score-validate js-miss-choice-score" name="choiceScore[{{ question.id }}]" value="{{question.score_rule['otherScore']|default(0)|score_text}}" style="width: 60px" aria-label="...">
+      </div>
+    </td>
+  {% elseif item.type == 'material' %}
+    <td></td>
+  {% endif %}
+  <td>{{ dict_text('difficulty', item.difficulty)}}</td>
+  <td>
+    <div class="btn-group">
+      <a class="color-info mrl" href="javascript:" class="notMoveHandle mrm" data-role="item-delete-btn">{{'form.btn.remove'|trans}}</a>
+    </div>
+  </td>
+</tr>

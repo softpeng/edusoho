@@ -1,117 +1,86 @@
-{% extends 'testpaper/testpaper-layout.html.twig' %}
+{% extends 'layout.html.twig' %}
 
-{% do script(['libs/es-ckeditor/ckeditor.js','libs/perfect-scrollbar.js','libs/jquery-timer.js','app/js/testpaper/result/index.js']) %}
+{% block title %}{{ assessment.name }} - {{ parent() }}{% endblock %}
 
-{% block paper_result_bar %}
-  {% include 'testpaper/part/paper-result-objective.html.twig' %}
-{% endblock %}
-
-{% set questionTypeDict = getQuestionTypes() %}
-{% if action|default('') is not empty %}
+{% if app.request.query.get('action') is not empty %}
   {% set showHeader = 1 %}
-  {% set isIframeBody = 0 %}
 {% else %}
   {% set showHeader = 0 %}
 {% endif %}
 
-{% block paper_warning %}
-  {% if app.user and app.user.id == paperResult.userId %}
-    {% if paperResult.status == 'reviewing' %}
-      <div class="alert alert-warning">{{'testpaper.result.teacher_reviewing'|trans}}</div>
-    {% elseif paperResult.status == 'finished' %}
-      {% if paperResult.teacherSay %}
-        <div class="alert alert-success">
-          <div class=""><strong>{{'testpaper.result.teacher_comments'|trans}}</strong></div>
-          <div class="mtm">{{ paperResult.teacherSay|bbCode2Html|raw }}</div>
-        </div>
-      {% endif %}
-      {% if paperResult.passedStatus == 'unpassed' and target|default(null) %}
-        {% if target.doTimes|default('0') %}
-          <div class="alert alert-danger">{{ 'testpaper.result.failed'|trans }}</div>
-        {% elseif target.redoInterval|default('0') and ("now"|date("U")) < (paperResult.checkedTime + target.redoInterval * 3600) %}
-          {% set countTime = (paperResult.checkedTime + target.redoInterval * 3600)|date('Y-m-d H:i:s') %}
-          <div class="alert alert-danger">
-            {{ 'testpaper.result.revise_tips'|trans({'%countTime%': '<span class="color-success">' ~ countTime ~ ' </span>'})|raw }}
-          </div>
-        {% else %}
-          <div class="alert alert-danger">
-            {{'testpaper.result.study_again_tips'|trans({'%testpaper%':path('testpaper_do', {lessonId:paperResult.lessonId,testId:paperResult.testId})})|raw}}
-          </div>
-        {% endif %}
-      {% elseif paperResult.passedStatus in ['passed','good','excellent'] %}
-        <div class="alert alert-success">{{'testpaper.result.pass'|trans}}</div>
-      {% endif %}
-    {% endif %}
-  {% endif %}
+{% do script(['app/js/homework/result/index.js']) %}
+
+{% set isModityComment = data('TestpaperReviewRole', { answerRecordId: answerRecord.id | default(null)}) %}
+
+{% block stylesheets %}
+  {{ parent() }}
+  {% include 'item-bank-css-loader.html.twig' %}
 {% endblock %}
 
-{% block paper_sidebar %}
+{% block body %}
+  {% block header %}
+    {% if showHeader %}{{ parent() }}{% endif %}
+  {% endblock %}
 
-{% if (paperResult.status|default(null) in ['reviewing', 'finished'] and setting('questions.testpaper_answers_show_mode','submitted') == 'submitted') or (setting('questions.testpaper_answers_show_mode','submitted') == 'reviewed'  and paperResult.status|default(null) == 'finished') %}
-
-  <div class="testpaper-card {{testpaperCardClass|default('')}} {% if action|default('') is empty %}affix{% endif %}" >
-    {% if target|default(null) and not target.doTimes|default('0') and paperResult.status == 'finished' and (app.user.id|default(0) == paperResult.userId) %}
-      {% if ("now"|date("U")) < (paperResult.checkedTime + target.redoInterval * 3600) %}
-        <div class="testpaper-timer">
-          {% set redoTime = (paperResult.checkedTime + target.redoInterval * 3600) - ("now"|date("U")) %}
-          {{ 'testpaper.redo_countdown'|trans }}:
-          <span class="timer js-testpaper-redo-timer" data-time="{{ redoTime }}">00:00:00</span>
-          <a class="btn btn-success do-test" id="finishPaper" href="{% if action|default('') is not empty and task|default(null) %}{{ path('course_task_show',{courseId:paperResult.courseId,id:task.id}) }}{% else %}{{ path('testpaper_do',{lessonId:paperResult.lessonId,testId:paperResult.testId}) }}{% endif %}" disabled="disabled">{{'testpaper.do_gagin'|trans}}</a>
-        </div>
-      {% else %}
-        <div class="testpaper-timer">
-          <a class="btn btn-success do-test" id="finishPaper" href="{% if action|default('') is not empty and task|default(null) %}{{ path('course_task_show',{courseId:paperResult.courseId,id:task.id}) }}{% else %}{{ path('testpaper_do',{lessonId:paperResult.lessonId,testId:paperResult.testId}) }}{% endif %}">{{'testpaper.do_gagin'|trans}}</a>
-        </div>
-      {% endif %}
-    {% endif %}
-
-    <div class="panel panel-default ">
-      <div class="panel-heading">
-        {{'testpaper.answer.answer_card'|trans}}
-        {% if target|default(null) and target.doTimes|default('0') %}
-          <span class="color-danger">{{'testpaper.answer.answer_card.one_chance_tips'|trans}}</span>
-        {% endif %}
-        {% if paperResult|default(null) %}
-          <a class="pull-right link-medium" href="javascript:;" data-container="body" data-toggle="popover" data-placement="bottom" data-trigger="hover" data-content='
-            <div>
-              {{'course.plan_task.activity_manage.testpaper.total_question'|trans({'%itemCount%':paper.itemCount, '%score%':paper.score})|raw}}
-            {% if testpaperActivity.finishCondition.type|default(null) == 'score' %}
-              {{'course.plan_task.activity_manage.testpaper.pass_score'|trans({'%finishScore%':testpaperActivity.finishCondition.finishScore|default(0)})|raw}}
-            {% endif %}
-            
-            {% if target.limitedTime|default(testpaper.limitedTime|default(0)) > 0 %}
-              {{'course.plan_task.activity_manage.testpaper.answer'|trans({'%limitedTime%':target.limitedTime|default(testpaper.limitedTime|default(0))})|raw}}
-            {% endif %}</div>'><i class="es-icon es-icon-info"></i></a>
-        {% endif %}
-      </div>
-      <div class="panel-body">
-        <div class="js-panel-card panel-card">
-          {% for type in questionTypes|default([]) %}
-            <p>{{ questionTypeDict[type] }}</p>
-            {% for question in questions[type] %}
-              {% if question.type == 'material' %}
-                {% for questionSub in question.subs|default([]) %}
-                  {% include 'testpaper/part/paper-card-choice.html.twig' with {paperResult:paperResult,question:questionSub,seq:questionSub.seq} %}
-                {% endfor %}
+  {% if answerRecord.status == 'finished' %}
+    <input type="hidden" class="js-answer-record-id" value='{{ answerRecord.id }}'>
+    <input type="hidden" class="js-testpaper-type" value='{{ type|default('default') }}'>
+    <div class="ibs-vue">
+      <div class="ant-row">
+        <div class="ant-col ibs-result-item">
+          <div class="item-bank-result review-result">
+            <div class="review-result__icon">
+              {% if answerReport.grade == 'unpassed' or answerReport.grade == 'none' %}
+                <img class="pull-left" src="{{ asset('static-dist/app/img/item-bank/unpassed.png') }}" srcset="{{ asset('static-dist/app/img/item-bank/unpassed.png') }} 1x, {{ asset('static-dist/app/img/item-bank/unpassed@2x.png') }} 2x">
               {% else %}
-                {% include 'testpaper/part/paper-card-choice.html.twig' with {paperResult:paperResult,question:question,seq:question.seq} %}
+                <img class="pull-left" src="{{ asset('static-dist/app/img/item-bank/passed.png') }}" srcset="{{ asset('static-dist/app/img/item-bank/passed.png') }} 1x, {{ asset('static-dist/app/img/item-bank/passed@2x.png') }} 2x">
               {% endif %}
-            {% endfor %}
-          {% endfor %}
-          {% include 'testpaper/part/card-choice-explain.html.twig' %}
-        </div>
-      </div>
-      <div class="panel-footer">
-        <div class="checkbox">
-          <label>
-            <input type="checkbox" id="showWrong" />
-            <span class="text-info">{{'testpaper.result.wrong_only'|trans}}</span>
-          </label>
-        </div>
-      </div>
+            </div>
 
+            <div class="review-result__content">
+              <div class="result-status">
+                {% if answerReport.grade == 'unpassed' or answerReport.grade == 'none' %}
+                  <span class="result-status--unpassed">{{ 'review.result.fail' | trans }}</span>
+                {% else %}
+                  <span class="result-status--passed">{{ 'review.result.pass' | trans }}</span>
+                {% endif %}
+              </div>
+              <div class="teacher-comment">
+                <div class="teacher-comment__label">{{ 'testpaper.result.comment'|trans }}：</div>
+                <div class="teacher-comment__content js-comment-box {% if isModityComment  and type|default('default') == 'default' %} teacher-comment__content--pb28 {% endif %}">
+                  <div class="js-comment-content" style="white-space: pre-wrap;">{{ answerReport.comment|default('') }}</div>
+                  {% if isModityComment  and type|default('default') == 'default' %}
+                    <span class="modify-comment-btn js-modify-btn">{{ 'review.result.amend_comment' | trans }}</span>
+                  {% endif %}
+                </div>
+
+                <div class="teacher-comment__input hidden js-modify-comment-box">
+                  <textarea maxlength="1500" class="comment-textarea js-comment-textarea" name="comment-textarea" rows="5">{{ answerReport.comment|default('') }}</textarea>
+                  <select name="comment-select" class="comment-select js-comment-select">
+                    {{ 'course.homework_check.review.common_comments' | trans | raw }}
+                  </select>
+                  <div class="comment-btn">
+                    <button class="cd-btn cd-btn-ghost-default cd-btn-sm js-close-btn">{{ 'form.btn.cancel' | trans }}</button>
+                    <button class="cd-btn cd-btn-primary cd-btn-sm js-save-btn">{{ 'form.btn.save' | trans }}</button>
+                    <p style="margin-top: 4px; margin-bottom: 0; font-size: 14px;">{{ 'review.result.comment_tips' | trans }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
-{% endif %}
 
+  {% endif %}
+
+  {% if app.request.query.get('action', '') == 'check' %}
+    {{ render(controller('AppBundle:AnswerEngine/AnswerEngine:assessmentResult', {answerRecordId: answerRecord.id})) }}
+  {% else %}
+    {{ render(controller('AppBundle:AnswerEngine/AnswerEngine:report', {answerRecordId: answerRecord.id, restartUrl:restartUrl, answerShow:answerShow})) }}
+  {% endif %}
+
+  {% block footer %}
+    {% if showHeader|default(1) %}{{ parent() }}{% endif %}
+  {% endblock %}
 {% endblock %}

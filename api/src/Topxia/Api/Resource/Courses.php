@@ -14,10 +14,12 @@ class Courses extends BaseResource
         $conditions = $request->query->all();
         $start = $request->query->get('start', 0);
         $limit = $request->query->get('limit', 20);
+        unset($conditions['start'], $conditions['limit']);
         $courses = $this->getCourseService()->searchCourses($conditions, array('createdTime' => 'DESC'), $start, $limit);
         $courses = $this->assemblyCourses($courses);
         $courses = $this->filter($courses);
         $next = $this->getCourseService()->searchCourseCount($conditions);
+
         return $this->wrap($courses, $next);
     }
 
@@ -65,6 +67,7 @@ class Courses extends BaseResource
         } else {
             $orderBy = array('createdTime' => 'DESC');
         }
+
         return array($orderBy, $count);
     }
 
@@ -72,10 +75,10 @@ class Courses extends BaseResource
     {
         $conditions['status'] = 'published';
         $conditions['parentId'] = 0;
-        if (!empty($conditions['type']) && $conditions['type'] != 'live') {
+        if (!empty($conditions['type']) && 'live' != $conditions['type']) {
             $conditions['type'] = 'normal';
         }
-        if (!empty($conditions['orderType']) && $conditions['orderType'] == 'recommend') {
+        if (!empty($conditions['orderType']) && 'recommend' == $conditions['orderType']) {
             $conditions['recommended'] = 1;
         }
         $conditions = ArrayToolkit::parts($conditions, array(
@@ -85,6 +88,7 @@ class Courses extends BaseResource
             'status',
             'recommended',
         ));
+
         return $conditions;
     }
 
@@ -96,7 +100,7 @@ class Courses extends BaseResource
         $coursesFilter = array();
         foreach ($courses as $key => $course) {
             $courseSet = $courseSets[$course['courseSetId']];
-            if ($courseSet['status'] == 'published') {
+            if ('published' == $courseSet['status']) {
                 $course['hitNum'] = $courseSet['hitNum'];
                 $course['courseSet'] = $courseSet;
                 $coursesFilter[] = $course;

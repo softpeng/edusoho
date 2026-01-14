@@ -2,15 +2,16 @@
 
 namespace Biz\OpenCourse\Event;
 
+use Biz\OpenCourse\OpenCourseException;
 use Biz\Taxonomy\TagOwnerManager;
 use Codeages\Biz\Framework\Event\Event;
-use Codeages\PluginBundle\Event\EventSubscriber;
+use Codeages\Biz\Framework\Event\EventSubscriber;
 
 class OpenCourseEventSubscriber extends EventSubscriber
 {
     public static function getSubscribedEvents()
     {
-        return array(
+        return [
             'open.course.update' => 'onCourseUpdate',
             'open.course.delete' => 'onCourseDelete',
             'open.course.lesson.create' => 'onLessonCreate',
@@ -20,7 +21,7 @@ class OpenCourseEventSubscriber extends EventSubscriber
             'course.material.update' => 'onMaterialUpdate',
             'course.material.delete' => 'onMaterialDelete',
             'live.replay.generate' => 'onLiveReplayGenerate',
-        );
+        ];
     }
 
     public function onCourseDelete(Event $event)
@@ -34,6 +35,11 @@ class OpenCourseEventSubscriber extends EventSubscriber
     public function onCourseUpdate(Event $event)
     {
         $fields = $event->getSubject();
+
+        $args = $fields['argument'];
+        if (!isset($args['tags'])) {
+            return;
+        }
 
         $course = $fields['course'];
         $tagIds = $fields['tagIds'];
@@ -51,15 +57,15 @@ class OpenCourseEventSubscriber extends EventSubscriber
         $course = $this->getOpenCourseService()->getCourse($lesson['courseId'], true);
 
         if (empty($course)) {
-            throw new \RuntimeException('添加课时失败，课程不存在。');
+            throw OpenCourseException::NOTFOUND_OPENCOURSE();
         }
 
-        if ($course['status'] === 'draft' || $lesson['type'] === 'liveOpen') {
+        if ('draft' === $course['status'] && 'open' === $course['type']) {
             $this->getOpenCourseService()->publishLesson($course['id'], $lesson['id']);
         }
 
-        $lessonNum = $this->getOpenCourseService()->countLessons(array('courseId' => $lesson['courseId']));
-        $this->getOpenCourseService()->updateCourse($lesson['courseId'], array('lessonNum' => $lessonNum));
+        $lessonNum = $this->getOpenCourseService()->countLessons(['courseId' => $lesson['courseId']]);
+        $this->getOpenCourseService()->updateCourse($lesson['courseId'], ['lessonNum' => $lessonNum]);
     }
 
     public function onLessonDelete(Event $event)
@@ -67,8 +73,8 @@ class OpenCourseEventSubscriber extends EventSubscriber
         $context = $event->getSubject();
         $lesson = $context['lesson'];
 
-        $lessonNum = $this->getOpenCourseService()->countLessons(array('courseId' => $lesson['courseId']));
-        $this->getOpenCourseService()->updateCourse($lesson['courseId'], array('lessonNum' => $lessonNum));
+        $lessonNum = $this->getOpenCourseService()->countLessons(['courseId' => $lesson['courseId']]);
+        $this->getOpenCourseService()->updateCourse($lesson['courseId'], ['lessonNum' => $lessonNum]);
     }
 
     public function onMemberCreate(Event $event)
@@ -77,16 +83,19 @@ class OpenCourseEventSubscriber extends EventSubscriber
         $fields = $context['argument'];
         $member = $context['newMember'];
 
-        $memberNum = $this->getOpenCourseService()->countMembers(array('courseId' => $fields['courseId']));
+        $memberNum = $this->getOpenCourseService()->countMembers([
+            'role' => 'student',
+            'courseId' => $fields['courseId'], ]
+        );
 
-        $this->getOpenCourseService()->updateCourse($fields['courseId'], array('studentNum' => $memberNum));
+        $this->getOpenCourseService()->updateCourse($fields['courseId'], ['studentNum' => $memberNum]);
     }
 
     public function onMaterialCreate(Event $event)
     {
         $material = $event->getSubject();
 
-        if ($material && $material['source'] == 'opencoursematerial' && $material['type'] == 'openCourse') {
+        if ($material && $material['lessonId'] && 'opencoursematerial' == $material['source'] && 'openCourse' == $material['type']) {
             $this->getOpenCourseService()->waveCourseLesson($material['lessonId'], 'materialNum', 1);
         }
     }
@@ -98,10 +107,10 @@ class OpenCourseEventSubscriber extends EventSubscriber
 
         $lesson = $this->getOpenCourseService()->getCourseLesson($material['courseId'], $material['lessonId']);
 
-        if ($material['source'] == 'opencoursematerial') {
+        if ('opencoursematerial' == $material['source']) {
             if ($material['lessonId']) {
                 $this->getOpenCourseService()->waveCourseLesson($material['lessonId'], 'materialNum', 1);
-            } elseif ($material['lessonId'] == 0 && isset($argument['lessonId']) && $argument['lessonId']) {
+            } elseif (0 == $material['lessonId'] && isset($argument['lessonId']) && $argument['lessonId']) {
                 $material['lessonId'] = $argument['lessonId'];
                 $this->_waveLessonMaterialNum($material);
             }
@@ -115,11 +124,11 @@ class OpenCourseEventSubscriber extends EventSubscriber
         $lesson = $this->getOpenCourseService()->getCourseLesson($material['courseId'], $material['lessonId']);
 
         if ($lesson) {
-            if ($material['lessonId'] && $material['source'] == 'opencourselesson' && $material['type'] == 'openCourse') {
+            if ($material['lessonId'] && 'opencourselesson' == $material['source'] && 'openCourse' == $material['type']) {
                 $this->getOpenCourseService()->resetLessonMediaId($material['lessonId']);
             }
 
-            if ($material['lessonId'] && $material['source'] == 'opencoursematerial' && $material['type'] == 'openCourse') {
+            if ($material['lessonId'] && 'opencoursematerial' == $material['source'] && 'openCourse' == $material['type']) {
                 $this->getOpenCourseService()->waveCourseLesson($material['lessonId'], 'materialNum', -1);
             }
         }
@@ -135,31 +144,31 @@ class OpenCourseEventSubscriber extends EventSubscriber
 
         $replay = current($replays);
 
-        if ($replay['type'] != 'liveOpen') {
+        if ('liveOpen' != $replay['type']) {
             return;
         }
 
         $courseId = $replay['courseId'];
         $lessonId = $replay['lessonId'];
 
-        $lessonFields = array(
+        $lessonFields = [
             'replayStatus' => 'generated',
-        );
+        ];
 
         $this->getOpenCourseService()->updateLesson($courseId, $lessonId, $lessonFields);
     }
 
     private function _waveLessonMaterialNum($material)
     {
-        if ($material['lessonId'] && $material['source'] == 'opencoursematerial' && $material['type'] == 'openCourse') {
-            $count = $this->getMaterialService()->countMaterials(array(
+        if ($material['lessonId'] && 'opencoursematerial' == $material['source'] && 'openCourse' == $material['type']) {
+            $count = $this->getMaterialService()->countMaterials([
                     'courseId' => $material['courseId'],
                     'lessonId' => $material['lessonId'],
                     'source' => 'opencoursematerial',
                     'type' => 'openCourse',
-                )
+                ]
             );
-            $this->getOpenCourseService()->updateLesson($material['courseId'], $material['lessonId'], array('materialNum' => $count));
+            $this->getOpenCourseService()->updateLesson($material['courseId'], $material['lessonId'], ['materialNum' => $count]);
 
             return true;
         }

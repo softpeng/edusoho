@@ -1,5 +1,5 @@
-import videojs from 'video.js'
-import Emitter from "component-emitter";
+import videojs from 'video.js';
+import Emitter from 'component-emitter';
 import notify from 'common/notify';
 let videoSwf = require('video.js/dist/video-js/video-js.swf');
 
@@ -20,6 +20,7 @@ class LocalVideoPlayer extends Emitter {
     var player = videojs(this.options.element, {
       techOrder: techOrder,
       loop: false,
+      autoplay: that.options.autoplay,
       flash: {
         swf: videoSwf
       },
@@ -32,14 +33,14 @@ class LocalVideoPlayer extends Emitter {
     player.src(this.options.url);
 
     player.on('error', error => {
-	    player.hasPlayerError = true;
-        var message = Translator.trans('site.browser_useless_play_video_hint');
-	    notify('danger',message, {delay:30000});
+      player.hasPlayerError = true;
+      var message = Translator.trans('site.browser_useless_play_video_hint');
+      notify('danger',message, {delay:30000});
     });
 
     player.on('fullscreenchange', function(e) {
       if ($(e.target).hasClass('vjs-fullscreen')) {
-        $("#site-navbar").hide();
+        $('#site-navbar').hide();
       }
     });
 
@@ -56,12 +57,12 @@ class LocalVideoPlayer extends Emitter {
       that.emit('ready', e);
     });
 
-    player.on("play", (e) => {
-      that.emit("playing", e);
+    player.on('play', (e) => {
+      that.emit('playing', e);
     });
 
-    player.on("pause", (e) => {
-      that.emit("paused", e);
+    player.on('pause', (e) => {
+      that.emit('paused', e);
     });
 
     this.player = player;

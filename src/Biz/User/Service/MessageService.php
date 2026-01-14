@@ -19,6 +19,8 @@ interface MessageService
      */
     public function sendMessage($fromId, $toId, $content, $createdTime = null);
 
+    public function sendMessageNoSensitiveCheck($fromId, $toId, $content);
+
     public function getConversation($conversationId);
 
     /**
@@ -128,4 +130,6 @@ interface MessageService
     public function deleteMessagesByIds(array $ids = null);
 
     public function clearUserNewMessageCounter($userId);
+
+    public function findNewUserConversations($userId, $start, $limit);
 }

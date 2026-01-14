@@ -12,7 +12,19 @@ interface CourseSetDao extends GeneralDaoInterface
 
     public function findLikeTitle($title);
 
+    public function findCourseSetsByCategoryIdAndCreator($categoryId, $creator);
+
+    public function findProductIdAndGoodsIdsByIds($ids);
+
     public function findCourseSetsByParentIdAndLocked($parentId, $locked);
 
     public function analysisCourseSetDataByTime($startTime, $endTime);
+
+    public function refreshHotSeq();
+
+    public function searchCourseSetsByTeacherOrderByStickTime($conditions, $orderBy, $userId, $start, $limit);
+
+    public function banLearningByIds($ids);
+
+    public function canLearningByIds($ids);
 }

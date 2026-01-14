@@ -2,163 +2,139 @@
 
 namespace AppBundle\Controller;
 
-use Biz\User\Service\UserService;
-use Biz\Course\Service\CourseService;
-use Topxia\Service\Common\ServiceKernel;
+use Biz\Activity\Constant\ActivityMediaType;
 use Biz\Activity\Service\ActivityService;
-use Biz\Question\Service\QuestionService;
-use Biz\Testpaper\Service\TestpaperService;
+use Biz\Activity\Service\ExerciseActivityService;
+use Biz\Common\CommonException;
+use Biz\Course\CourseException;
+use Biz\Course\Service\CourseService;
+use Biz\Task\Service\TaskService;
+use Biz\Testpaper\ExerciseException;
+use Biz\User\UserException;
+use Codeages\Biz\ItemBank\Answer\Constant\AnswerRecordStatus;
+use Codeages\Biz\ItemBank\Answer\Constant\ExerciseMode;
+use Codeages\Biz\ItemBank\Answer\Service\AnswerRecordService;
+use Codeages\Biz\ItemBank\Answer\Service\AnswerService;
+use Codeages\Biz\ItemBank\Assessment\Service\AssessmentService;
+use Codeages\Biz\ItemBank\ErrorCode;
+use Codeages\Biz\ItemBank\Item\Exception\ItemException;
 use Symfony\Component\HttpFoundation\Request;
-use AppBundle\Common\Exception\ResourceNotFoundException;
 
 class ExerciseController extends BaseController
 {
     public function startDoAction(Request $request, $lessonId, $exerciseId)
     {
-        $exercise = $this->getTestpaperService()->getTestpaperByIdAndType($exerciseId, 'exercise');
-        if (empty($exercise)) {
-            throw new ResourceNotFoundException('exercise', $exerciseId);
+        $activity = $this->getActivityService()->getActivity($lessonId, true);
+        if (!$this->getCourseService()->canTakeCourse($activity['fromCourseId'])) {
+            $this->createNewException(CourseException::FORBIDDEN_TAKE_COURSE());
         }
 
-        $activity = $this->getActivityService()->getActivity($lessonId);
-        if ($activity['mediaId'] != $exerciseId) {
-            //exerciseId not belong to activity(lessonId)
-            throw new ResourceNotFoundException('exercise', $exerciseId);
-        }
-
-        list($course, $member) = $this->getCourseService()->tryTakeCourse($activity['fromCourseId']);
-
-        $result = $this->getTestpaperService()->startTestpaper($exercise['id'], array('lessonId' => $lessonId, 'courseId' => $course['id']));
-
-        if ($result['status'] == 'doing') {
-            return $this->redirect($this->generateUrl('exercise_show', array(
-                'resultId' => $result['id'],
-            )));
-        } else {
-            return $this->redirect($this->generateUrl('exercise_result_show', array(
-                'resultId' => $result['id'],
-            )));
-        }
-    }
-
-    public function doTestAction(Request $request, $resultId)
-    {
-        $result = $this->getTestpaperService()->getTestpaperResult($resultId);
-        if (!$result) {
-            throw new ResourceNotFoundException('exerciseResult', $resultId);
-        }
-
-        list($course, $member) = $this->getCourseService()->tryTakeCourse($result['courseId']);
-
-        $exercise = $this->getTestpaperService()->getTestpaperByIdAndType($result['testId'], 'exercise');
-        if (!$exercise) {
-            throw new ResourceNotFoundException('exercise', $result['testId']);
-        }
-
-        $questions = $this->getTestpaperService()->showTestpaperItems($exercise['id'], $result['id']);
-
-        $activity = $this->getActivityService()->getActivity($result['lessonId']);
-
-        $exercise['itemCount'] = $this->getActureQuestionNum($questions);
-
-        return $this->render('exercise/do.html.twig', array(
-            'paper' => $exercise,
-            'questions' => $questions,
-            'course' => $course,
-            'paperResult' => $result,
-            'activity' => $activity,
-            'showTypeBar' => 0,
-            'showHeader' => 0,
-        ));
-    }
-
-    public function showResultAction(Request $request, $resultId)
-    {
-        $exerciseResult = $this->getTestpaperService()->getTestpaperResult($resultId);
-
-        $exercise = $this->getTestpaperService()->getTestpaperByIdAndType($exerciseResult['testId'], $exerciseResult['type']);
-
-        if (!$exercise) {
-            throw $this->createResourceNotFoundException('exercise', $exerciseResult['testId']);
-        }
-
-        if (in_array($exerciseResult['status'], array('doing', 'paused'))) {
-            return $this->redirect($this->generateUrl('exercise_show', array('resultId' => $exerciseResult['id'])));
-        }
-
-        $canLookExercise = $this->getTestpaperService()->canLookTestpaper($exerciseResult['id']);
-
-        if (!$canLookExercise) {
-            throw $this->createAccessDeniedException('无权查看作业！');
-        }
-
-        $builder = $this->getTestpaperService()->getTestpaperBuilder($exercise['type']);
-        $questions = $builder->showTestItems($exercise['id'], $exerciseResult['id']);
-
-        $student = $this->getUserService()->getUser($exerciseResult['userId']);
-
-        $attachments = $this->getTestpaperService()->findAttachments($exercise['id']);
-
-        $exercise['itemCount'] = $this->getActureQuestionNum($questions);
-
-        return $this->render('exercise/do.html.twig', array(
-            'questions' => $questions,
-            'paper' => $exercise,
-            'paperResult' => $exerciseResult,
-            'student' => $student,
-            'attachments' => $attachments,
-            'action' => $request->query->get('action', ''),
-        ));
-    }
-
-    public function submitAction(Request $request, $resultId)
-    {
-        $result = $this->getTestpaperService()->getTestpaperResult($resultId);
-
-        if (!empty($result) && !in_array($result['status'], array('doing', 'paused'))) {
-            return $this->createJsonResponse(array('result' => false, 'message' => 'json_response.exercise_cannot_submit_answer.message'));
-        }
-
-        if ($request->getMethod() === 'POST') {
-            $formData = $request->request->all();
-
-            $paperResult = $this->getTestpaperService()->finishTest($result['id'], $formData);
-
-            $goto = $this->generateUrl('exercise_result_show', array('resultId' => $paperResult['id']));
-
-            return $this->createJsonResponse(array('result' => true, 'message' => '', 'goto' => $goto));
-        }
-
-        return $this->createJsonResponse(array('result' => false, 'message' => 'result not found'));
-    }
-
-    protected function getActureQuestionNum($questions)
-    {
-        return array_reduce($questions, function ($count, $question) {
-            if ($question['type'] == 'material' && isset($question['subs'])) {
-                $count += count($question['subs']);
-            } else {
-                $count += 1;
+        try {
+            $latestAnswerRecord = $this->getCurrentAnswerRecordOrStartNew($activity, $request->get('assessmentId'), $this->getCurrentUser()->getId());
+        } catch (ItemException $e) {
+            if (ErrorCode::ITEM_NOT_ENOUGH == $e->getCode()) {
+                return $this->render('@activity/exercise/resources/views/show/index.html.twig', ['activity' => $activity, 'questionLack' => true]);
             }
+        }
+        if (ExerciseMode::SUBMIT_SINGLE == $latestAnswerRecord['exercise_mode']) {
+            return $this->render('@activity/exercise/resources/views/show/not-support-submit-single-modal.html.twig', ['activity' => $activity]);
+        }
+        $task = $this->getTaskService()->getTaskByCourseIdAndActivityId($activity['fromCourseId'], $activity['id']);
 
-            return $count;
-        }, 0);
+        return $this->forward('AppBundle:AnswerEngine/AnswerEngine:do', [
+            'answerRecordId' => $latestAnswerRecord['id'],
+            'submitGotoUrl' => $this->generateUrl('course_task_activity_show', ['courseId' => $activity['fromCourseId'], 'id' => $task['id']]),
+            'saveGotoUrl' => $this->generateUrl('my_course_show', ['id' => $activity['fromCourseId']]),
+        ]);
     }
 
-    /**
-     * @return TestpaperService
-     */
-    protected function getTestpaperService()
+    public function showResultAction(Request $request, $answerRecordId)
     {
-        return $this->createService('Testpaper:TestpaperService');
+        if (!$this->canLookAnswerRecord($answerRecordId)) {
+            $this->createNewException(CommonException::FORBIDDEN_DRAG_CAPTCHA_ERROR());
+        }
+
+        $answerRecord = $this->getAnswerRecordService()->get($answerRecordId);
+        $assessment = $this->getAssessmentService()->getAssessment($answerRecord['assessment_id']);
+
+        $task = $this->getTaskByAnswerSceneId($answerRecord['answer_scene_id']);
+        $restartUrl = $this->generateUrl('course_task_activity_show', ['courseId' => $task['courseId'], 'id' => $task['id'], 'doAgain' => true]);
+
+        return $this->render('exercise/result.html.twig', [
+            'answerRecordId' => $answerRecordId,
+            'assessment' => $assessment,
+            'restartUrl' => $restartUrl,
+        ]);
     }
 
-    /**
-     * @return QuestionService
-     */
-    protected function getQuestionService()
+    private function getCurrentAnswerRecordOrStartNew($activity, $assessmentId, $userId)
     {
-        return $this->createService('Question:QuestionService');
+        $latestAnswerRecord = $this->getAnswerRecordService()->getLatestAnswerRecordByAnswerSceneIdAndUserId($activity['ext']['answerSceneId'], $userId);
+        if ($latestAnswerRecord && AnswerRecordStatus::FINISHED != $latestAnswerRecord['status']) {
+            return $latestAnswerRecord;
+        }
+        if (empty($assessmentId)) {
+            $assessment = $this->getExerciseActivityService()->createExerciseAssessment($activity);
+            $assessmentId = $assessment['id'];
+        } elseif (!$this->getExerciseActivityService()->isExerciseAssessment($assessmentId, $activity['ext'])) {
+            $this->createNewException(ExerciseException::EXERCISE_NOTDO());
+        }
+
+        return $this->getAnswerService()->startAnswer($activity['ext']['answerSceneId'], $assessmentId, $userId);
+    }
+
+    protected function getTaskByAnswerSceneId($answerSceneId)
+    {
+        $activity = $this->getActivityService()->getActivityByAnswerSceneIdAndMediaType($answerSceneId, ActivityMediaType::EXERCISE);
+
+        return $this->getTaskService()->getTaskByCourseIdAndActivityId($activity['fromCourseId'], $activity['id']);
+    }
+
+    protected function canLookAnswerRecord($answerRecordId)
+    {
+        $user = $this->getCurrentUser();
+
+        if (!$user->isLogin()) {
+            $this->createNewException(UserException::UN_LOGIN());
+        }
+
+        $answerRecord = $this->getAnswerRecordService()->get($answerRecordId);
+
+        if (!$answerRecord) {
+            $this->createNewException(CommonException::ERROR_PARAMETER());
+        }
+
+        if (AnswerRecordStatus::DOING === $answerRecord['status'] && ($answerRecord['user_id'] != $user['id'])) {
+            $this->createNewException(CommonException::FORBIDDEN_DRAG_CAPTCHA_ERROR());
+        }
+
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        $activity = $this->getActivityService()->getActivityByAnswerSceneIdAndMediaType($answerRecord['answer_scene_id'], ActivityMediaType::EXERCISE);
+
+        $course = $this->getCourseService()->getCourse($activity['fromCourseId']);
+        $member = $this->getCourseMemberService()->getCourseMember($course['id'], $user['id']);
+
+        if ('teacher' === $member['role']) {
+            return true;
+        }
+
+        if ($answerRecord['user_id'] == $user['id']) {
+            return true;
+        }
+
+        if ($course['parentId'] > 0) {
+            $classroom = $this->getClassroomService()->getClassroomByCourseId($course['id']);
+            $member = $this->getClassroomService()->getClassroomMember($classroom['id'], $user['id']);
+
+            if ($member && array_intersect($member['role'], ['assistant', 'teacher', 'headTeacher'])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -170,14 +146,6 @@ class ExerciseController extends BaseController
     }
 
     /**
-     * @return UserService
-     */
-    protected function getUserService()
-    {
-        return $this->createService('User:UserService');
-    }
-
-    /**
      * @return CourseService
      */
     protected function getCourseService()
@@ -186,10 +154,47 @@ class ExerciseController extends BaseController
     }
 
     /**
-     * @return ServiceKernel
+     * @return TaskService
      */
-    protected function getServiceKernel()
+    protected function getTaskService()
     {
-        return ServiceKernel::instance();
+        return $this->createService('Task:TaskService');
+    }
+
+    /**
+     * @return AssessmentService
+     */
+    protected function getAssessmentService()
+    {
+        return $this->createService('ItemBank:Assessment:AssessmentService');
+    }
+
+    /**
+     * @return AnswerRecordService
+     */
+    protected function getAnswerRecordService()
+    {
+        return $this->createService('ItemBank:Answer:AnswerRecordService');
+    }
+
+    protected function getCourseMemberService()
+    {
+        return $this->createService('Course:MemberService');
+    }
+
+    /**
+     * @return ExerciseActivityService
+     */
+    protected function getExerciseActivityService()
+    {
+        return $this->createService('Activity:ExerciseActivityService');
+    }
+
+    /**
+     * @return AnswerService
+     */
+    protected function getAnswerService()
+    {
+        return $this->createService('ItemBank:Answer:AnswerService');
     }
 }

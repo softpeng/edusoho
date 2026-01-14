@@ -2,14 +2,11 @@
 
 namespace ApiBundle\Api\Resource\Course;
 
-use ApiBundle\Api\Annotation\ApiConf;
 use ApiBundle\Api\ApiRequest;
-use ApiBundle\Api\Exception\ErrorCode;
 use ApiBundle\Api\Resource\AbstractResource;
+use Biz\Course\CourseException;
 use Biz\Course\Service\CourseService;
 use Biz\Course\Service\ReportService;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 class CourseReport extends AbstractResource
@@ -19,7 +16,7 @@ class CourseReport extends AbstractResource
         $course = $this->getCourseService()->getCourse($courseId);
 
         if (!$course) {
-            throw new NotFoundHttpException('教学计划不存在', null, ErrorCode::RESOURCE_NOT_FOUND);
+            throw CourseException::NOTFOUND_COURSE();
         }
 
         $this->getCourseService()->tryManageCourse($courseId);
@@ -54,17 +51,17 @@ class CourseReport extends AbstractResource
         $startDate = $request->query->get('startDate', date('Y-m-d', strtotime('-6 days')));
         $endDate = $request->query->get('endDate', date('Y-m-d'));
 
-        return $this->getReportService()->getStudentTrend($courseId,array('startDate' => $startDate,'endDate' => $endDate));
+        return $this->getReportService()->getStudentTrend($courseId, array('startDate' => $startDate, 'endDate' => $endDate));
     }
 
     private function getStudentDetail(ApiRequest $request, $courseId)
     {
         list($offset, $limit) = $this->getOffsetAndLimit($request);
-        $sort = $request->query->get('sort','createdTimeDesc');
-        $filter = $request->query->get('filter','all');
-        $userIds = $this->getReportService()->searchUserIdsByCourseIdAndFilterAndSortAndKeyword($courseId,$filter,$sort,$offset,$limit);
-        return $this->getReportService()->getStudentDetail($courseId,$userIds);
+        $sort = $request->query->get('sort', 'createdTimeDesc');
+        $filter = $request->query->get('filter', 'all');
+        $userIds = $this->getReportService()->searchUserIdsByCourseIdAndFilterAndSortAndKeyword($courseId, $filter, $sort, $offset, $limit);
 
+        return $this->getReportService()->getStudentDetail($courseId, $userIds);
     }
 
     /**

@@ -2,16 +2,20 @@
 
 namespace Biz\Content\Service\Impl;
 
+use AppBundle\Common\ArrayToolkit;
+use AppBundle\Common\FileToolkit;
 use Biz\BaseService;
+use Biz\Common\CommonException;
 use Biz\Content\Dao\FileDao;
 use Biz\Content\Dao\FileGroupDao;
+use Biz\Content\FileException;
 use Biz\Content\Service\FileService;
 use Biz\Course\Service\CourseService;
 use Biz\System\Service\SettingService;
+use Biz\User\UserException;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpFoundation\File\File;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
-use AppBundle\Common\ArrayToolkit;
-use AppBundle\Common\FileToolkit;
 
 class FileServiceImpl extends BaseService implements FileService
 {
@@ -26,7 +30,7 @@ class FileServiceImpl extends BaseService implements FileService
 
         $group = $this->getGroupDao()->getByCode($group);
         if (empty($group)) {
-            return array();
+            return [];
         }
 
         return $this->getFileDao()->findByGroupId($group['id'], $start, $limit);
@@ -61,7 +65,7 @@ class FileServiceImpl extends BaseService implements FileService
     {
         $user = $this->getCurrentUser();
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('用户尚未登录。');
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         return $this->addFile($group, $file);
@@ -72,11 +76,11 @@ class FileServiceImpl extends BaseService implements FileService
         $errors = FileToolkit::validateFileExtension($file);
         if ($errors) {
             @unlink($file->getRealPath());
-            throw $this->createServiceException('该文件格式，不允许上传。');
+            $this->createNewException(FileException::FILE_UPLOAD_NOT_ALLOWED());
         }
         $group = $this->getGroupDao()->getByCode($group);
 
-        $record = array();
+        $record = [];
         $user = $this->getCurrentUser();
         $record['userId'] = empty($user) || !$user->isLogin() ? 0 : $user['id'];
 
@@ -95,6 +99,29 @@ class FileServiceImpl extends BaseService implements FileService
         return $record;
     }
 
+    public function addFiles($group, array $filePaths)
+    {
+        $files = [];
+        foreach ($filePaths as $filePath) {
+            $files[] = new File($filePath);
+        }
+        $group = $this->getGroupDao()->getByCode($group);
+        $records = [];
+        foreach ($files as $key => $file) {
+            $records[] = [
+                'groupId' => $group['id'],
+                'userId' => $this->getCurrentUser()->getId(),
+                'uri' => $this->generateUri($group, $file),
+                'mime' => '',
+                'size' => $file->getSize(),
+            ];
+            $this->saveFile($file, $records[$key]['uri']);
+        }
+        $this->getFileDao()->batchCreate($records);
+
+        return $records;
+    }
+
     protected function validateFileExtension(File $file, $extensions)
     {
         if ($file instanceof UploadedFile) {
@@ -102,7 +129,7 @@ class FileServiceImpl extends BaseService implements FileService
         } else {
             $filename = $file->getFilename();
         }
-        $errors = array();
+        $errors = [];
         $regex = '/\.('.preg_replace('/ +/', '|', preg_quote($extensions)).')$/i';
         if (!preg_match($regex, $filename)) {
             $errors[] = '只允许上传以下扩展名的文件：'.$extensions;
@@ -113,7 +140,7 @@ class FileServiceImpl extends BaseService implements FileService
 
     protected function validateFileNameLength(File $file)
     {
-        $errors = array();
+        $errors = [];
 
         if (!$file->getFilename()) {
             $errors[] = '文件名为空，请给文件取个名吧。';
@@ -133,6 +160,10 @@ class FileServiceImpl extends BaseService implements FileService
 
     public function deleteFileByUri($uri)
     {
+        if (empty($uri)) {
+            return [];
+        }
+
         $this->getFileDao()->deleteByUri($uri);
         $parsed = $this->parseFileUri($uri);
         if (file_exists($parsed['fullpath'])) {
@@ -176,14 +207,16 @@ class FileServiceImpl extends BaseService implements FileService
     protected function saveFile(File $file, $uri)
     {
         $parsed = $this->parseFileUri($uri);
-        if ($parsed['access'] == 'public') {
-            $directory = realpath($this->biz['topxia.upload.public_directory']);
+        if ('public' == $parsed['access']) {
+            $path = $this->biz['topxia.upload.public_directory'];
         } else {
-            $directory = realpath($this->biz['topxia.upload.private_directory']);
+            $path = $this->biz['topxia.upload.private_directory'];
         }
 
+        $this->checkDirectoryExist($path);
+        $directory = realpath($path);
         if (!is_writable($directory)) {
-            throw $this->createServiceException(sprintf('文件上传路径%s不可写，文件上传失败。', $directory));
+            $this->createNewException(FileException::FILE_DIRECTORY_UN_WRITABLE());
         }
 
         $directory .= '/'.$parsed['directory'];
@@ -198,6 +231,16 @@ class FileServiceImpl extends BaseService implements FileService
         return $newFile;
     }
 
+    protected function checkDirectoryExist($dirPath)
+    {
+        $fileSystem = new FileSystem();
+        if (!$fileSystem->exists($dirPath)) {
+            $fileSystem->mkdir($dirPath, 0777);
+        }
+
+        return true;
+    }
+
     protected function generateUri($group, File $file)
     {
         if ($file instanceof UploadedFile) {
@@ -209,7 +252,7 @@ class FileServiceImpl extends BaseService implements FileService
         $filenameParts = explode('.', $filename);
         $ext = array_pop($filenameParts);
         if (empty($ext)) {
-            throw $this->createServiceException('获取文件扩展名失败！');
+            $this->createNewException(FileException::FILE_EXT_PARSE_FAILED());
         }
 
         $uri = ($group['public'] ? 'public://' : 'private://').$group['code'].'/';
@@ -225,17 +268,17 @@ class FileServiceImpl extends BaseService implements FileService
      */
     public function parseFileUri($uri)
     {
-        $parsed = array();
+        $parsed = [];
         $parts = explode('://', $uri);
-        if (empty($parts) || count($parts) != 2) {
-            throw $this->createServiceException(sprintf('解析文件URI(%s)失败！', $uri));
+        if (empty($parts) || 2 != count($parts)) {
+            $this->createNewException(FileException::FILE_PARSE_URI_FAILED());
         }
         $parsed['access'] = $parts[0];
         $parsed['path'] = $parts[1];
         $parsed['directory'] = dirname($parsed['path']);
         $parsed['name'] = basename($parsed['path']);
 
-        if ($parsed['access'] == 'public') {
+        if ('public' == $parsed['access']) {
             $directory = $this->biz['topxia.upload.public_directory'];
         } else {
             $directory = $this->biz['topxia.upload.private_directory'];
@@ -272,7 +315,7 @@ class FileServiceImpl extends BaseService implements FileService
 
     public function thumbnailFile(array $file, array $options)
     {
-        $options = array('quality' => 90, 'mode' => 'outbound') + $options;
+        $options = ['quality' => 90, 'mode' => 'outbound'] + $options;
 
         $imagine = new Imagine();
 
@@ -285,7 +328,7 @@ class FileServiceImpl extends BaseService implements FileService
 
         $imagine->open($file['file']->getRealPath())
             ->thumbnail($size, $options['mode'])
-            ->save($savePath.'.jpg', array('quality' => $options['quality']));
+            ->save($savePath.'.jpg', ['quality' => $options['quality']]);
 
         $file = new File($savePath.'.jpg');
 
@@ -304,19 +347,24 @@ class FileServiceImpl extends BaseService implements FileService
     public function getImgFileMetaInfo($fileId, $scaledWidth, $scaledHeight)
     {
         if (empty($fileId)) {
-            throw $this->createInvalidArgumentException('参数不正确');
+            $this->createNewException(CommonException::ERROR_PARAMETER());
         }
 
         $file = $this->getFile($fileId);
         if (empty($file)) {
-            throw $this->createNotFoundException('文件不存在');
+            $this->createNewException(FileException::FILE_NOT_FOUND());
         }
 
         $parsed = $this->parseFileUri($file['uri']);
 
         list($naturalSize, $scaledSize) = FileToolkit::getImgInfo($parsed['fullpath'], $scaledWidth, $scaledHeight);
 
-        return array($parsed['path'], $naturalSize, $scaledSize);
+        return [$parsed['path'], $naturalSize, $scaledSize];
+    }
+
+    public function findFilesByUris(array $uris)
+    {
+        return $this->getFileDao()->findByUris($uris);
     }
 
     /**

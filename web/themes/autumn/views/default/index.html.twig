@@ -42,38 +42,38 @@
                       {{ lazy_img(filepath(classroom.largePicture, 'classroom.png'), 'img-responsive', classroom.title, 'lazyload_class.png') }}
                     </a>
                     <div class="class-body">
-                      <h3 class="class-title">
-                        <a href="{{ path('classroom_show', {id:classroom.id}) }}">{{ classroom.title }}</a>
+                      <h3 class="class-title text-overflow">
+                        <a class="link-primary" href="{{ path('classroom_show', {id:classroom.id}) }}">{{ classroom.title }}</a>
                       </h3>
                       <div class="class-metas">
-                      <span class="class-teacher">
-                        {% if teachers %}
-                          <i class="es-icon es-icon-people"></i>
-                          {% for teacher in teachers %}
-                          {% if loop.index <= 1 %}
-                            <a class="teacher-nickname mrl" href="{{ path('user_show', {id:teacher.id}) }}">{{ teacher.nickname }}</a>
+                        <span class="class-teacher">
+                          {% if teachers %}
+                            <i class="es-icon es-icon-people"></i>
+                            {% for teacher in teachers %}
+                            {% if loop.index <= 1 %}
+                              <a class="teacher-nickname mrl link-primary" href="{{ user_show_path({id:teacher.id}) }}">{{ teacher.nickname }}</a>
+                            {% endif %}
+                          {% endfor %}
                           {% endif %}
-                        {% endfor %}
-                        {% endif %}
-                      </span>
+                        </span>
                         <span class="class-student hidden-md"><i class="es-icon es-icon-people"></i>{{ classroom.studentNum + classroom.auditorNum }}</span>
-                        <span class="class-price">
-                          {% if setting('coin.coin_enabled') and setting('coin.price_type') == 'Coin' %}
-                            {% if classroom.price > 0 %}
-                              {{ classroom.price * setting('coin.cash_rate') }} {{ setting('coin.coin_name') }}
+                        {% if classroom.hidePrice != '1' %}
+                          <span class="class-price">
+                            {% if setting('coin.coin_enabled') and setting('coin.price_type') == 'Coin' %}
+                              {% if classroom.price > 0 %}
+                                {{ classroom.price * setting('coin.cash_rate') }} {{ setting('coin.coin_name') }}
+                              {% else %}
+                                {{ '免费'|trans }}
+                              {% endif %}
                             {% else %}
-                              {{ '免费'|trans }}
+                              {% if classroom.price > 0 %}
+                                {{ '%classroom.price% 元'|trans({'%classroom.price%': classroom.price}) }}
+                              {% else %}
+                                {{ '免费'|trans }}
+                              {% endif %}
                             {% endif %}
-                          {% else %}
-                            {% if classroom.price > 0 %}
-                              {{ '%classroom.price% 元'|trans({'%classroom.price%': classroom.price}) }}
-                            {% else %}
-                              {{ '免费'|trans }}
-                            {% endif %}
-                          {% endif %}
-
-
-                      </span>
+                          </span>
+                        {% endif %}
                       </div>
                       <div class="course-num">{{ '共%courseNum%课程'|trans({'%courseNum%': classroom.courseNum }) }}</div>
                     </div>
@@ -215,7 +215,7 @@
                 {% if teacher %}
                   <li class="col-xs-6 col-md-4 ">
                     <div class="teachers-item">
-                      <a href="{{ path('user_show', {id:teacher.id}) }}">
+                      <a href="{{ user_show_path({id:teacher.id}) }}">
                         <img class="img-circle" src="{{ filepath(teacher.mediumAvatar, 'avatar.png') }}">
                       </a>
                       <span>{{ web_macro.user_link(teacher) }}</span>
@@ -248,7 +248,7 @@
                       <div class="row">
                         <div class="col-sm-3 vip-Img">
                           <a href="{{ path('vip_course_explore', {levelId:level.id}) }}">
-                            <img class="img-responsive" src="{{ level.icon|default(asset('assets/img/default/vip-default.png')) }}"
+                            <img class="img-responsive" src="{{ level.icon|default(asset('assets/img/default/vip.png')) }}"
                               alt="{{ level.name }}">
                           </a>
                         </div>
@@ -260,9 +260,9 @@
                           {% if setting('coin.coin_enabled') and setting('coin.price_type') == 'Coin' %}
                             <h4> {{ set_price((level.monthPrice) * (setting('coin.cash_rate'))) }}{{ setting('coin.coin_name', '虚拟币') }}</h4>
                           {% else %}
-                            <h4>¥&nbsp;{{ level.monthPrice }}</h4>
+                            <h4>¥&nbsp;{{ level.monthPrice |default(0) }}</h4>
                           {% endif %}
-                          <h4><a href="{{ path('vip_buy') }}" class="btn btn-success">{{ '立即购买'|trans }}</a></h4>
+                          <h4><a href="{{ path('vip') }}" class="btn btn-success">{{ '立即购买'|trans }}</a></h4>
                         </div>
                       </div>
                     </li>
@@ -379,7 +379,9 @@
       {% endif %}
 
       {# 学员评价 #}
-      {{ render(controller('AppBundle:Default:latestReviewsBlock', {number:5})) }}
+      {% if setting('goods_setting.show_review', '1') == 1 %}
+        {{ render(controller('AppBundle:Default:latestReviewsBlock', {number:5})) }}
+      {% endif %}
 
       {# 最热话题 #}
       {% if setting('group').group_show|default(1) %}

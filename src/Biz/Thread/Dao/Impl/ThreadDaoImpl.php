@@ -9,25 +9,54 @@ class ThreadDaoImpl extends GeneralDaoImpl implements ThreadDao
 {
     protected $table = 'thread';
 
+    public function findThreadIds($conditions)
+    {
+        $builder = $this->createQueryBuilder($conditions)
+            ->select('id');
+
+        return $builder->execute()->fetchAll(0) ?: [];
+    }
+
+    protected function createQueryBuilder($conditions)
+    {
+        if (isset($conditions['title'])) {
+            $conditions['title'] = "%{$conditions['title']}%";
+        }
+
+        if (isset($conditions['content'])) {
+            $conditions['content'] = "%{$conditions['content']}%";
+        }
+
+        return parent::createQueryBuilder($conditions);
+    }
+
+    public function deleteByUserId($userId)
+    {
+        return $this->db()->delete($this->table, ['userId' => $userId]);
+    }
+
     public function declares()
     {
-        return array(
-            'serializes' => array(
+        return [
+            'timestamps' => ['createdTime', 'updateTime'],
+            'serializes' => [
                 'ats' => 'json',
-            ),
-            'orderbys' => array(
+            ],
+            'orderbys' => [
                 'sticky',
                 'createdTime',
                 'lastPostTime',
                 'updateTime',
                 'hitNum',
-            ),
-            'conditions' => array(
+            ],
+            'conditions' => [
                 'updateTime >= :updateTime_GE',
                 'targetType = :targetType',
                 'targetId = :targetId',
                 'userId = :userId',
                 'type = :type',
+                'type != :typeExclude',
+                'type not in (:typeExcludes)',
                 'sticky = :isStick',
                 'nice = :nice',
                 'postNum = :postNum',
@@ -40,7 +69,9 @@ class ThreadDaoImpl extends GeneralDaoImpl implements ThreadDao
                 'targetId IN (:targetIds)',
                 'startTime > :startTimeGreaterThan',
                 'content LIKE :content',
-            ),
-        );
+                'auditStatus = :auditStatus',
+                'auditStatus != :excludeAuditStatus',
+            ],
+        ];
     }
 }

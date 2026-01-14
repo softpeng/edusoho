@@ -2,17 +2,19 @@
 
 namespace Biz\MoneyCard\Service\Impl;
 
+use AppBundle\Common\ArrayToolkit;
 use Biz\BaseService;
 use Biz\MoneyCard\Dao\MoneyCardBatchDao;
 use Biz\MoneyCard\Dao\MoneyCardDao;
+use Biz\MoneyCard\MoneyCardException;
 use Biz\MoneyCard\Service\MoneyCardService;
-use AppBundle\Common\ArrayToolkit;
+use Codeages\Biz\Pay\Service\AccountService;
 
 class MoneyCardServiceImpl extends BaseService implements MoneyCardService
 {
     public function getMoneyCard($id, $lock = false)
     {
-        return $this->getMoneyCardDao()->get($id, array('lock' => $lock));
+        return $this->getMoneyCardDao()->get($id, ['lock' => $lock]);
     }
 
     public function getMoneyCardByIds($ids)
@@ -28,6 +30,11 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
     public function getBatch($id)
     {
         return $this->getMoneyCardBatchDao()->get($id);
+    }
+
+    public function getBatchByToken($token, $options = [])
+    {
+        return $this->getMoneyCardBatchDao()->getBatchByToken($token, $options);
     }
 
     public function searchMoneyCards(array $conditions, array $oderBy, $start, $limit)
@@ -52,7 +59,7 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
 
     public function createMoneyCard(array $moneyCardData)
     {
-        $batch = ArrayToolkit::parts($moneyCardData, array(
+        $batch = ArrayToolkit::parts($moneyCardData, [
             'money',
             'coin',
             'cardPrefix',
@@ -61,7 +68,7 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
             'note',
             'deadline',
             'batchName',
-        ));
+        ]);
 
         if (isset($batch['money'])) {
             $batch['money'] = (int) $batch['money'];
@@ -80,19 +87,19 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
         }
 
         if (isset($batch['money']) && $batch['money'] <= 0) {
-            throw $this->createServiceException('ERROR! Money Value Less Than Zero!');
+            $this->createNewException(MoneyCardException::MONEY_INVALID());
         }
 
         if (isset($batch['coin']) && $batch['coin'] <= 0) {
-            throw $this->createServiceException('ERROR! Coin Value Less Than Zero!');
+            $this->createNewException(MoneyCardException::COIN_INVALID());
         }
 
         if (isset($batch['cardLength']) && $batch['cardLength'] <= 0) {
-            throw $this->createServiceException('ERROR! CardLength Less Than Zero!');
+            $this->createNewException(MoneyCardException::CARDLENGTH_INVALID());
         }
 
         if (isset($batch['number']) && $batch['number'] <= 0) {
-            throw $this->createServiceException('ERROR! Card Number Less Than Zero!');
+            $this->createNewException(MoneyCardException::NUMBER_INVALID());
         }
 
         $batch['rechargedNumber'] = 0;
@@ -103,24 +110,24 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
         $moneyCardIds = $this->makeRands($batch['cardLength'], $batch['number'], $batch['cardPrefix'], $moneyCardData['passwordLength']);
 
         if (!$this->getMoneyCardDao()->isCardIdAvailable(array_keys($moneyCardIds))) {
-            throw $this->createServiceException('卡号有重复，生成失败，请重新生成！');
+            $this->createNewException(MoneyCardException::DUPLICATE_CARD());
         }
 
-        $token = $this->getTokenService()->makeToken('money_card', array(
+        $token = $this->getTokenService()->makeToken('money_card', [
             'duration' => strtotime($batch['deadline']) + 24 * 60 * 60 - time(),
-        ));
+        ]);
         $batch['token'] = $token['token'];
         $batch = $this->getMoneyCardBatchDao()->create($batch);
 
         foreach ($moneyCardIds as $cardid => $cardPassword) {
             $this->getMoneyCardDao()->create(
-                array(
+                [
                     'cardId' => $cardid,
                     'password' => $cardPassword,
                     'deadline' => date('Y-m-d', strtotime($moneyCardData['deadline'])),
                     'cardStatus' => 'normal',
                     'batchId' => $batch['id'],
-                )
+                ]
             );
         }
 
@@ -134,27 +141,27 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
         $moneyCard = $this->getMoneyCard($id);
 
         if (empty($moneyCard)) {
-            throw $this->createServiceException('充值卡不存在，作废失败！');
+            $this->createNewException(MoneyCardException::NOTFOUND_MONEYCARD());
         }
 
-        if ($moneyCard['cardStatus'] == 'normal' || $moneyCard['cardStatus'] == 'receive') {
-            if ($moneyCard['cardStatus'] == 'receive') {
+        if ('normal' == $moneyCard['cardStatus'] || 'receive' == $moneyCard['cardStatus']) {
+            if ('receive' == $moneyCard['cardStatus']) {
                 $card = $this->getCardService()->getCardByCardIdAndCardType($moneyCard['id'], 'moneyCard');
 
                 $batch = $this->getBatch($moneyCard['batchId']);
 
-                $this->getCardService()->updateCardByCardIdAndCardType($moneyCard['id'], 'moneyCard', array('status' => 'invalid'));
+                $this->getCardService()->updateCardByCardIdAndCardType($moneyCard['id'], 'moneyCard', ['status' => 'invalid']);
 
-                $message = "您的一张价值为{$batch['coin']}{$this->getSettingService()->get('coin.coin_name', '虚拟币')}的学习卡已经被管理员作废，详情请联系管理员。";
+                $message = "您的一张价值为{$batch['coin']}{$this->getCoinName()}的学习卡已经被管理员作废，详情请联系管理员。";
 
                 $this->getNotificationService()->notify($card['userId'], 'default', $message);
             }
 
-            $moneyCard = $this->getMoneyCardDao()->update($moneyCard['id'], array('cardStatus' => 'invalid'));
+            $moneyCard = $this->getMoneyCardDao()->update($moneyCard['id'], ['cardStatus' => 'invalid']);
 
             $this->getLogService()->info('money_card', 'lock', "作废了卡号为{$moneyCard['cardId']}的充值卡");
         } else {
-            throw $this->createServiceException('不能作废已使用状态的充值卡！');
+            $this->createNewException(MoneyCardException::LOCK_USED_CARD());
         }
 
         return $moneyCard;
@@ -165,31 +172,31 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
         $moneyCard = $this->getMoneyCard($id);
 
         if (empty($moneyCard)) {
-            throw $this->createServiceException('充值卡不存在，作废失败！');
+            $this->createNewException(MoneyCardException::NOTFOUND_MONEYCARD());
         }
 
         $batch = $this->getBatch($moneyCard['batchId']);
 
-        if ($batch['batchStatus'] == 'invalid') {
-            throw $this->createServiceException('批次刚刚被别人作废，在批次被作废的情况下，不能启用批次下的充值卡！');
+        if ('invalid' == $batch['batchStatus']) {
+            $this->createNewException(MoneyCardException::BATCH_STATUS_EQUAL_INVALID());
         }
 
-        if ($moneyCard['cardStatus'] == 'invalid') {
+        if ('invalid' == $moneyCard['cardStatus']) {
             $card = $this->getCardService()->getCardByCardIdAndCardType($moneyCard['id'], 'moneyCard');
 
             if (!empty($card)) {
-                $this->getCardService()->updateCardByCardIdAndCardType($moneyCard['id'], 'moneyCard', array('status' => 'receive'));
-                $this->updateMoneyCard($card['cardId'], array('cardStatus' => 'receive'));
-                $message = "您的一张价值为{$batch['coin']}{$this->getSettingService()->get('coin.coin_name', '虚拟币')}的学习卡已经被管理员启用。";
+                $this->getCardService()->updateCardByCardIdAndCardType($moneyCard['id'], 'moneyCard', ['status' => 'receive']);
+                $this->updateMoneyCard($card['cardId'], ['cardStatus' => 'receive']);
+                $message = "您的一张价值为{$batch['coin']}{$this->getCoinName()}的学习卡已经被管理员启用。";
 
                 $this->getNotificationService()->notify($card['userId'], 'default', $message);
             } else {
-                $moneyCard = $this->getMoneyCardDao()->update($moneyCard['id'], array('cardStatus' => 'normal'));
+                $moneyCard = $this->getMoneyCardDao()->update($moneyCard['id'], ['cardStatus' => 'normal']);
             }
 
             $this->getLogService()->info('money_card', 'unlock', "启用了卡号为{$moneyCard['cardId']}的充值卡");
         } else {
-            throw $this->createServiceException("只能启用作废状态的充值卡！{$moneyCard['cardStatus']}--{$moneyCard['rechargeUserId']}");
+            $this->createNewException(MoneyCardException::UNLOCK_NOT_INVALID_CARD());
         }
 
         return $moneyCard;
@@ -202,9 +209,9 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
         $this->getMoneyCardDao()->delete($id);
         $card = $this->getCardService()->getCardByCardIdAndCardType($moneyCard['id'], 'moneyCard');
         if (!empty($card)) {
-            $this->getCardService()->updateCardByCardIdAndCardType($moneyCard['id'], 'moneyCard', array('status' => 'deleted'));
+            $this->getCardService()->updateCardByCardIdAndCardType($moneyCard['id'], 'moneyCard', ['status' => 'deleted']);
 
-            $message = "您的一张价值为{$batch['coin']}{$this->getSettingService()->get('coin.coin_name', '虚拟币')}的学习卡已经被管理员删除，详情请联系管理员。";
+            $message = "您的一张价值为{$batch['coin']}{$this->getCoinName()}的学习卡已经被管理员删除，详情请联系管理员。";
 
             $this->getNotificationService()->notify($card['userId'], 'default', $message);
         }
@@ -217,23 +224,23 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
         $batch = $this->getBatch($id);
 
         if (empty($batch)) {
-            throw $this->createServiceException('批次不存在，作废失败！');
+            $this->createNewException(MoneyCardException::NOTFOUND_BATCH());
         }
 
         $this->getMoneyCardDao()->updateBatchByCardStatus(
-            array(
+            [
                 'batchId' => $batch['id'],
                 'cardStatus' => 'normal',
-            ),
-            array('cardStatus' => 'invalid')
+            ],
+            ['cardStatus' => 'invalid']
         );
 
         $moneyCards = $this->searchMoneyCards(
-            array(
+            [
                 'batchId' => $batch['id'],
                 'cardStatus' => 'receive',
-            ),
-            array('id' => 'ASC'),
+            ],
+            ['id' => 'ASC'],
             0,
             1000
         );
@@ -242,23 +249,23 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
             $card = $this->getCardService()->getCardByCardIdAndCardType($moneyCard['id'], 'moneyCard');
 
             if (!empty($card)) {
-                $this->getCardService()->updateCardByCardIdAndCardType($moneyCard['id'], 'moneyCard', array('status' => 'invalid'));
+                $this->getCardService()->updateCardByCardIdAndCardType($moneyCard['id'], 'moneyCard', ['status' => 'invalid']);
 
-                $message = "您的一张价值为{$batch['coin']}{$this->getSettingService()->get('coin.coin_name', '虚拟币')}的学习卡已经被管理员作废，详情请联系管理员。";
+                $message = "您的一张价值为{$batch['coin']}{$this->getCoinName()}的学习卡已经被管理员作废，详情请联系管理员。";
 
                 $this->getNotificationService()->notify($card['userId'], 'default', $message);
             }
         }
 
         $this->getMoneyCardDao()->updateBatchByCardStatus(
-            array(
+            [
                 'batchId' => $batch['id'],
                 'cardStatus' => 'receive',
-            ),
-            array('cardStatus' => 'invalid')
+            ],
+            ['cardStatus' => 'invalid']
         );
 
-        $batch = $this->updateBatch($batch['id'], array('batchStatus' => 'invalid'));
+        $batch = $this->updateBatch($batch['id'], ['batchStatus' => 'invalid']);
         $this->getLogService()->info('money_card', 'batch_lock', "作废了批次为{$batch['id']}的充值卡");
 
         return $batch;
@@ -269,41 +276,41 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
         $batch = $this->getBatch($id);
 
         if (empty($batch)) {
-            throw $this->createServiceException('批次不存在，作废失败！');
+            $this->createNewException(MoneyCardException::NOTFOUND_BATCH());
         }
 
         $moneyCards = $this->searchMoneyCards(
-            array(
+            [
                 'batchId' => $batch['id'],
                 'cardStatus' => 'invalid',
-            ),
-            array('id' => 'ASC'),
+            ],
+            ['id' => 'ASC'],
             0,
             1000
         );
 
         $this->getMoneyCardDao()->updateBatchByCardStatus(
-            array(
+            [
                 'batchId' => $batch['id'],
                 'cardStatus' => 'invalid',
                 'rechargeUserId' => 0,
-            ),
-            array('cardStatus' => 'normal')
+            ],
+            ['cardStatus' => 'normal']
         );
 
         foreach ($moneyCards as $moneyCard) {
             $card = $this->getCardService()->getCardByCardIdAndCardType($moneyCard['id'], 'moneyCard');
 
-            if (!empty($card) && $card['status'] == 'invalid') {
-                $this->getCardService()->updateCardByCardIdAndCardType($moneyCard['id'], 'moneyCard', array('status' => 'receive'));
-                $this->updateMoneyCard($card['cardId'], array('cardStatus' => 'receive'));
-                $message = "您的一张价值为{$batch['coin']}{$this->getSettingService()->get('coin.coin_name', '虚拟币')}的学习卡已经被管理员启用。";
+            if (!empty($card) && 'invalid' == $card['status']) {
+                $this->getCardService()->updateCardByCardIdAndCardType($moneyCard['id'], 'moneyCard', ['status' => 'receive']);
+                $this->updateMoneyCard($card['cardId'], ['cardStatus' => 'receive']);
+                $message = "您的一张价值为{$batch['coin']}{$this->getCoinName()}的学习卡已经被管理员启用。";
 
                 $this->getNotificationService()->notify($card['userId'], 'default', $message);
             }
         }
 
-        $batch = $this->updateBatch($batch['id'], array('batchStatus' => 'normal'));
+        $batch = $this->updateBatch($batch['id'], ['batchStatus' => 'normal']);
         $this->getLogService()->info('money_card', 'batch_unlock', "启用了批次为{$batch['id']}的充值卡");
 
         return $batch;
@@ -314,10 +321,10 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
         $batch = $this->getBatch($id);
 
         if (empty($batch)) {
-            throw $this->createServiceException(sprintf('学习卡批次不存在或已被删除'));
+            $this->createNewException(MoneyCardException::NOTFOUND_BATCH());
         }
 
-        $moneyCards = $this->getMoneyCardDao()->search(array('batchId' => $id), array('id' => 'ASC'), 0, 1000);
+        $moneyCards = $this->getMoneyCardDao()->search(['batchId' => $id], ['id' => 'ASC'], 0, 1000);
 
         $this->getMoneyCardBatchDao()->delete($id);
         $this->getMoneyCardDao()->deleteMoneyCardsByBatchId($id);
@@ -326,9 +333,9 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
             $card = $this->getCardService()->getCardByCardIdAndCardType($moneyCard['id'], 'moneyCard');
 
             if (!empty($card)) {
-                $this->getCardService()->updateCardByCardIdAndCardType($moneyCard['id'], 'moneyCard', array('status' => 'deleted'));
+                $this->getCardService()->updateCardByCardIdAndCardType($moneyCard['id'], 'moneyCard', ['status' => 'deleted']);
 
-                $message = "您的一张价值为{$batch['coin']}{$this->getSettingService()->get('coin.coin_name', '虚拟币')}的学习卡已经被管理员删除，详情请联系管理员。";
+                $message = "您的一张价值为{$batch['coin']}{$this->getCoinName()}的学习卡已经被管理员删除，详情请联系管理员。";
 
                 $this->getNotificationService()->notify($card['userId'], 'default', $message);
             }
@@ -337,13 +344,20 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
         $this->getLogService()->info('money_card', 'batch_delete', "删除了批次为{$id}的充值卡");
     }
 
+    private function getCoinName()
+    {
+        $coin = $this->getSettingService()->get('coin');
+
+        return empty($coin['coin_name']) ? '虚拟币' : $coin['coin_name'];
+    }
+
     protected function makeRands($median, $number, $cardPrefix, $passwordLength)
     {
         if ($median <= 3) {
-            throw new \RuntimeException('Bad median');
+            $this->createNewException(MoneyCardException::CARDLENGTH_INVALID());
         }
 
-        $cardIds = array();
+        $cardIds = [];
         $i = 0;
 
         while (true) {
@@ -371,7 +385,7 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
         return $cardIds;
     }
 
-    public function uuid($uuidLength, $prefix = '', $needSplit = false)
+    protected function uuid($uuidLength, $prefix = '', $needSplit = false)
     {
         $chars = md5(uniqid(mt_rand(), true));
 
@@ -385,6 +399,7 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
         } else {
             $uuid = substr($chars, 0, $uuidLength);
         }
+        $uuid = str_replace('i', 'a', $uuid);
 
         return $prefix.$uuid;
     }
@@ -399,7 +414,7 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
         return substr(crc32(substr($word, 0, -3)), 0, 3) == substr($word, -3, 3);
     }
 
-    private $tmpPasswords = array();
+    private $tmpPasswords = [];
 
     protected function makePassword($length)
     {
@@ -408,7 +423,7 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
             $password = $this->blendCrc32($uuid);
             $moneyCard = $this->getMoneyCardByPassword($password);
 
-            if (($moneyCard == null) && (!isset($this->tmpPasswords[$password]))) {
+            if ((null == $moneyCard) && (!isset($this->tmpPasswords[$password]))) {
                 break;
             }
         }
@@ -433,7 +448,7 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
 
             $moneyCard = $this->getMoneyCard($id, true);
 
-            if ($moneyCard['cardStatus'] == 'recharged') {
+            if ('recharged' == $moneyCard['cardStatus']) {
                 $this->rollback();
 
                 return $moneyCard;
@@ -443,27 +458,29 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
 
             $batch = $this->getBatch((int) $moneyCard['batchId']);
 
-            $flow = array(
-                'userId' => $fields['rechargeUserId'],
-                'amount' => $batch['coin'],
-                'name' => '学习卡'.$moneyCard['cardId'].'充值'.$batch['coin'],
-                'orderSn' => '',
-                'category' => 'inflow',
-                'note' => '',
-            );
+            $recharge = [
+                'to_user_id' => $fields['rechargeUserId'],
+                'from_user_id' => 0,
+                'amount' => $batch['coin'] * 100,
+                'amount_type' => 'coin',
+                'title' => '学习卡'.$moneyCard['cardId'].'充值'.$batch['coin'],
+                'buyer_id' => $this->getCurrentUser()->getId(),
+                'action' => 'recharge',
+            ];
 
-            $this->getCashService()->inflowByCoin($flow);
-            $batch['rechargedNumber'] += 1;
+            $this->getAccountService()->transferCoin($recharge);
+
+            ++$batch['rechargedNumber'];
             $this->updateBatch($batch['id'], $batch);
             $card = $this->getCardService()->getCardByCardIdAndCardType($moneyCard['id'], 'moneyCard');
 
             if (!empty($card)) {
-                $this->getCardService()->updateCardByCardIdAndCardType($moneyCard['id'], 'moneyCard', array(
+                $this->getCardService()->updateCardByCardIdAndCardType($moneyCard['id'], 'moneyCard', [
                     'status' => 'used',
                     'useTime' => $moneyCard['rechargeTime'],
-                ));
+                ]);
             } else {
-                $this->getCardService()->addCard(array(
+                $this->getCardService()->addCard([
                     'cardId' => $moneyCard['id'],
                     'cardType' => 'moneyCard',
                     'status' => 'used',
@@ -471,7 +488,7 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
                     'useTime' => $moneyCard['rechargeTime'],
                     'userId' => $moneyCard['rechargeUserId'],
                     'createdTime' => time(),
-                ));
+                ]);
             }
 
             $this->commit();
@@ -488,107 +505,239 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
         $token = $this->getTokenService()->verifyToken('money_card', $token);
 
         if (!$token) {
-            return array(
+            return [
                 'code' => 'failed',
-                'message' => '无效的链接',
-            );
+                'message' => '学习卡已过期',
+            ];
         }
 
         try {
             $this->biz['db']->beginTransaction();
-            $batch = $this->getMoneyCardBatchDao()->getBatchByToken($token['token'], array('lock' => 1));
+            $batch = $this->getMoneyCardBatchDao()->getBatchByToken($token['token'], ['lock' => 1]);
 
             if (empty($batch)) {
                 $this->biz['db']->commit();
 
-                return array(
+                return [
                     'code' => 'failed',
                     'message' => '该链接不存在或已被删除',
-                );
+                ];
             }
 
-            if ($batch['batchStatus'] == 'invalid') {
+            if ('invalid' == $batch['batchStatus']) {
                 $this->biz['db']->commit();
 
-                return array(
+                return [
                     'code' => 'failed',
                     'message' => '该学习卡已经作废',
-                );
+                ];
             }
 
             if (!empty($userId)) {
-                $conditions = array(
+                $conditions = [
                     'rechargeUserId' => $userId,
                     'batchId' => $batch['id'],
-                );
+                ];
 
-                $moneyCard = $this->getMoneyCardDao()->search($conditions, array('id' => 'DESC'), 0, 1);
+                $moneyCard = $this->getMoneyCardDao()->search($conditions, ['id' => 'DESC'], 0, 1);
 
-                if (!empty($moneyCard)) {
+                if (!empty($moneyCard) && 0 == $moneyCard[0]['rechargeTime']) {
                     $this->biz['db']->commit();
 
-                    return array(
-                        'code' => 'failed',
+                    return [
+                        'batchId' => $batch['id'],
+                        'code' => 'received',
                         'message' => '您已经领取该批学习卡',
-                    );
+                    ];
+                }
+
+                if (!empty($moneyCard) && 0 != $moneyCard[0]['rechargeTime']) {
+                    $this->biz['db']->commit();
+
+                    return [
+                        'batchId' => $batch['id'],
+                        'code' => 'recharged',
+                        'message' => '您已经领取并使用该批学习卡',
+                    ];
                 }
             }
 
-            $conditions = array(
+            $conditions = [
                 'rechargeUserId' => 0,
                 'cardStatus' => 'normal',
                 'batchId' => $batch['id'],
-            );
-            $moneyCards = $this->getMoneyCardDao()->search($conditions, array('id' => 'ASC'), 0, 1);
+            ];
+            $moneyCards = $this->getMoneyCardDao()->search($conditions, ['id' => 'ASC'], 0, 1);
 
             if (empty($moneyCards)) {
                 $this->biz['db']->commit();
 
-                return array(
-                    'code' => 'failed',
+                return [
+                    'code' => 'empty',
                     'message' => '该批学习卡已经被领完',
-                );
+                ];
             }
 
             $moneyCard = $this->getMoneyCardDao()->get($moneyCards[0]['id']);
 
             if (!empty($moneyCard) && !empty($userId)) {
-                $moneyCard = $this->getMoneyCardDao()->update($moneyCard['id'], array(
+                $moneyCard = $this->getMoneyCardDao()->update($moneyCard['id'], [
                     'rechargeUserId' => $userId,
                     'cardStatus' => 'receive',
                     'receiveTime' => time(),
-                ));
+                ]);
 
                 if (empty($moneyCard)) {
                     $this->biz['db']->commit();
 
-                    return array(
+                    return [
                         'code' => 'failed',
                         'message' => '学习卡领取失败',
-                    );
+                    ];
                 }
 
-                $this->getCardService()->addCard(array(
+                $this->getCardService()->addCard([
                     'cardId' => $moneyCard['id'],
                     'cardType' => 'moneyCard',
                     'deadline' => strtotime($moneyCard['deadline']),
                     'userId' => $userId,
-                ));
-                $message = "您有一张价值为{$batch['coin']}{$this->getSettingService()->get('coin.coin_name', '虚拟币')}的充值卡领取成功";
+                ]);
+
+                $receivedNumber = $this->getMoneyCardDao()->count([
+                    'batchId' => $batch['id'],
+                    'receiveTime_GT' => 0,
+                ]);
+                $batch = $this->getMoneyCardBatchDao()->update($batch['id'], [
+                    'receivedNumber' => $receivedNumber,
+                ]);
+
+                $message = "您有一张价值为{$batch['coin']}{$this->getCoinName()}的充值卡领取成功";
                 $this->getNotificationService()->notify($userId, 'default', $message);
                 $this->dispatchEvent('moneyCard.receive', $batch);
             }
 
             $this->biz['db']->commit();
 
-            return array(
+            return [
                 'id' => $moneyCard['id'],
+                'batchId' => $batch['id'],
                 'code' => 'success',
                 'message' => '领取成功，请在卡包中查看',
-            );
+            ];
         } catch (\Exception $e) {
             $this->biz['db']->rollback();
             throw $e;
+        }
+    }
+
+    public function receiveMoneyCardByPassword($password, $userId)
+    {
+        $moneyCard = $this->getMoneyCardByPassword($password);
+        $result = $this->canUseMoneyCard($moneyCard, $userId);
+        if (!empty($result)) {
+            return $result;
+        }
+
+        try {
+            $this->biz['db']->beginTransaction();
+
+            $moneyCard = $this->getMoneyCardDao()->update($moneyCard['id'], [
+                'rechargeUserId' => $userId,
+                'cardStatus' => 'receive',
+                'receiveTime' => time(),
+            ]);
+
+            if (empty($moneyCard)) {
+                $this->biz['db']->commit();
+
+                return [
+                    'code' => 'failed',
+                    'message' => 'money_card.card_receive_fail',
+                ];
+            }
+
+            $this->getCardService()->addCard([
+                'cardId' => $moneyCard['id'],
+                'cardType' => 'moneyCard',
+                'deadline' => strtotime($moneyCard['deadline']),
+                'userId' => $userId,
+            ]);
+
+            $receivedNumber = $this->getMoneyCardDao()->count([
+                'batchId' => $moneyCard['batchId'],
+                'receiveTime_GT' => 0,
+            ]);
+            $batch = $this->getMoneyCardBatchDao()->update($moneyCard['batchId'], [
+                'receivedNumber' => $receivedNumber,
+            ]);
+
+            $message = $this->trans('money_card.notify.card_receive_success', ['coin_number' => $batch['coin'], 'coin_name' => $this->getCoinName()]);
+            $this->getNotificationService()->notify($userId, 'default', $message);
+            $this->dispatchEvent('moneyCard.receive', $batch);
+
+            $this->biz['db']->commit();
+
+            return [
+                'id' => $moneyCard['id'],
+                'code' => 'success',
+                'message' => 'money_card.card_receive_success',
+            ];
+        } catch (\Exception $e) {
+            $this->biz['db']->rollback();
+            throw $e;
+        }
+    }
+
+    protected function canUseMoneyCard($moneyCard, $userId)
+    {
+        if (!$moneyCard) {
+            return [
+                'code' => 'failed',
+                'message' => 'money_card.invalid_password',
+            ];
+        }
+
+        if ('invalid' == $moneyCard['cardStatus']) {
+            return [
+                'code' => 'invalid',
+                'message' => 'money_card.invalid_card',
+            ];
+        }
+
+        if ('receive' == $moneyCard['cardStatus'] && $moneyCard['rechargeUserId'] != $userId) {
+            return [
+                'code' => 'receivedByOther',
+                'message' => 'money_card.card_received_by_other',
+            ];
+        }
+
+        if ('receive' == $moneyCard['cardStatus'] && $moneyCard['rechargeUserId'] == $userId) {
+            return [
+                'id' => $moneyCard['id'],
+                'code' => 'received',
+                'message' => 'money_card.card_received',
+            ];
+        }
+
+        if (0 != $moneyCard['rechargeTime'] && $moneyCard['rechargeUserId'] == $userId) {
+            return [
+                'code' => 'recharged',
+                'message' => 'money_card.card_used',
+            ];
+        }
+
+        if (0 != $moneyCard['rechargeTime'] && $moneyCard['rechargeUserId'] != $userId) {
+            return [
+                'code' => 'rechargedByOther',
+                'message' => 'money_card.card_used_by_other',
+            ];
+        }
+
+        if (!(time() < 86400 + strtotime($moneyCard['deadline']))) {
+            return [
+                'code' => 'expired',
+                'message' => 'money_card.expired_card',
+            ];
         }
     }
 
@@ -600,6 +749,9 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
         return $this->createDao('MoneyCard:MoneyCardDao');
     }
 
+    /**
+     * @return \Biz\Card\Service\CardService
+     */
     protected function getCardService()
     {
         return $this->createService('Card:CardService');
@@ -618,11 +770,6 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
         return $this->createService('System:LogService');
     }
 
-    protected function getCashService()
-    {
-        return $this->createService('Cash:CashService');
-    }
-
     private function getTokenService()
     {
         return $this->createService('User:TokenService');
@@ -636,5 +783,13 @@ class MoneyCardServiceImpl extends BaseService implements MoneyCardService
     private function getNotificationService()
     {
         return $this->createService('User:NotificationService');
+    }
+
+    /**
+     * @return AccountService
+     */
+    private function getAccountService()
+    {
+        return $this->createService('Pay:AccountService');
     }
 }

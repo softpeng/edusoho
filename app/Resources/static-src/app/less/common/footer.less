@@ -21,6 +21,20 @@
         color: #fff;
       }
     }
+    #license-picture {
+      >img{
+        width: 20px;
+        height: 20px;
+      }
+    }
+
+    .container {
+      width: 1136px;
+      text-align: left;
+      @media (max-width: @screen-md-max) {
+        width: 100%;
+      }
+    }
   }
 }
 
@@ -42,6 +56,7 @@
     @media (max-width: @screen-xs-max) {
       width: 33.33%;
       padding: 0 5px;
+      margin-top: 20px;
     }
   }
   h3 {

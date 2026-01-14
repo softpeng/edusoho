@@ -1,19 +1,21 @@
 {% extends 'layout.html.twig' %}
 
+{% do script(['libs/vue.js', 'app/js/question-manage/preview/index.js']) %}
+
+{% block title %}{{'course.question_manage.preview'|trans}}{% endblock %}
+
+{% block stylesheets %}
+  {{ parent() }}
+  {% include 'item-bank-css-loader.html.twig' %}
+{% endblock %}
+
 {% block body %}
-  <style>
-    body {
-      background-color: #fff;
-    }
-  </style>
-  <div style="padding:20px;">
+  {% verbatim %}
+    <div id="app">
+    </div>
+  {% endverbatim %}
 
-    {% set questionTemplate = getQuestionTypeTemplate(question.type,'do') %}
-    {% if questionTemplate %}
-    {{dump(questionTemplate)}}
-      {% include questionTemplate %}
-    {% endif %}
-
-  </div>
-  <div id="attachment-modal" class="modal"></div>
+  <input type="hidden" name="item" value="{{ item|json_encode }}">
+  <input type="hidden" name="question_bank_attachment_setting" value="{{ setting('question_bank_attachment_setting')|json_encode }}">
+  {% include 'attachment-upload/upload-data.html.twig'  %}
 {% endblock %}

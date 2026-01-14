@@ -21,3 +21,69 @@
       }
     }
   }
+
+.download-materials-list {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  .download-materials-item {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 16px;
+    background-color: @bg-color;
+    border-radius: 4px;
+
+    .materials-icon {
+      width: 28px;
+      height: 30px;
+    }
+
+    .materials-content {
+      width: 100%;
+      min-width: 0;
+      display: flex;
+      justify-content: space-between;
+
+      p {
+        margin-bottom: 0;
+      }
+
+      &__title {
+        color: #333;
+        line-height: 18px;
+      }
+
+      &__desc {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #999;
+        line-height: 16px;
+      }
+
+      .download-material-btn-group {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-shrink: 0;
+      }
+
+      .download-materials-btn {
+        padding: 4px 20px;
+        background: #03c777;
+        box-shadow: 0 2px 4px 0 rgba(3, 199, 119, 0.20);
+        border-radius: 12px;
+        color: #fff !important;
+        font-size: 12px;
+        line-height: 16px;
+        .es-transition();
+
+        &:hover {
+          background: rgba(3, 199, 119, .8);
+        }
+      }
+    }
+  }
+}

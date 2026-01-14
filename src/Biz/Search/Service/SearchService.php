@@ -9,4 +9,8 @@ interface SearchService
     public function refactorAllDocuments();
 
     public function applySearchAccount($callbackRouteUrl);
+
+    public function setCloudApi($node, $api);
+
+    public function isCloudSearchUsable();
 }

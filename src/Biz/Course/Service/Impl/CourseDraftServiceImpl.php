@@ -4,6 +4,7 @@ namespace Biz\Course\Service\Impl;
 
 use AppBundle\Common\ArrayToolkit;
 use Biz\BaseService;
+use Biz\Course\CourseDraftException;
 use Biz\Course\Dao\CourseDraftDao;
 use Biz\Course\Service\CourseDraftService;
 
@@ -42,12 +43,10 @@ class CourseDraftServiceImpl extends BaseService implements CourseDraftService
         $draft = $this->getCourseDraft($id);
 
         if (empty($draft)) {
-            throw $this->createNotFoundException('草稿不存在，更新失败！');
+            $this->createNewException(CourseDraftException::NOTFOUND_DRAFT());
         }
 
         $fields = $this->_filterDraftFields($fields);
-
-        $this->getLogService()->info('course', 'update_draft', "更新草稿《{$draft['title']}》(#{$draft['id']})的信息", $fields);
 
         return $this->getCourseDraftDao()->update($id, $fields);
     }

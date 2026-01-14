@@ -1,0 +1,30 @@
+{% extends 'layout.html.twig' %}
+{% do script(['app/js/base-index/index.js']) %}
+{% block keywords %}{{ setting('site.seo_keywords') }}{% endblock %}
+{% block description %}{{ setting('site.seo_description') }}{% endblock %}
+
+{% set appDownload = is_ES_copyright() and setting('mobile.enabled', null) and is_show_mobile_page() %}
+{% set latestLiveTask = latest_live_task() %}
+{% set bodyClass = appDownload ? 'homepage has-app' : 'homepage' %}
+{% set siteNav = '/' %}
+
+{% set _target_path = path('homepage') %}
+
+{% set isIndex = true %}
+{% set consultDisplay = true %}
+
+{% block full_content %}
+  <style>
+  .cd-notification {
+    overflow: visible !important;
+  }
+  </style>
+  {% if appDownload  %}
+    {{ render(controller('AppBundle:Default:appDownload')) }}
+  {% endif %}
+  {% if latestLiveTask %}
+    {% include 'default/current-live.html.twig' with {task:latestLiveTask} %}
+  {% endif %}
+  {% block content %}{% endblock %}
+  {% include 'mobile/footer-tool-bar.html.twig' with { mobile_tool_bar: 'index' } %}
+{% endblock %}

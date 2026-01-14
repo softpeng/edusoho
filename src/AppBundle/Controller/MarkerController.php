@@ -15,16 +15,16 @@ class MarkerController extends BaseController
     {
         $course = $this->getCourseService()->tryManageCourse($courseId);
         $task = $this->getTaskService()->getCourseTask($courseId, $taskId);
-        $activity = array();
+        $activity = [];
         if (!empty($task)) {
             $activity = $this->getActivityService()->getActivity($task['activityId'], true);
         }
 
-        return $this->render('marker/index.html.twig', array(
+        return $this->render('marker/index.html.twig', [
             'course' => $course,
             'task' => $task,
             'activity' => $activity,
-        ));
+        ]);
     }
 
     public function previewAction(Request $request, $courseId, $taskId)
@@ -32,16 +32,16 @@ class MarkerController extends BaseController
         $course = $this->getCourseService()->tryManageCourse($courseId);
         $task = $this->getTaskService()->getCourseTask($courseId, $taskId);
 
-        $activity = array();
+        $activity = [];
         if (!empty($task)) {
             $activity = $this->getActivityService()->getActivity($task['activityId'], true);
         }
 
-        return $this->render('marker/preview.html.twig', array(
+        return $this->render('marker/preview.html.twig', [
             'course' => $course,
             'task' => $task,
             'activity' => $activity,
-        ));
+        ]);
     }
 
     //驻点合并
@@ -60,29 +60,27 @@ class MarkerController extends BaseController
         return $this->createJsonResponse(true);
     }
 
-    public function markerMetasAction(Request $request, $mediaId)
+    public function markerMetasAction(Request $request, $activityId)
     {
         if (!$this->tryManageMarker()) {
             return $this->createJsonResponse(false);
         }
 
-        $markersMeta = $this->getMarkerService()->findMarkersMetaByMediaId($mediaId);
-        $file = $this->getUploadFileService()->getFile($mediaId);
-
+        $activity = $this->getActivityService()->getActivity($activityId, true);
+        $markersMeta = $this->getMarkerService()->findMarkersMetaByActivityId($activityId);
+        $file = $this->getUploadFileService()->getFile($activity['ext']['mediaId']);
         foreach ($markersMeta as $key => $value) {
             foreach ($markersMeta[$key]['questionMarkers'] as $index => $questionMarker) {
-                $markersMeta[$key]['questionMarkers'][$index]['includeImg'] = (preg_match('/<img (.*?)>/', $questionMarker['stem'])) ? true : false;
-
-                if ($questionMarker['type'] == 'fill') {
+                if ('fill' == $questionMarker['type']) {
                     $markersMeta[$key]['questionMarkers'][$index]['stem'] = preg_replace('/\[\[.+?\]\]/', '____', $questionMarker['stem']);
                 }
             }
         }
 
-        $result = array(
+        $result = [
             'markersMeta' => $markersMeta,
             'videoTime' => $file['length'],
-        );
+        ];
 
         return $this->createJsonResponse($result);
     }
@@ -96,10 +94,10 @@ class MarkerController extends BaseController
 
         $data = $request->request->all();
         $data['id'] = isset($data['id']) ? $data['id'] : 0;
-        $fields = array(
+        $fields = [
             'updatedTime' => time(),
             'second' => isset($data['second']) ? $data['second'] : '',
-        );
+        ];
         $marker = $this->getMarkerService()->updateMarker($data['id'], $fields);
 
         return $this->createJsonResponse($marker);
@@ -113,12 +111,12 @@ class MarkerController extends BaseController
         $activity = $this->getActivityService()->getActivity($task['activityId']);
         $storage = $this->getSettingService()->get('storage');
         $video_header = $this->getUploadFileService()->getFileByTargetType('headLeader');
-        $markers = $this->getMarkerService()->findMarkersByMediaId($activity['ext']['file']['id']);
-        $results = array();
+        $markers = $this->getMarkerService()->findMarkersByActivityId($activity['id']);
+        $results = [];
         $user = $this->getUserService()->getCurrentUser();
 
         if ($this->agentInWhiteList($request->headers->get('user-agent')) ? 1 : 0) {
-            return $this->createJsonResponse(array());
+            return $this->createJsonResponse([]);
         }
 
         foreach ($markers as $key => $marker) {

@@ -1,15 +1,15 @@
 {% extends 'layout.html.twig' %}
 
 {% set bodyClass = 'homepage' %}
-{% do script(['libs/echo-js.js','defaultbtheme/js/default/index.js']) %}
+{% do script(['libs/echo-js.js','libs/jquery-cycle2.js','defaultbtheme/js/default/index.js']) %}
 
 {% set consultDisplay = true %}
 
 {% block content %}
 
-  <div class="es-row-wrap container-gap">
+  <div class="es-row-wrap">
 
-    <div class="homepage-feature homepage-feature-slides ">
+    <div class="homepage-feature homepage-feature-slides mbl">
       <div class="cycle-pager"></div>
       {{ block_show('default-b:home_top_banner') }}
     </div>
@@ -57,36 +57,38 @@
                         {{ lazy_img(filepath(classroom.middlePicture, 'classroom.png'), 'img-responsive', classroom.title, 'lazyload_class.png') }}
                       </a>
                       <div class="class-body">
-                        <h3 class="class-title">
+                        <h3 class="class-title text-overflow">
                           <a href="{{ path('classroom_show', {id:classroom.id}) }}">{{ classroom.title }}</a>
                         </h3>
                         <div class="class-metas">
-                          {% if teachers %}
-                            <span class="class-teacher">
+                          <span class="class-teacher">
+                            {% if teachers %}
                               <i class="es-icon es-icon-people"></i>
                               {% for teacher in teachers %}
                                 {% if loop.index <= 1 %}
-                                  <a class="teacher-nickname mrl" href="{{ path('user_show', {id:teacher.id}) }}">{{ teacher.nickname }}</a>
+                                  <a class="teacher-nickname mrl" href="{{ user_show_path({id:teacher.id}) }}">{{ teacher.nickname }}</a>
                                 {% endif %}
                               {% endfor %}
-                            </span>
-                          {% endif %}
-                          <span class="class-student hidden-md"><i class="es-icon es-icon-people"></i>{{ classroom.studentNum + classroom.auditorNum }} 人</span>
-                          <span class="class-price">
-                            {% if setting('coin.coin_enabled') and setting('coin.price_type') == 'Coin' %}
-                              {% if classroom.price > 0 %}
-                                {{ classroom.price * setting('coin.cash_rate') }} {{ setting('coin.coin_name') }}
-                              {% else %}
-                                {{ '免费'|trans }}
-                              {% endif %}
-                            {% else %}
-                              {% if classroom.price > 0 %}
-                                {{ '%classroomPrice%元'|trans({'%classroomPrice%': classroom.price}) }}
-                              {% else %}
-                                {{ '免费'|trans }}
-                              {% endif %}
                             {% endif %}
                           </span>
+                          <span class="class-student hidden-md"><i class="es-icon es-icon-people"></i>{{ classroom.studentNum + classroom.auditorNum }} 人</span>
+                          {% if classroom.hidePrice != '1' %}
+                            <span class="class-price mr0">
+                              {% if setting('coin.coin_enabled') and setting('coin.price_type') == 'Coin' %}
+                                {% if classroom.price > 0 %}
+                                  {{ classroom.price * setting('coin.cash_rate') }} {{ setting('coin.coin_name') }}
+                                {% else %}
+                                  {{ '免费'|trans }}
+                                {% endif %}
+                              {% else %}
+                                {% if classroom.price > 0 %}
+                                  {{ '%classroomPrice%元'|trans({'%classroomPrice%': classroom.price}) }}
+                                {% else %}
+                                  {{ '免费'|trans }}
+                                {% endif %}
+                              {% endif %}
+                            </span>
+                          {% endif %}
                         </div>
                         <div class="course-num">{{ '共%classroomCourseNum%课程'|trans({'%classroomCourseNum%': classroom.courseNum}) }}</div>
                       </div>
@@ -158,7 +160,8 @@
                     <li class="col-md-6">
                       <em>{{ article.publishedTime|date('m-d H:i') }} </em>
                       <a href="{{ path('article_detail', {id:article.id}) }}" title="{{ article.title }}"> {% if article.categoryId %}
-                        <span>[{{ article.category.name }}]{% endif %}</span>{{ article.title }} </a>
+                        <span>[{{ article.category.name |default('') }}]{% endif %}</span>
+                        {{ article.title }} </a>
                     </li>
                   {% endif %}
                 {% endfor %}
@@ -198,7 +201,7 @@
                         </p>
                       </div>
                     </li>
-                  {% endif %} 
+                  {% endif %}
                 {% endfor %}
               </ul>
             </div>
@@ -219,7 +222,7 @@
                   {% if teacher %}
                     <li class="col-xs-6  col-sm-6 col-md-4">
                       <div class="teachers-item">
-                        <a href="{{ path('user_show', {id:teacher.id}) }}">
+                        <a href="{{ user_show_path({id:teacher.id}) }}">
                           <img class="img-circle" src="{{ filepath(teacher.mediumAvatar, 'avatar.png') }}">
                         </a>
                         <span>{{ web_macro.user_link(teacher) }}</span>
@@ -251,7 +254,7 @@
                         <div class="row">
                           <div class="col-sm-3">
                             <a href="{{ path('vip_course_explore', {levelId:level.id}) }}">
-                              <img class="img-responsive" src="{{ level.icon|default(asset('assets/img/default/vip-default.png')) }}"
+                              <img class="img-responsive" src="{{ level.icon|default(asset('assets/img/default/vip.png')) }}"
                                 alt="{{ level.name }}">
                             </a>
                           </div>
@@ -263,9 +266,9 @@
                             {% if setting('coin.coin_enabled') and setting('coin.price_type') == 'Coin' %}
                               <h4> {{ set_price((level.monthPrice) * (setting('coin.cash_rate'))) }}{{ setting('coin.coin_name', '虚拟币') }}</h4>
                             {% else %}
-                              <h4>¥&nbsp;{{ level.monthPrice }}</h4>
+                              <h4>¥&nbsp;{{ level.monthPrice |default(0) }}</h4>
                             {% endif %}
-                            <h4><a href="{{ path('vip_buy') }}" class="btn btn-success">立即购买</a></h4>
+                            <h4><a href="{{ path('vip') }}" class="btn btn-success">立即购买</a></h4>
                           </div>
                         </div>
                       </li>
@@ -357,7 +360,12 @@
                       <a href="{{ path('course_show', {id: courseSet.defaultCourseId}) }}">
                         <div class="course-item">
                           <img src="{{ filepath(course_set_cover(courseSet, 'large'), 'courseSet.png') }}" class="img-responsive thumb pull-left">
-                          <div class="course-title">{{ courseSet.title }}</div>
+                          {% if can_obtain_certificates(courseSet.id, 'courseSet') %}
+                            <a style="margin-top: 6px" class="certificate-tag" tabindex="0" role="button" data-container="body" data-toggle="popover" data-trigger="hover" data-placement="top" data-html="true" title="{{ 'explore.classroom.certificate_tag'|trans }}" data-content="{{ 'course.catalogue.certificate_obtain'|trans }}">{{ 'explore.classroom.certificate_tag_short'|trans }}</a>
+                          {% endif %}
+                          <div class="course-title">
+                            {{ courseSet.title|raw }}
+                          </div>
                         </div>
                       </a>
                     </li>
@@ -391,7 +399,9 @@
           </div>
         {% endif %}
 
-        {{ render(controller('AppBundle:Default:latestReviewsBlock', {number:5})) }}
+        {% if setting('goods_setting.show_review', '1') == 1 %}
+          {{ render(controller('AppBundle:Default:latestReviewsBlock', {number:5})) }}
+        {% endif %}
 
         {# 最热话题 #}
         {% if setting('group').group_show|default(1) %}
@@ -458,7 +468,11 @@
                 {% endif %}
               {% endif %}
 
-              <span class="title">{{ courseSet.title }}</span>
+              {% if can_obtain_certificates(course.id, 'course') %}
+                <a style="margin: 10px -6px 0 10px;" class="certificate-tag" tabindex="0" role="button" data-container="body" data-toggle="popover" data-trigger="hover" data-placement="top" data-html="true" title="{{ 'explore.classroom.certificate_tag'|trans }}" data-content="{{ 'course.catalogue.certificate_obtain'|trans }}">{{ 'explore.classroom.certificate_tag_short'|trans }}</a>
+              {% endif %}
+              <span class="title">{{ courseSet.title|raw }}</span>
+
               {% if mode in ['default', 'teach'] %}
 
                 {% if courseSet.type == 'live' %}
@@ -477,8 +491,8 @@
                  {% include "course/widgets/course-set-price.html.twig" %}
               </div>
             {% endif %}
-
-                  <span class="review-col pull-left" style="text-align: left;">
+            {% if setting('goods_setting.show_review', '1') == 1 %}
+              <span class="review-col pull-left" style="text-align: left;">
                 {% if course.ratingNum > 0 %}
                   <span class="meta-label"><strong>{{ courseSet.ratingNum }}</strong> {{ '评价'|trans }}</span>
                   <span class="review-rating">
@@ -491,7 +505,7 @@
                   </span>
                 {% endif %}
               </span>
-
+            {% endif %}
                   {% if setting('course.show_student_num_enabled', '1') == 1 %}
                     <span class="student-col">
                 <span class="meta-label">{{ '学生'|trans }}</span>
@@ -587,9 +601,11 @@
                 <span class="text-muted mrm">
                   <i class="es-icon es-icon-thumbup mrs"></i>{{ course.likeNum }}
                 </span>
-                <span class="text-muted mrm">
-                  <i class="es-icon es-icon-textsms mrs"></i>{{ course.postNum }}
-                </span>
+                {% if setting('openCourse.show_comment', '1') == 1 %}
+                  <span class="text-muted mrm">
+                    <i class="es-icon es-icon-textsms mrs"></i>{{ course.postNum }}
+                  </span>
+                {% endif %}
               </span>
 
             {% set user = users[course.teacherIds|first]|default(null) %}

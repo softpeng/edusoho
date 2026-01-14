@@ -2,11 +2,12 @@
 
 namespace Biz\MaterialLib\Service\Impl;
 
+use AppBundle\Common\ArrayToolkit;
 use Biz\BaseService;
 use Biz\CloudFile\Service\CloudFileService;
+use Biz\CloudFile\Service\SupplierFileService;
+use Biz\File\UploadFileException;
 use Biz\MaterialLib\Service\MaterialLibService;
-use AppBundle\Common\ArrayToolkit;
-use Topxia\Service\Common\ServiceKernel;
 
 class MaterialLibServiceImpl extends BaseService implements MaterialLibService
 {
@@ -22,7 +23,28 @@ class MaterialLibServiceImpl extends BaseService implements MaterialLibService
 
     public function player($globalId, $ssl = false)
     {
-        return $this->getCloudFileService()->player($globalId, $ssl);
+        $service = $this->getPlayerService($globalId);
+
+        return $service->player($globalId, $ssl);
+    }
+
+    /**
+     * @return CloudFileService|SupplierFileService|null
+     */
+    protected function getPlayerService($globalId)
+    {
+        $file = $this->getUploadFileService()->getFileByGlobalId($globalId);
+        if (empty($file)) {
+            $this->createNewException(UploadFileException::NOTFOUND_FILE());
+        }
+
+        if ('supplier' == $file['storage']) {
+            return $this->getSupplierFileService();
+        } elseif ('cloud' == $file['storage']) {
+            return $this->getCloudFileService();
+        }
+
+        return null;
     }
 
     public function edit($fileId, $fields)
@@ -47,25 +69,25 @@ class MaterialLibServiceImpl extends BaseService implements MaterialLibService
             $result = $this->delete($id);
         }
 
-        return array('success' => true);
+        return ['success' => true];
     }
 
     public function batchTagEdit($fileIds, $tagNames)
     {
         $tagNames = explode(',', $tagNames);
 
-        foreach ($fileIds as $key => $fileId) {
-            foreach ($tagNames as $key => $tagName) {
+        foreach ($fileIds as $fileId) {
+            foreach ($tagNames as $tagName) {
                 $tag = $this->getTagService()->getTagByName($tagName);
 
                 $result = $this->getUploadFileTagService()->findByFileId($fileId);
                 $fileTagIds = ArrayToolkit::column($result, 'tagId');
 
                 if (!in_array($tag['id'], $fileTagIds)) {
-                    $this->getUploadFileTagService()->add(array(
+                    $this->getUploadFileTagService()->add([
                         'fileId' => $fileId,
                         'tagId' => $tag['id'],
-                    ));
+                    ]);
                 }
             }
 
@@ -75,7 +97,7 @@ class MaterialLibServiceImpl extends BaseService implements MaterialLibService
             $tags = $this->getTagService()->findTagsByIds($tagIds);
             $editTagNames = ArrayToolkit::column($tags, 'name');
 
-            $conditions = array();
+            $conditions = [];
             $conditions['tags'] = implode(',', $editTagNames);
 
             $this->getUploadFileService()->update($fileId, $conditions);
@@ -85,21 +107,17 @@ class MaterialLibServiceImpl extends BaseService implements MaterialLibService
     public function batchShare($ids)
     {
         foreach ($ids as $key => $id) {
-            $fields = array('isPublic' => '1');
-
-            $this->getUploadFileService()->update($id, $fields);
+            $this->getUploadFileService()->sharePublic($id);
         }
 
-        return array('success' => true);
+        return ['success' => true];
     }
 
     public function unShare($id)
     {
-        $fields = array('isPublic' => '0');
+        $this->getUploadFileService()->unsharePublic($id);
 
-        $this->getUploadFileService()->update($id, $fields);
-
-        return array('success' => true);
+        return ['success' => true];
     }
 
     public function download($id)
@@ -107,7 +125,7 @@ class MaterialLibServiceImpl extends BaseService implements MaterialLibService
         return $this->getUploadFileService()->getDownloadMetas($id);
     }
 
-    public function reconvert($globalId, $options = array())
+    public function reconvert($globalId, $options = [])
     {
         $result = $this->getCloudFileService()->reconvert($globalId, $options);
         $file = $this->getByGlobalId($globalId);
@@ -120,12 +138,12 @@ class MaterialLibServiceImpl extends BaseService implements MaterialLibService
         return $this->getCloudFileService()->getDefaultHumbnails($globalId);
     }
 
-    public function getThumbnail($globalId, $options = array())
+    public function getThumbnail($globalId, $options = [])
     {
         return $this->getCloudFileService()->getThumbnail($globalId, $options);
     }
 
-    public function getStatistics($options = array())
+    public function getStatistics($options = [])
     {
         return $this->getCloudFileService()->getStatistics($options);
     }
@@ -137,7 +155,7 @@ class MaterialLibServiceImpl extends BaseService implements MaterialLibService
 
     protected function getUploadFileService()
     {
-        return ServiceKernel::instance()->createService('File:UploadFileService');
+        return $this->createService('File:UploadFileService');
     }
 
     /**
@@ -145,16 +163,24 @@ class MaterialLibServiceImpl extends BaseService implements MaterialLibService
      */
     protected function getCloudFileService()
     {
-        return $this->biz->service('CloudFile:CloudFileService');
+        return $this->createService('CloudFile:CloudFileService');
+    }
+
+    /**
+     * @return SupplierFileService
+     */
+    protected function getSupplierFileService()
+    {
+        return $this->createService('CloudFile:SupplierFileService');
     }
 
     protected function getUploadFileTagService()
     {
-        return ServiceKernel::instance()->createService('File:UploadFileTagService');
+        return $this->createService('File:UploadFileTagService');
     }
 
     protected function getUserService()
     {
-        return ServiceKernel::instance()->createService('User:UserService');
+        return $this->createService('User:UserService');
     }
 }

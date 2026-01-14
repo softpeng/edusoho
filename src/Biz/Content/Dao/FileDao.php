@@ -2,9 +2,9 @@
 
 namespace Biz\Content\Dao;
 
-use Codeages\Biz\Framework\Dao\GeneralDaoInterface;
+use Codeages\Biz\Framework\Dao\AdvancedDaoInterface;
 
-interface FileDao extends GeneralDaoInterface
+interface FileDao extends AdvancedDaoInterface
 {
     public function findByIds(array $ids);
 
@@ -17,4 +17,6 @@ interface FileDao extends GeneralDaoInterface
     public function countByGroupId($groupId);
 
     public function deleteByUri($uri);
+
+    public function findByUris(array $uris);
 }

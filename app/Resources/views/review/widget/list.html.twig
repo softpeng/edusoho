@@ -5,34 +5,36 @@
   <div class="clearfix">
      <button class="btn btn-primary btn-sm pull-right js-show-review-form" {% if not userReview or (hideRereview|default(false)) %}style="display:none;"{% endif %}>{{'course.reviews.review_again'|trans}}</button>
   </div>
-  {% include 'review/widget/review-form.html.twig' with {userReview:userReview,reviewSaveUrl:reviewSaveUrl|default(null)} %}
+  {% include 'review/widget/review-form.html.twig' with { userReview:userReview, targetType:targetType|default('course'), targetId:targetId|default() } %}
 {% endif %}
 
+{% include 'common/anti-brush-captcha.html.twig' %}
+
 {% set canAccess = canAccess|default(false) %}
+{% set reportType = reportType|default('') %}
+{% set replyReportType = replyReportType|default('') %}
 
 {% for review in reviews if users[review.userId]|default(false) %}
   {% set user = users[review.userId] %}
   {% set posts = data('ReviewPosts',{reviewId:review.id, targetType:targetType|default('course'), start:0,limit:5})|default(null) %}
 
   <div class="js-reviews">
-    <div class="media media-evaluate">
+    <div class="media media-evaluate main_hover_item">
       <div class="media-left">
         {{ web_macro.user_avatar_link(user,'small', ['card']) }}
       </div>
       <div class="media-body thread-post">
         <div class="title">{{ web_macro.user_link(user) }}
-          {% if review.meta %}<span>{{(courseMap[review.courseId].title|default('course.reviews.teaching_plan')) ~ ' ' ~ ('course.reviews.teaching_plan_progress'|trans)}}:{{ review.meta.learnedNum }}/{{ review.meta.lessonNum}}</span>{% endif %}&nbsp;&nbsp;
+          {% if review.meta %}<span>{{(courseMap[review.targetId].title|default('course.reviews.teaching_plan')|trans) ~ ' ' ~ ('course.reviews.teaching_plan_progress'|trans)}}:{{ review.meta.learnedNum }}/{{ review.meta.lessonNum}}</span>{% endif %}&nbsp;&nbsp;
           {{ review.createdTime|date('Y-m-d') }}
         </div>
         <div class="score">
           {{ web_macro.star(review.rating) }}
         </div>
         <div class="content">
-          <div class="short-content">{{ review.content|sub_text(100) }}
-            {% if review.updatedTime != review.createdTime and review.updatedTime is not null %}<span class="label label-success">{{'course.reviews.additional_reviews_btn'|trans}}</span>{% endif %}
+          <div class="short-content" style="white-space: pre-wrap;">{{ review.content|raw|wrap_text(100) }}{% if app.user.isLogin()|default(false) and app.user.id != review.userId and is_reported(reportType, review.id) %}<span style="color: red;">({{ ('已举报')|trans }})</span>{% endif %}<span id="{{ 'js-review-after-' ~ review.id }}"></span>
           </div>
-          <div class="full-content" style="display:none;">{{ review.content|nl2br }}
-            {% if review.updatedTime != review.createdTime and review.updatedTime is not null %}<span class="label label-success">{{'course.reviews.additional_reviews_btn'|trans}}</span>{% endif %}
+          <div class="full-content" style="white-space: pre-wrap; display:none;">{{ review.content|raw|nl2br }}{% if app.user.isLogin()|default(false) and app.user.id != review.userId and is_reported(reportType, review.id) %}<span style="color: red;">({{ ('已举报')|trans }})</span>{% endif %}<span id="{{ 'js-review-after-' ~ review.id }}"></span>
           </div>
         </div>
         <div class="actions clearfix">
@@ -41,18 +43,18 @@
           {% if canAccess %}
             <a href="javascript:;" class="js-reply pull-right">{% if posts is empty %}{{'course.reviews.reply_btn'|trans}}{% else %}{{'course.reviews.cancel_reply_btn'|trans}}{% endif %}</a>
           {% endif %}
+          {% if app.user.isLogin()|default(false) and app.user.id != review.userId and not is_reported(reportType, review.id) %}
+            <span class="pull-right" style="position: relative;right: 10px;">
+              <a class="color-primary item-hover" id="js-review-modal-{{ review.id }}" href="#modal" data-toggle="modal" data-url="{{ path('common_report_tags_modal', {targetType: reportType, targetId: review.id, modalTarget: 'js-review-modal-'~ review.id, contentTarget: 'js-review-after-' ~ review.id }) }}">举报</a>
+            </span>
+          {% endif %}
         </div>
 
         {% set goto = goto|default(path('homepage')) %}
-        {% if targetType|default('course') == 'classroom' %}
-          {% set postReplyUrl = path('classroom_review_post',{id:review.classroomId,reviewId:review.id}) %}
-        {% else %}
-          {% set postReplyUrl = path('course_review_post',{courseId:review.courseId,reviewId:review.id}) %}
-        {% endif %}
 
         <div class="thread-subpost-container subcomments clearfix {% if posts is empty %}hide{% endif %}">
           <div class="thread-subpost-content">
-            {% include 'review/widget/subposts.html.twig' with {posts:posts,targetType:targetType|default('course'),canAccess:canAccess|default(false)} %}
+            {% include 'review/widget/subposts.html.twig' with {posts:posts,targetType:targetType|default('course'),canAccess:canAccess|default(false), replyReportType: replyReportType} %}
           </div>
 
           {% if canAccess %}
@@ -62,7 +64,7 @@
           {% endif %}
 
           {% if app.user %}
-            <form method="post" action="{{ postReplyUrl }}" class="thread-subpost-form {% if posts %}hide{% endif %}">
+            <form method="post" class="thread-subpost-form {% if posts %}hide{% endif %}">
               <div class="form-group">
                 <div class="controls">
                   <textarea class="form-control" name="content" data-display="{{'course.reviews.content'|trans}}"></textarea>
@@ -70,7 +72,8 @@
               </div>
               <div class="form-group">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('site') }}">
-                <button type="submit" data-loading-text="{{'form.btn.reply.submiting'|trans}}" class="btn btn-primary btn-sm pull-right">{{'form.btn.reply'|trans}}</button>
+                <input type="hidden" name="_dragCaptchaToken" value="">
+                <a href="javascript:;" class="btn btn-primary btn-sm pull-right js-btn-save-post" data-target-id="{{ review.id }}" data-loading-text="{{'form.btn.reply.submiting'|trans}}">{{'form.btn.save'|trans}}</a>
               </div>
             </form>
           {% else %}

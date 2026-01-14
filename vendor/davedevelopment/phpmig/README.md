@@ -177,8 +177,7 @@ $container['phpmig.migrations_path'] = __DIR__ . DIRECTORY_SEPARATOR . 'migratio
 return $container;
 ```
 
-Unfortunately Zend Framework does not have a Database Abstraction Layer and
-setting up migrations requires couple additional steps. You first need to prepare
+Setting up migrations with Zend Framework  requires a couple additional steps. You first need to prepare
 the configuration. It might be in any format supported by Zend_Config. Here is an
 example in YAML for MySQL:
 
@@ -192,7 +191,7 @@ In configuration file you need to provide the table name where the migrations wi
 be stored and a create statement. You can use one of the configurations provided
 in the config folder for some common RDBMS.
 
-Here is how the bootstrap file should look like:
+Here is how the bootstrap file should look:
 
 ```php
 <?php
@@ -392,11 +391,13 @@ $container['phpmig.sets'] = function ($container) {
     return array(
         'cms' => array(
             'adapter' => new Adapter\File\Flat('modules/migrationLogs/cms_migrations.log'),
-            'migrations_path' => 'migrations/cms'
+            'migrations_path' => 'migrations/cms',
+            'migrations_template_path' => 'PhpmigCmsTemplate.php'
         ),
         'blog' => array(
             'adapter' => new Adapter\File\Flat('modules/migrationLogs/blog_migrations.log'),
-            'migrations_path' => 'migrations/blog'
+            'migrations_path' => 'migrations/blog',
+            'migrations_template_path' => 'PhpmigBlogTemplate.php',
         )
     );
 };

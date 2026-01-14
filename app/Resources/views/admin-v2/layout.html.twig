@@ -1,0 +1,269 @@
+{% import "macro.html.twig" as web_macro %}
+{% import "admin-v2/macro.html.twig" as admin_macro %}
+{% import _self as self_macro %}
+
+{% set menu = menu|default(null) %}
+{% set currentMenu = permission(menu) %}
+{% set cloudSmsInfo = isOldSmsUser()|default(false) %}
+{% set lang = app.request.getLocale() %}
+{% set isSafari = (app.request.headers.get('User-Agent') matches '/Safari/') and (not (app.request.headers.get('User-Agent') matches '/Chrome/')) %}
+
+<!DOCTYPE html>
+<html lang="{{ lang }}" class="{% if lang == 'en' %}es-en-admin{% endif %}">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <meta name="renderer" content="webkit">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta content="{{ csrf_token('site') }}" name="csrf-token" />
+  <title>
+
+    {% block title %}
+      {{ currentMenu.name|trans({}, 'menu') }}
+      - {{ menu|parent_permission.name|trans({}, 'menu') }} -
+        {{ menu|parent_permission.code|parent_permission.name|trans({}, 'menu')  }}
+    {% endblock %}
+    {% if not setting('copyright.owned') %} | EduSoho{% endif %}
+  </title>
+
+  {% if setting('site.favicon') %}
+    <link rel="icon" href="{{ asset(setting('site.favicon')) }}" type="image/x-icon" />
+    <link href="{{ asset(setting('site.favicon')) }}" rel="shortcut icon" />
+  {% endif %}
+
+  {% block stylesheets %}
+    <link href="{{ asset('assets/libs/gallery2/bootstrap/3.1.1/css/bootstrap.css') }}" rel="stylesheet" />
+    <link href="{{ asset('static-dist/app/css/admin.css') }}" rel="stylesheet" />
+    <link href="{{ asset('static-dist/app/css/admin-v2.css') }}" rel="stylesheet" />
+    {% include 'css_loader.html.twig' %}
+  {% endblock %}
+
+  {% block javascripts %}{% endblock %}
+    <script src="{{ asset('assets/libs/jquery/1.11.2/jquery-admin-v2.js') }}"></script>
+    <script src="{{ asset('assets/libs/gallery2/bootstrap/bootstrap.js') }}"></script>
+    {% do load_script('widget/tooltip-widget') %}
+</head>
+{% block body %}
+  <body {% if bodyClass|default('') %}class="{{ bodyClass }}"{% endif %}>
+    <div class="ct-layout-container admin-layout-container">
+      <div class="cd-fixed-top">
+        <div class="ct-top-logo hidden-xs">
+          <a class="admin-navbar-brand" href="{{ url('admin_v2') }}">{% if not setting('copyright.owned') %}EduSoho{% endif %}</a>
+        </div>
+        <div class="navbar-header navbar-header--mobile visible-xs">
+          <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+            <i class="es-icon es-icon-menu"></i>
+          </button>
+          <a class="navbar-mobile-title" href="{{ url('admin_v2') }}">{{'admin.navbar.header.console_btn'|trans}}</a>
+        </div>
+        <div class="ct-layout-navbar navbar-collapse navbar-collapse--mobile collapse">
+          {% include 'admin-v2/widget/navigation.html.twig' %}
+        </div>
+        <div class="ct-layout-person hidden-xs">
+          <ul class="cd-clearfix ct-layout-person__ul mb0">
+            <li class="ct-layout-person_center cd-dropdown" data-toggle="cd-dropdown">
+                <a class="user-avatar-toggle" href="javascript:;">
+                  <img class="cd-avatar cd-avatar-xs" style="padding: 1px;" src="{{ filepath(app.user.smallAvatar, 'avatar.png') }}">
+                  <span class="cd-ml8">{{ app.user.nickname }}</span>
+                </a>
+                <div class="dropdown-menu user-dropdown">
+                  <div class="text-center ptl">
+                    <div class="dropdown-arrow"></div>
+                    <a class="user-operate-link" href="{{ path('logout') }}"><i class="es-icon es-icon-logout cd-mr8"></i>{{ 'homepage.header.logout'|trans }}</a>
+                  </div>
+                </div>
+            </li>
+          </ul>
+        </div>
+        {% if not is_show_mall() %}
+          <div class="js-sass pull-right change-version-btn">
+            <a href="{{ path('homepage') }}" target="_blank">
+              <i class="es-icon es-icon-site icon-home"></i>{{ 'admin_v2.homepage.school_info.access_web'|trans }}
+            </a>
+          </div>
+        {% else %}
+          <div class="hidden pull-right change-version-btn cd-dropdown js-sass" data-toggle="cd-dropdown" data-trigger="hover">
+            <a href="{{ path('homepage') }}" target="_blank">
+              <i class="es-icon es-icon-site icon-home"></i>{{ 'admin_v2.homepage.school_info.access_web'|trans }}
+            </a>
+            <div class="dropdown-menu" style="width: 392px;left: -212px;">
+              <div class="js-mall-card" style="position: absolute;top:-2000px;left:0;z-index:1;padding: 24px;background-color: #fff;border-radius: 4px;">
+                <div style="display: flex;width: 300px;margin-bottom:20px;align-items:center;">
+                  <div style="width: 124px;height:58px;text-align: center;">
+                    <img src="{{ asset(setting('site.logo')|default('/static-dist/app/img/admin-v2/default-logo@2x.png')) }}" 
+                      style="max-width: 100%;max-height: 100%;margin-right:16px;border-radius: 2px;">
+                  </div>
+                  <div style="flex: 1;line-height: initial;font-size: 16px;font-weight: bold;">{{ setting('site.name') }}的商城</div>
+                </div>
+                <canvas class="js-marketing-qrcode1"></canvas>
+              </div>
+              <div class="school-share-container">
+                <div class="clearfix cd-mb16">
+                  <div class="pull-left share-label">{{ 'admin_v2.homepage.school_info.enter.label'|trans }}</div>
+                  <a class="pull-left" href="{{ path('homepage') }}" target="_blank">
+                    <div class="es-btn">{{ 'admin_v2.homepage.school_info.enter.content'|trans }}</div>
+                  </a>
+                </div>
+                <div class="clearfix" style="margin-bottom: 12px;">
+                  <div class="pull-left share-label">{{ 'admin_v2.homepage.school_info.enter.marketing'|trans }}</div>
+                  <a class="hidden pull-left js-tooltip-twig-widget js-marketing"  href="{{ path('admin_v2_marketing_mall') }}" target="_blank">
+                    <div class="es-btn open-btn js-twig-widget-tips" data-placement="bottom">{{ 'admin_v2.homepage.school_info.enter.start_marketing'|trans }}</div>
+                    <div class="js-twig-widget-html" style="display:none;">
+                      <div style="color: #333;">{{ 'admin_v2.homepage.school_info.enter.start_marketing_tooltip'|trans }}</div>
+                    </div>
+                  </a>
+                  <div class="pull-left text-14 js-marketing" style="color: #86909C;line-height:32px;margin-left:12px;">
+                    {{ 'admin_v2.homepage.school_info.enter.copy_link_tips'|trans }}
+                  </div>
+                </div>
+                {# info-disable #}
+                <div class="js-share-container" style="padding: 16px;background-color: #F7F8FA;border-radius: 2px;">
+                  <div class="disabled-mask"></div>  
+                  <div style="margin-bottom:16px;font-size: 14px;line-height: 22px;color: #272E3B;font-weight:400;">
+                    {{ 'admin_v2.homepage.school_info.enter.link_share'|trans }}
+                  </div>
+                  <div style="display: flex;border: 1px solid #E5E6EB;border-radius: 2px;line-height:32px;font-weight:400;">
+                    <div class="text-overflow js-marketing-url" 
+                      style="width: 225px;height: 32px;padding:0 12px;border-right: 1px solid #E5E6EB;color: #1D2129;">
+                    </div>
+                    <div class="js-copy-link"
+                      data-clipboard-text=""
+                      style="width: 85px;height:32px;font-size:14px;font-weight:400;text-align:center;line-height: 32px;color: #272E3B;cursor:pointer;">
+                        {{ 'admin_v2.homepage.school_info.enter.copy_btn'|trans }}
+                      </div>
+                  </div>
+                  <div style="margin-top: 4px;font-size:14px;line-height:22px;">
+                    {{ 'admin_v2.homepage.school_info.enter.link_tips1'|trans }}
+                    <img style="width:16px;margin:0 4px;" src="{{ asset('static-dist/app/img/icon/icon-qq.png') }}" />
+                    <img style="width:16px;margin-right:4px;" src="{{ asset('static-dist/app/img/icon/icon-weixin.png') }}" />
+                    {{ 'admin_v2.homepage.school_info.enter.link_tips2'|trans }}
+                  </div>
+                  <div style="margin-top: 24px;color: #272E3B;font-size:14px;line-height:22px;margin-bottom:16px;">
+                    {{ 'admin_v2.homepage.school_info.enter.qrcode_share'|trans }}
+                  </div>
+                  <div class="clearfix">
+                    <div class="pull-left" style="margin-right: 12px;width:80px;height:80px;">
+                      <img class="js-marketing-default-qrcode" 
+                        src="{{ asset('/static-dist/app/img/admin-v2/default-code.png') }}" 
+                        style="width: 80px;margin-left: 4px;" />
+                      <canvas class="hidden js-marketing-qrcode2"></canvas>
+                    </div>
+                    <div class="pull-left">
+                      <div class="download-btn js-download-btn">{{ 'admin_v2.homepage.school_info.enter.download_qrcode'|trans }}</div>
+                      <div class="text-14" style="color: #86909C;">
+                        {{ 'admin_v2.homepage.school_info.enter.qrcode_share_tips'|trans }}
+                        <img style="width:16px;margin:0 4px;" src="{{ asset('static-dist/app/img/icon/icon-qq.png') }}" />
+                        <img style="width:16px;" src="{{ asset('static-dist/app/img/icon/icon-weixin.png') }}" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+      <div class="cd-layout-main">
+        {% if isSafari %}
+          {% include 'admin-v2/default/safari-notify-modal.html.twig' %}
+        {% endif %}
+        {% block container %}
+          {% block content %}
+            {% include 'admin-v2/widget/side-bar.html.twig' %}
+            <div class="cd-layout-aside">
+              <div class="cd-layout-aside_bread"></div>
+              <div class="cd-layout-adside_content">
+                <div class="clearfix page-header pvm">
+                  {% block page_flash_message %}{% endblock %}
+                  <h1 class="pull-left">
+                      {% block page_title %}
+                          {{ currentMenu.code|parent_permission.name|trans({}, 'menu') }}
+                      {% endblock %}
+                  </h1>
+                  <div class="pull-right">
+
+                      {% block page_buttons %}
+
+
+                        {% if currentMenu.mode|default('') == 'capsules' and capsule|default(false) %}
+                          {% for m in sub_permissions(permission(capsule).code,'topBtn') if m.visible is not defined or eval_expression(m.visible) %}
+                            {{ self_macro.menu_link_html(_context, m, 'btn btn-success btn-sm') }}
+                          {% endfor %}
+                        {% else %}
+                          {% for m in sub_permissions(currentMenu.code,'topBtn') if m.visible is not defined or eval_expression(m.visible) %}
+                            {% set class = m.class|default() ? "btn btn-sm " ~  m.class : 'btn btn-success btn-sm' %}
+                            {{ self_macro.menu_link_html(_context, m, class) }}
+                          {% endfor %}
+                        {% endif %}
+                      {% endblock %}
+
+                  </div>
+                </div>
+                {% block content_header %}{% endblock %}
+                {% block tabs %}{% include 'admin-v2/widget/tabs.html.twig' %}{% endblock %}
+                {% block capsule %}{% endblock %}
+                {% block main %}
+                {% endblock %}
+              </div>
+            </div>
+          {% endblock %}
+        {% endblock %}
+      </div>
+    </div>
+
+
+    {% block footer %}
+      <div class="site-analytics-section">
+        {{ setting('site.analytics')|raw }}
+      </div>
+
+      {% if setting('siteTrace.enabled')|default(false) %}
+        {{ setting('siteTrace.script')|raw }}
+      {% endif %}
+    {% endblock %}
+
+
+    <div id="modal" class="modal" ></div>
+    <div id="attachment-modal" class="modal" ></div>
+    {% if setting('copyright.thirdCopyright') != 1 and is_show_feedback() %}
+      <div class="fixed-bar">
+        <a href="{{path('feedback')}}"  target='_blank' class="icon-question-text feedback">
+          <span>{{ 'admin.fixed_bar.product_feedback'|trans|raw }}</span>
+        </a>
+      </div>
+    {% endif %}
+
+    {% block scriptBoot %}
+      {% include 'old-script_boot.html.twig' with {script_main: asset('bundles/topxiaadmin/js/admin-app-v2.js')} %}
+      {% include 'admin-v2/default/script-webpack.html.twig' %}
+      {% include 'admin-v2/script_boot.html.twig'  with {state :0} %}
+    {% endblock %}
+
+    {% block faqSDK %}
+      {% include 'admin-v2/faq/sdk.html.twig' %}
+    {% endblock %}
+
+    {% if setting('copyright.thirdCopyright') != 1 and has_permission('admin_v2_cloud_center') %}
+      <input type="hidden" name="aiSurveyUrl" value="{{ path('admin_v2_ai_survey') }}">
+    {% endif %}
+  </body>
+{% endblock %}
+</html>
+
+{% macro menu_link_html(_context, menu, class) %}
+  <a
+  {% if class %}
+    class="{{ class }}"
+  {% endif %}
+  {% if menu.mode|default(null) == 'modal' %}
+    data-url="{{ permission_path(menu) }}"
+    data-toggle="modal"
+    data-target="#modal"
+  {% else %}
+    href="{{ permission_path(menu) }}"
+  {% endif %}
+  {% if menu.blank|default(false) %}
+    target="blank"
+  {% endif %}
+  >{{ menu.name|trans({}, 'menu') }}</a>
+{% endmacro %}

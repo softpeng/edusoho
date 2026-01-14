@@ -2,57 +2,56 @@
 
 namespace AppBundle\Controller\My;
 
-use Biz\Order\OrderRefundProcessor\OrderRefundProcessorFactory;
-use Biz\Order\Service\OrderService;
-use Symfony\Component\HttpFoundation\Request;
-use AppBundle\Common\Paginator;
 use AppBundle\Common\ArrayToolkit;
+use AppBundle\Common\Paginator;
 use AppBundle\Controller\BaseController;
+use Biz\Classroom\Service\ClassroomService;
+use Biz\Course\Service\CourseSetService;
+use Biz\Goods\Service\GoodsService;
+use Biz\Order\OrderException;
+use Codeages\Biz\Order\Service\OrderRefundService;
+use Codeages\Biz\Order\Service\OrderService;
+use Codeages\Biz\Order\Service\WorkflowService;
+use Codeages\Biz\Pay\Service\PayService;
+use Symfony\Component\HttpFoundation\Request;
 
 class OrderController extends BaseController
 {
     protected function getTimeRange($fields)
     {
-        if (isset($fields['startTime']) && isset($fields['endTime']) && $fields['startTime'] != '' && $fields['endTime'] != '') {
+        if (isset($fields['startTime']) && isset($fields['endTime']) && '' != $fields['startTime'] && '' != $fields['endTime']) {
             if ($fields['startTime'] > $fields['endTime']) {
                 return false;
             }
 
-            return array('startTime' => strtotime($fields['startTime']), 'endTime' => (strtotime($fields['endTime']) + 24 * 3600));
+            return ['startTime' => strtotime($fields['startTime']), 'endTime' => (strtotime($fields['endTime']) + 24 * 3600)];
         }
 
-        return array('startTime' => strtotime(date('Y-m', time())), 'endTime' => strtotime(date('Y-m-d', time() + 24 * 3600)));
+        return ['startTime' => strtotime(date('Y-m', time())), 'endTime' => strtotime(date('Y-m-d', time() + 24 * 3600))];
     }
 
     public function indexAction(Request $request)
     {
         $user = $this->getCurrentUser();
+        $status = $request->get('display_status');
+        $keyWord = $request->get('q');
+        $payWays = $request->get('payWays');
 
-        $conditions = array(
-            'userId' => $user['id'],
-            'status' => $request->get('status'),
-        );
-
-        $conditions['startTime'] = 0;
-        $conditions['endTime'] = time();
-        switch ($request->get('lastHowManyMonths')) {
-            case 'oneWeek':
-                $conditions['startTime'] = $conditions['endTime'] - 7 * 24 * 3600;
-                break;
-            case 'twoWeeks':
-                $conditions['startTime'] = $conditions['endTime'] - 14 * 24 * 3600;
-                break;
-            case 'oneMonth':
-                $conditions['startTime'] = $conditions['endTime'] - 30 * 24 * 3600;
-                break;
-            case 'twoMonths':
-                $conditions['startTime'] = $conditions['endTime'] - 60 * 24 * 3600;
-                break;
-            case 'threeMonths':
-                $conditions['startTime'] = $conditions['endTime'] - 90 * 24 * 3600;
-                break;
+        $conditions = [
+            'user_id' => $user['id'],
+        ];
+        if (!empty($status)) {
+            $conditions['display_status'] = $status;
         }
-        $conditions['payment'] = $request->get('payWays');
+
+        if (!empty($keyWord)) {
+            $conditions['order_item_title'] = $keyWord;
+        }
+
+        if (!empty($payWays)) {
+            $conditions['payment'] = $payWays;
+        }
+
         $paginator = new Paginator(
             $request,
             $this->getOrderService()->countOrders($conditions),
@@ -61,87 +60,70 @@ class OrderController extends BaseController
 
         $orders = $this->getOrderService()->searchOrders(
             $conditions,
-            'latest',
+            ['created_time' => 'DESC'],
             $paginator->getOffsetCount(),
             $paginator->getPerPageCount()
         );
 
-        $waitToBePaidCountConditions = array('userId' => $user['id'], 'status' => 'created');
-        $waitToBePaidCount = $this->getOrderService()->countOrders($waitToBePaidCountConditions);
+        $orderIds = ArrayToolkit::column($orders, 'id');
+        $orderSns = ArrayToolkit::column($orders, 'sn');
+        $orderItems = $this->getOrderService()->findOrderItemsByOrderIds($orderIds);
+        $orderItems = ArrayToolkit::index($orderItems, 'order_id');
 
-        foreach ($orders as $index => $expiredOrderToBeUpdated) {
-            if ((($expiredOrderToBeUpdated['createdTime'] + 48 * 60 * 60) < time()) && ($expiredOrderToBeUpdated['status'] == 'created')) {
-                $this->getOrderService()->cancelOrder($expiredOrderToBeUpdated['id']);
-                $orders[$index]['status'] = 'cancelled';
-                $waitToBePaidCount -= 1;
-            }
+        $paymentTrades = $this->getPayService()->findTradesByOrderSns($orderSns);
+        $paymentTrades = ArrayToolkit::index($paymentTrades, 'order_sn');
+
+        $orderRefunds = $this->getOrderRefundService()->findRefundsByOrderIds($orderIds);
+        $orderRefunds = ArrayToolkit::index($orderRefunds, 'order_id');
+
+        $goodsSpecs = $this->getGoodsService()->findGoodsSpecsByIds(ArrayToolkit::column($orderItems, 'target_id'));
+        $goodsSpecs = ArrayToolkit::index($goodsSpecs, 'id');
+        foreach ($orders as &$order) {
+            $order['item'] = empty($orderItems[$order['id']]) ? [] : $orderItems[$order['id']];
+            $order['trade'] = empty($paymentTrades[$order['sn']]) ? [] : $paymentTrades[$order['sn']];
+            $order['refund'] = empty($orderRefunds[$order['id']]) ? [] : $orderRefunds[$order['id']];
+            $order['goodsId'] = empty($goodsSpecs[$order['item']['target_id']]) ? '' : $goodsSpecs[$order['item']['target_id']]['goodsId'];
+            $order['targetId'] = empty($goodsSpecs[$order['item']['target_id']]) ? '' : $goodsSpecs[$order['item']['target_id']]['targetId'];
         }
 
-        return $this->render('my-order/index.html.twig', array(
+        return $this->render('my-order/order/index.html.twig', [
             'orders' => $orders,
             'paginator' => $paginator,
             'request' => $request,
-            'waitToBePaidCount' => $waitToBePaidCount,
-        ));
+        ]);
     }
 
     public function detailAction(Request $request, $id)
     {
-        $currentUser = $this->getCurrentUser();
         $order = $this->tryManageOrder($id);
 
-        $user = $this->getUserService()->getUser($order['userId']);
+        $user = $this->getUserService()->getUser($order['user_id']);
 
-        $orderLogs = $this->getOrderService()->findOrderLogs($order['id']);
+        $orderLogs = $this->getOrderService()->findOrderLogsByOrderId($order['id']);
 
-        $users = $this->getUserService()->findUsersByIds(ArrayToolkit::column($orderLogs, 'userId'));
+        $orderItems = $this->getOrderService()->findOrderItemsByOrderId($order['id']);
 
-        return $this->render('my-order/detail-modal.html.twig', array(
+        $paymentTrade = $this->getPayService()->getTradeByTradeSn($order['trade_sn']);
+
+        $orderDeducts = $this->getOrderService()->findOrderItemDeductsByOrderId($order['id']);
+
+        $users = $this->getUserService()->findUsersByIds(ArrayToolkit::column($orderLogs, 'user_id'));
+
+        return $this->render('my-order/detail-modal.html.twig', [
             'order' => $order,
             'user' => $user,
+            'orderItems' => $orderItems,
+            'paymentTrade' => $paymentTrade,
             'orderLogs' => $orderLogs,
+            'orderDeducts' => $orderDeducts,
             'users' => $users,
-        ));
-    }
-
-    public function refundsAction(Request $request)
-    {
-        $user = $this->getCurrentUser();
-
-        $paginator = new Paginator(
-            $request,
-            $this->getOrderService()->findUserRefundCount($user['id']),
-            20
-        );
-
-        $refunds = $this->getOrderService()->findUserRefunds(
-            $user['id'],
-            $paginator->getOffsetCount(),
-            $paginator->getPerPageCount()
-        );
-
-        $orders = $this->getOrderService()->findOrdersByIds(ArrayToolkit::column($refunds, 'orderId'));
-
-        return $this->render('my-order/refunds.html.twig', array(
-            'refunds' => $refunds,
-            'orders' => $orders,
-            'paginator' => $paginator,
-        ));
-    }
-
-    public function cancelRefundAction(Request $request, $id)
-    {
-        $order = $this->tryManageOrder($id);
-        $processor = OrderRefundProcessorFactory::create($order['targetType']);
-        $processor->cancelRefundOrder($id);
-
-        return $this->createJsonResponse(true);
+        ]);
     }
 
     public function cancelAction(Request $request, $id)
     {
         $this->tryManageOrder($id);
-        $order = $this->getOrderService()->cancelOrder($id, '取消订单');
+        $order = $this->getWorkflowService()->close($id, ['type' => 'manual']);
 
         return $this->createJsonResponse(true);
     }
@@ -151,8 +133,8 @@ class OrderController extends BaseController
         $currentUser = $this->getCurrentUser();
         $order = $this->getOrderService()->getOrder($id);
 
-        if ($currentUser['id'] != $order['userId']) {
-            throw $this->createAccessDeniedException('该订单不属于当前登录用户');
+        if ($currentUser['id'] != $order['user_id']) {
+            $this->createNewException(OrderException::BEYOND_AUTHORITY());
         }
 
         return $order;
@@ -167,10 +149,50 @@ class OrderController extends BaseController
     }
 
     /**
-     * @return CourseOrderService
+     * @return WorkflowService
      */
-    protected function getCourseOrderService()
+    protected function getWorkflowService()
     {
-        return $this->getBiz()->service('Course:CourseOrderService');
+        return $this->createService('Order:WorkflowService');
+    }
+
+    /**
+     * @return PayService
+     */
+    protected function getPayService()
+    {
+        return $this->createService('Pay:PayService');
+    }
+
+    /**
+     * @return OrderRefundService
+     */
+    protected function getOrderRefundService()
+    {
+        return $this->createService('Order:OrderRefundService');
+    }
+
+    /**
+     * @return CourseSetService
+     */
+    protected function getCourseSetService()
+    {
+        return $this->createService('Course:CourseSetService');
+    }
+
+    /**
+     * @return ClassroomService
+     */
+    protected function getClassroomService()
+    {
+        return $this->createService('Classroom:ClassroomService');
+    }
+
+    /**
+     * @return GoodsService
+     */
+    protected function getGoodsService()
+    {
+        return $this->createService('Goods:GoodsService');
     }
 }

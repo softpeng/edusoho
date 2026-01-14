@@ -29,6 +29,8 @@ class CloudSearchProcessor extends BizAware implements ProcessorInterface
             'users' => $namespace.'\\Resource\\Users',
             'user' => $namespace.'\\Resource\\User',
             'chaos_threads' => $namespace.'\\Resource\\ChaosThreads',
+            'classroom' => $namespace.'\\Resource\\Classroom',
+            'classrooms' => $namespace.'\\Resource\\Classrooms',
         );
 
         if (!isset($classMap[$type])) {
@@ -58,7 +60,7 @@ class CloudSearchProcessor extends BizAware implements ProcessorInterface
     public function execute(Request $request)
     {
         $method = strtolower($request->getMethod());
-        if ($method != 'get') {
+        if ('get' != $method) {
             throw new \InvalidArgumentException(sprintf('unsupported method: %s', $method));
         }
 

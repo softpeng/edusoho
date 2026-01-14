@@ -10,11 +10,7 @@
 
 {% block detail_content %}
 
-<ul class="breadcrumb">
-  <li><a href="{{ path('my_course_show', {id: course.id, tab: 'threads'}) }}">{{'course.thread'|trans}}</a></li>
-  <li><a href="{{ path('course_thread_show', {courseId:thread.courseId, threadId:thread.id}) }}">{{ thread.title|plain_text(10) }}</a></li>
-  <li class="active">{{'course.thread.post_form.edit_btn'|trans}}</li>
-</ul>
+{% include 'common/anti-brush-captcha.html.twig' %}
 
 <form id="thread-post-form" method="post"
   {% if post %}
@@ -55,11 +51,12 @@
     <div class="controls clearfix">
       {{ form_rest(form) }}
       <button type="button" class="btn btn-primary pull-right js-btn-thread-save" data-loading-text="{{'course.thread.post_form.create_tips'|trans}}">{{'course.thread.post_form.create_btn'|trans}}</button>
-      <a href="{{ path('my_course_show', {id: course.id, tab: 'threads'}) }}" class="btn btn-link pull-right">{{'form.btn.cancel'|trans}}</a>
+      <a href="{{ path('my_course_show', {id: course.id, tab: thread.type, type: thread.type}) }}" class="btn btn-link pull-right">{{'form.btn.cancel'|trans}}</a>
     </div>
   </div>
 
   <input type="hidden" name="_csrf_token" value="{{ csrf_token('site') }}">
+  <input type="hidden" name="_dragCaptchaToken">
 </form>
 
 {% endblock %}

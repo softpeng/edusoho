@@ -2,9 +2,10 @@
 
 namespace Topxia\Api\Resource;
 
-use Monolog\Logger;
-use Monolog\Handler\StreamHandler;
+use AppBundle\Util\CdnUrl;
 use Codeages\Biz\Framework\Context\Biz;
+use Monolog\Handler\StreamHandler;
+use Monolog\Logger;
 use Topxia\Service\Common\ServiceKernel;
 
 abstract class BaseResource
@@ -39,6 +40,7 @@ abstract class BaseResource
     protected function callFilter($name, $res)
     {
         global $app;
+
         return $app["res.{$name}"]->filter($res);
     }
 
@@ -47,6 +49,7 @@ abstract class BaseResource
         foreach ($res as $key => $one) {
             $res[$key] = $this->callFilter($name, $one);
         }
+
         return $res;
     }
 
@@ -58,6 +61,7 @@ abstract class BaseResource
     protected function callSimplify($name, $res)
     {
         global $app;
+
         return $app["res.{$name}"]->simplify($res);
     }
 
@@ -66,6 +70,7 @@ abstract class BaseResource
         foreach ($res as $key => $one) {
             $res[$key] = $this->callSimplify($name, $one);
         }
+
         return $res;
     }
 
@@ -88,14 +93,14 @@ abstract class BaseResource
     {
         $userAgent = strtolower($userAgent);
 
-        $ios = array("iphone", "ipad", "ipod");
+        $ios = ['iphone', 'ipad', 'ipod'];
         foreach ($ios as $keyword) {
             if (strpos($userAgent, $keyword) > -1) {
                 return 'ios';
             }
         }
 
-        if (strpos($userAgent, "Android") > -1) {
+        if (strpos($userAgent, 'Android') > -1) {
             return 'android';
         }
 
@@ -104,24 +109,24 @@ abstract class BaseResource
 
     protected function error($code, $message)
     {
-        return array('error' => array(
+        return ['error' => [
             'code' => $code,
             'message' => $message,
-        ));
+        ]];
     }
 
     protected function wrap($resources, $total)
     {
         if (is_array($total)) {
-            return array('resources' => $resources, 'next' => $total);
+            return ['resources' => $resources, 'next' => $total];
         } else {
-            return array('resources' => $resources, 'total' => $total ?: 0);
+            return ['resources' => $resources, 'total' => $total ?: 0];
         }
     }
 
     protected function simpleUsers($users)
     {
-        $newArray = array();
+        $newArray = [];
         foreach ($users as $key => $user) {
             $newArray[$key] = $this->simpleUser($user);
         }
@@ -131,52 +136,61 @@ abstract class BaseResource
 
     protected function simpleUser($user)
     {
-        $simple = array();
+        $simple = [];
+        $user = $this->destroyedNicknameFilter($user);
 
         $simple['id'] = $user['id'];
         $simple['nickname'] = $user['nickname'];
         $simple['title'] = $user['title'];
         $simple['roles'] = $user['roles'];
         $simple['avatar'] = $this->getFileUrl($user['smallAvatar']);
+        $simple['uuid'] = $user['uuid'];
 
         return $simple;
+    }
+
+    protected function destroyedNicknameFilter($user)
+    {
+        $user['nickname'] = (1 == $user['destroyed']) ? '帐号已注销' : $user['nickname'];
+
+        return $user;
     }
 
     protected function nextCursorPaging($currentCursor, $currentStart, $currentLimit, $currentRows)
     {
         $end = end($currentRows);
         if (empty($end)) {
-            return array(
+            return [
                 'cursor' => $currentCursor + 1,
                 'start' => 0,
                 'limit' => $currentLimit,
                 'eof' => true,
-            );
+            ];
         }
 
         if (count($currentRows) < $currentLimit) {
-            return array(
+            return [
                 'cursor' => $end['updatedTime'] + 1,
                 'start' => 0,
                 'limit' => $currentLimit,
                 'eof' => true,
-            );
+            ];
         }
 
         if ($end['updatedTime'] != $currentCursor) {
-            $next = array(
+            $next = [
                 'cursor' => $end['updatedTime'],
                 'start' => 0,
                 'limit' => $currentLimit,
                 'eof' => false,
-            );
+            ];
         } else {
-            $next = array(
+            $next = [
                 'cursor' => $currentCursor,
                 'start' => $currentStart + $currentLimit,
                 'limit' => $currentLimit,
                 'eof' => false,
-            );
+            ];
         }
 
         return $next;
@@ -188,39 +202,49 @@ abstract class BaseResource
         if (empty($matches)) {
             return $text;
         }
-        foreach ($matches[1] as $url) {
-            $text = str_replace($url, $this->getFileUrl($url), $text);
+
+        $urls = array_unique($matches[1]);
+        foreach ($urls as $url) {
+            $text = str_replace($url, $this->getFileUrl($url, '', 'content'), $text);
         }
 
         return $text;
     }
 
-    public function getFileUrl($path, $defaultKey = '')
+    /**
+     * @param $path
+     * @param string $defaultKey
+     * @param string $cdnType
+     *
+     * @return mixed|string
+     */
+    public function getFileUrl($path, $defaultKey = '', $cdnType = 'default')
     {
         if (empty($path)) {
             if (empty($defaultKey)) {
                 return '';
             }
 
-            $defaultSetting = $this->getSettingService()->get('default', array());
-            if (($defaultKey == 'course.png' && !empty($defaultSetting['defaultCoursePicture'])) || $defaultKey == 'avatar.png' && !empty($defaultSetting['defaultAvatar']) && empty($defaultSetting[$defaultKey])) {
+            $defaultSetting = $this->getSettingService()->get('default', []);
+            if (('course.png' == $defaultKey && !empty($defaultSetting['defaultCoursePicture'])) || 'avatar.png' == $defaultKey && !empty($defaultSetting['defaultAvatar']) && empty($defaultSetting[$defaultKey])) {
                 $path = $defaultSetting[$defaultKey];
             } else {
-                return $this->getHttpHost().'/assets/img/default/'.$defaultKey;
+                return $this->getBaseUrl($cdnType).'/assets/img/default/'.$defaultKey;
             }
         }
 
-        if (strpos($path, $this->getHttpHost()."://") !== false) {
+        if (false !== strpos($path, $this->getHttpHost().'://')) {
             return $path;
         }
-        if (strpos($path, "http://") !== false || strpos($path, "https://") !== false) {
+        if (false !== strpos($path, 'http://') || false !== strpos($path, 'https://')) {
             return $path;
         }
 
         $path = str_replace('public://', '', $path);
         $path = str_replace('files/', '', $path);
-        $files = strpos($path, '/') == 0 ? '/files' : '/files/';
-        $path = $this->getHttpHost().$files."{$path}";
+        $files = 0 == strpos($path, '/') ? '/files' : '/files/';
+        $path = $this->getBaseUrl($cdnType).$files."{$path}";
+
         return $path;
     }
 
@@ -229,7 +253,8 @@ abstract class BaseResource
         if (empty($path)) {
             return '';
         }
-        $path = $this->getHttpHost()."/assets/{$path}";
+        $path = $this->getBaseUrl()."/assets/{$path}";
+
         return $path;
     }
 
@@ -244,24 +269,50 @@ abstract class BaseResource
         if (!empty($https) && 'off' !== strtolower($https)) {
             return 'https';
         }
+
         return 'http';
     }
 
-    protected function generateUrl($route, $parameters = array())
+    protected function isSsl()
+    {
+        return 'https' == $this->getSchema();
+    }
+
+    protected function getCdn($type = 'default')
+    {
+        $cdn = new CdnUrl();
+
+        return $cdn->get($type);
+    }
+
+    protected function getBaseUrl($type = 'default')
+    {
+        $cdnUrl = $this->getCdn($type);
+        if (!empty($cdnUrl)) {
+            return $this->getSchema().':'.$cdnUrl;
+        }
+
+        return $this->getHttpHost();
+    }
+
+    protected function generateUrl($route, $parameters = [])
     {
         global $app;
+
         return $app['url_generator']->generate($route, $parameters);
     }
 
     protected function render($templatePath, $args)
     {
         global $app;
+
         return $app['twig']->render($templatePath, $args);
     }
 
     protected function getCurrentUser()
     {
         $biz = $this->getBiz();
+
         return $biz['user'];
     }
 
@@ -309,5 +360,13 @@ abstract class BaseResource
     protected function getSettingService()
     {
         return $this->createService('System:SettingService');
+    }
+
+    /**
+     * @return \Biz\S2B2C\Service\S2B2CFacadeService
+     */
+    protected function getS2B2CFacadeService()
+    {
+        return $this->createService('S2B2C:S2B2CFacadeService');
     }
 }

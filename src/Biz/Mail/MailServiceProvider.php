@@ -4,10 +4,12 @@ namespace Biz\Mail;
 
 use AppBundle\Extension\Extension;
 use Biz\Mail\Template\EffectEmailResetPasswordTemplate;
+use Biz\Mail\Template\EmailImportUserEmailTemplate;
 use Biz\Mail\Template\EmailRegistrationTemplate;
 use Biz\Mail\Template\EmailResetEmailTemplate;
 use Biz\Mail\Template\EmailResetPasswordTemplate;
 use Biz\Mail\Template\EmailSystemSelfTestTemplate;
+use Biz\Mail\Template\EmailVerifyCodeTemplate;
 use Biz\Mail\Template\EmailVerifyEmailTemplate;
 use Biz\Mail\Template\EmptyTemplate;
 use Pimple\Container;
@@ -41,7 +43,7 @@ class MailServiceProvider extends Extension implements ServiceProviderInterface
                 /*
                  * @var Mail $mail
                  */
-                if (isset($cloudConfig['status']) && $cloudConfig['status'] == 'enable') {
+                if (isset($cloudConfig['status']) && 'enable' == $cloudConfig['status']) {
                     $mail = $biz['cloud_mail']($mailOptions);
                 } else {
                     $mail = $biz['normal_mail']($mailOptions);
@@ -111,6 +113,20 @@ class MailServiceProvider extends Extension implements ServiceProviderInterface
 
         $biz['email_verify_email_template'] = function ($biz) {
             $template = new EmailVerifyEmailTemplate();
+            $template->setBiz($biz);
+
+            return $template;
+        };
+
+        $biz['email_import_user_email_template'] = function ($biz) {
+            $template = new EmailImportUserEmailTemplate();
+            $template->setBiz($biz);
+
+            return $template;
+        };
+
+        $biz['email_verify_code_template'] = function ($biz) {
+            $template = new EmailVerifyCodeTemplate();
             $template->setBiz($biz);
 
             return $template;

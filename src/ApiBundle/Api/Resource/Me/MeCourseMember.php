@@ -2,16 +2,15 @@
 
 namespace ApiBundle\Api\Resource\Me;
 
+use AgentBundle\Biz\AgentConfig\Service\AgentConfigService;
+use AgentBundle\Biz\StudyPlan\Service\StudyPlanService;
+use ApiBundle\Api\Annotation\ResponseFilter;
 use ApiBundle\Api\ApiRequest;
-use ApiBundle\Api\Exception\ErrorCode;
 use ApiBundle\Api\Resource\AbstractResource;
+use Biz\Contract\Service\ContractService;
+use Biz\Course\MemberException;
 use Biz\Course\Service\CourseService;
 use Biz\Course\Service\MemberService;
-use Biz\Order\OrderRefundProcessor\OrderRefundProcessorFactory;
-use Biz\Order\Service\OrderService;
-use ApiBundle\Api\Annotation\ResponseFilter;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class MeCourseMember extends AbstractResource
 {
@@ -21,10 +20,34 @@ class MeCourseMember extends AbstractResource
     public function get(ApiRequest $request, $courseId)
     {
         $courseMember = $this->getCourseMemberService()->getCourseMember($courseId, $this->getCurrentUser()->getId());
-        $this->getOCUtil()->single($courseMember, array('userId'));
+        $this->getOCUtil()->single($courseMember, ['userId']);
 
         if ($courseMember) {
             $courseMember['access'] = $this->getCourseService()->canLearnCourse($courseId);
+            $courseMember['expire'] = $this->getCourseMemberExpire($courseMember);
+        }
+
+        // 获取班级课程有效期
+        $course = $this->getCourseService()->getCourse($courseId);
+        if ($course['parentId']) {
+            $classroom = $this->getClassroomService()->getClassroomByCourseId($course['id']);
+            $classroomMember = $this->invokeResource(new ApiRequest("/api/me/classroom_members/{$classroom['id']}", 'GET'));
+
+            if (!empty($classroomMember['expire'])) {
+                $courseMember['expire']['status'] = $classroomMember['expire']['status'];
+                $courseMember['expire']['deadline'] = empty($classroomMember['expire']['deadline']) ? 0 : strtotime($classroomMember['expire']['deadline']);
+            }
+        }
+        if ($courseMember) {
+            $goodsKey = empty($classroom) ? 'course_'.$course['id'] : 'classroom_'.$classroom['id'];
+            $signRecord = $this->getContractService()->getSignRecordByUserIdAndGoodsKey($this->getCurrentUser()->getId(), $goodsKey);
+            $courseMember['isContractSigned'] = empty($signRecord) ? 0 : 1;
+
+            $studyPlanConfig = $this->getAgentConfigService()->getAgentConfigByCourseId($courseId);
+            $courseMember['aiTeacherEnabled'] = !empty($studyPlanConfig['isActive']);
+            $courseMember['studyPlanGenerated'] = $this->getStudyPlanService()->isUserStudyPlanGenerated($this->getCurrentUser()->getId(), $courseId);
+            $courseMember['aiTeacherDomain'] = $studyPlanConfig['domainId'] ?? '';
+            $courseMember['courseSetTitle'] = $course['courseSetTitle'];
         }
 
         return $courseMember;
@@ -32,29 +55,90 @@ class MeCourseMember extends AbstractResource
 
     public function remove(ApiRequest $request, $courseId)
     {
-        $reason = $request->request->get('reason', '从App退出课程');
-        $processor = OrderRefundProcessorFactory::create('course');
+        $note = $this->filterUtf8mb4($request->query->get('note')) ? $this->filterUtf8mb4($request->query->get('note')) : '从App退出课程';
 
         $user = $this->getCurrentUser();
-        $member = $processor->getTargetMember($courseId, $user['id']);
 
-        if (empty($member) || empty($member['orderId'])) {
-            throw new BadRequestHttpException('您不是学员或尚未购买，不能退学。', null, ErrorCode::INVALID_ARGUMENT);
+        $this->getCourseService()->tryTakeCourse($courseId);
+
+        $member = $this->getCourseMemberService()->getCourseMember($courseId, $user->getId());
+
+        if (empty($member)) {
+            throw MemberException::NOTFOUND_MEMBER();
         }
 
-        $order = $this->getOrderService()->getOrder($member['orderId']);
+        $this->getCourseMemberService()->removeStudent($courseId, $user->getId(), [
+            'reason' => $note,
+            'reason_type' => 'exit',
+        ]);
 
-        if (empty($order)) {
-            throw new NotFoundHttpException('', null, ErrorCode::RESOURCE_NOT_FOUND);
+        return ['success' => true];
+    }
+
+    private function getCourseMemberExpire($member)
+    {
+        $course = $this->getCourseService()->getCourse($member['courseId']);
+        if (empty($course) || empty($member)) {
+            return [
+                'status' => 0,
+                'deadline' => 0,
+            ];
         }
 
-        if ($order['targetType'] == 'groupSell') {
-            throw new BadRequestHttpException('组合购买课程不能退出。', null, ErrorCode::INVALID_ARGUMENT);
+        if ('forever' == $course['expiryMode'] && 'vip_join' != $member['joinedChannel']) {
+            return [
+                'status' => 1,
+                'deadline' => $member['deadline'],
+            ];
         }
 
-        $processor->applyRefundOrder($member['orderId'], 0, array('note' => $reason), null);
+        $deadline = $member['deadline'];
 
-        return array('success' => true);
+        // 比较:学员有效期和课程有效期
+        $courseDeadline = $this->getCourseDeadline($course);
+        if ($courseDeadline) {
+            $deadline = $deadline < $courseDeadline ? $deadline : $courseDeadline;
+        }
+
+        // 会员加入情况下的有效期
+        if ('vip_join' == $member['joinedChannel']) {
+            $deadline = $this->getVipDeadline($course, $member, $deadline);
+        }
+
+        return [
+            'status' => $deadline < time() ? 0 : 1,
+            'deadline' => $deadline,
+        ];
+    }
+
+    private function getCourseDeadline($course)
+    {
+        $deadline = 0;
+        if ('date' == $course['expiryMode'] || 'end_date' == $course['expiryMode']) {
+            $deadline = $course['expiryEndDate'];
+        }
+
+        return $deadline;
+    }
+
+    private function getVipDeadline($course, $member, $deadline)
+    {
+        $vipApp = $this->getAppService()->getAppByCode('vip');
+        if (empty($vipApp)) {
+            return 0;
+        }
+
+        $status = $this->getVipService()->checkUserVipRight($member['user']['id'], 'course', $course['id']);
+        if ('ok' !== $status) {
+            return 0;
+        }
+
+        $vip = $this->getVipService()->getMemberByUserId($member['user']['id']);
+        if (!$deadline) {
+            return $vip['deadline'];
+        } else {
+            return $deadline < $vip['deadline'] ? $deadline : $vip['deadline'];
+        }
     }
 
     /**
@@ -66,18 +150,49 @@ class MeCourseMember extends AbstractResource
     }
 
     /**
-     * @return OrderService
-     */
-    private function getOrderService()
-    {
-        return $this->service('Order:OrderService');
-    }
-
-    /**
      * @return MemberService
      */
     private function getCourseMemberService()
     {
         return $this->service('Course:MemberService');
+    }
+
+    private function getAppService()
+    {
+        return $this->service('CloudPlatform:AppService');
+    }
+
+    protected function getVipService()
+    {
+        return $this->service('VipPlugin:Vip:VipService');
+    }
+
+    protected function getClassroomService()
+    {
+        return $this->getBiz()->service('Classroom:ClassroomService');
+    }
+
+    /**
+     * @return ContractService
+     */
+    private function getContractService()
+    {
+        return $this->service('Contract:ContractService');
+    }
+
+    /**
+     * @return AgentConfigService
+     */
+    private function getAgentConfigService()
+    {
+        return $this->biz->service('AgentBundle:AgentConfig:AgentConfigService');
+    }
+
+    /**
+     * @return StudyPlanService
+     */
+    private function getStudyPlanService()
+    {
+        return $this->service('AgentBundle:StudyPlan:StudyPlanService');
     }
 }

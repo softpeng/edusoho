@@ -1,184 +1,149 @@
-import notify from 'common/notify';
-import sortList from 'common/sortable';
-
-export const sortablelist = (list) => {
-  let $list = $(list);
-  let data = $list.sortable("serialize").get();
-
-  let lessonNum = 0,
-    chapterNum = 0,
-    unitNum = 0;
-  $list.find('.task-manage-item').each(function () {
-    let $item = $(this);
-    if ($item.hasClass('js-task-manage-item')) {
-      if ($item.find('.number').length > 0) {
-        lessonNum++;
-        $item.find('.number').text(lessonNum);
-      }
-    } else if ($item.hasClass('task-manage-unit')) {
-      unitNum++;
-      $item.find('.number').text(unitNum);
-    } else if ($item.hasClass('task-manage-chapter')) {
-      chapterNum++;
-      unitNum = 0;
-      $item.find('.number').text(chapterNum);
-    }
-  });
-
-  $list.trigger('finished');
-
-  $.post($list.data('sortUrl'), { ids: data }, (response) => {
-
-  });
-}
-
-export const taskSortable = (list) => {
-  if ($(list).length) {
-    sortList({
-      element: list,
-      ajax: false,
-    }, (data) => {
-      sortablelist(list);
-    });
-  }
-}
+import {publish} from 'app/common/widget/publish';
 
 export const closeCourse = () => {
-  $('body').on('click', '.js-close-course', function (evt) {
+  $('body').on('click', '.js-close-course', (evt) => {
     let $target = $(evt.currentTarget);
-    if (!confirm(Translator.trans('course.manage.close_hint'))) {
-      return;
-    }
-
-    $.post($target.data('check-url'), function (data) {
-
-      if (data.warn) {
-        if (!confirm(Translator.trans(data.message))) {
+    cd.confirm({
+      title: Translator.trans('site.close'),
+      content: Translator.trans('course.manage.close_hint'),
+      okText: Translator.trans('site.confirm'),
+      cancelText: Translator.trans('site.cancel')
+    }).on('ok', () => {
+      $.post($target.data('checkUrl'), (data) => {
+        if (data.warn) {
+          cd.confirm({
+            title: Translator.trans('site.close'),
+            content: Translator.trans(data.message),
+            okText: Translator.trans('site.confirm'),
+            cancelText: Translator.trans('site.cancel')
+          }).on('ok', () => {
+            closeCourseAction($target);
+          });
           return;
         }
-      }
+        closeCourseAction($target);
+      });
+    });
+  });
+};
 
-      $.post($target.data('url'), function (data) {
+export const hideCourse = () => {
+  $('body').on('click', '.js-hide-course', (evt) => {
+    let $target = $(evt.currentTarget);
+    cd.confirm({
+      title: '<span class="es-icon es-icon-infooutline" style="color: #FAAD14; margin-right: 16px; font-size: 22px; line-height: 22px;"></span>' + Translator.trans('site.tips.delist'),
+      content: Translator.trans('course.manage.hide_hint'),
+      okText: Translator.trans('site.confirm'),
+      cancelText: Translator.trans('site.cancel')
+    }).on('ok', () => {
+      hideCourseAction($target);
+    });
+  });
+};
+
+const hideCourseAction = ($target) => {
+    $.post($target.data('url'), (data) => {
+      if (data.success) {
+        cd.message({type: 'success', message: Translator.trans('admin.courseSet.delist.success_hint')});
+        window.location.reload();
+      } else {
+        cd.message({type: 'danger', message: Translator.trans('admin.courseSet.delist.fail_hint') + ':' + data.message});
+      }
+    });
+}
+
+export const showCourse = () => {
+  $('body').on('click', '.js-show-course', (evt) => {
+    let $target = $(evt.currentTarget);
+    $.post($target.data('url'), (data) => {
+      if (data.success) {
+        cd.message({type: 'success', message: Translator.trans('course.manage.show_success_hint')});
+        window.location.reload();
+      } else {
+        cd.message({type: 'danger', message: Translator.trans('course.manage.show_fail_hint') + ':' + data.message});
+      }
+    });
+  });
+};
+
+const closeCourseAction = ($target) => {
+  $.post($target.data('url'), (data) => {
+    if (data.success) {
+      cd.message({type: 'success', message: Translator.trans('course.manage.close_success_hint')});
+      window.location.reload();
+    } else {
+      cd.message({type: 'danger', message: Translator.trans('course.manage.close_fail_hint') + ':' + data.message});
+    }
+  });
+};
+
+export const deleteCourse = () => {
+  $('body').on('click', '.js-delete-course', (evt) => {
+    let msg = 'course.manage.delete_hint';
+    let status = null;
+    $.ajax({
+      type: 'post',
+      url: $(evt.currentTarget).data('check-url'),
+      async: false,
+      success: function (data) {
+        status = data.status;
+        if (status === 'should_delete_mall_goods') {
+          msg = 'course.manage.mall_goods_exist.delete_hint';
+          if (data.redirect) {
+            window.location.href = data.redirect;
+          }
+        }
+        if (status === 'cannot_delete') {
+          cd.message({type: 'danger', message: Translator.trans('mall.goods.exist.delete_fail_hint')});
+        }
+      }
+    });
+    if (status === 'cannot_delete') {
+      return;
+    }
+    cd.confirm({
+      title: Translator.trans('site.delete'),
+      content: Translator.trans(msg),
+      okText: Translator.trans('site.confirm'),
+      cancelText: Translator.trans('site.cancel')
+    }).on('ok', () => {
+      $.post($(evt.currentTarget).data('url'), (data) => {
         if (data.success) {
-          notify('success', Translator.trans('course.manage.close_success_hint'));
-          location.reload();
+          cd.message({type: 'success', message: Translator.trans('site.delete_success_hint')});
+          if (data.redirect) {
+            window.location.href = data.redirect;
+          } else {
+            window.location.reload();
+          }
         } else {
-          notify('danger', Translator.trans('course.manage.close_fail_hint') + ':' + data.message);
+          cd.message({type: 'danger', message: Translator.trans('site.delete_fail_hint') + ':' + data.message});
         }
       });
     });
   });
 };
 
-export const deleteCourse = () => {
-  $('body').on('click', '.js-delete-course', function (evt) {
-    if (!confirm(Translator.trans('course.manage.delete_hint'))) {
-      return;
-    }
-    $.post($(evt.currentTarget).data('url'), function (data) {
-      if (data.success) {
-        notify('success', Translator.trans('site.delete_success_hint'));
-        if (data.redirect) {
-          window.location.href = data.redirect;
-        }else {
-          location.reload();
-        }
-      } else {
-        notify('danger', Translator.trans('site.delete_fail_hint') + ':' + data.message);
-      }
-    });
-  });
-};
-
 export const publishCourse = () => {
-  $('body').on('click', '.js-publish-course', function (evt) {
-    if (!confirm(Translator.trans('course.manage.publish_hint'))) {
-      return;
-    }
-    $.post($(evt.target).data('url'), function (data) {
-      if (data.success) {
-        notify('success', Translator.trans('course.manage.task_publish_success_hint'));
-        location.reload();
-      } else {
-        notify('danger', Translator.trans('course.manage.task_publish_fail_hint')+':' + data.message, {delay:5000});
-      }
-    });
-  });
-};
+  const info = {
+    title: 'course.manage.publish_title',
+    hint: 'course.manage.publish_hint',
+    success: 'course.manage.publish_success_hint',
+    fail: 'course.manage.publish_fail_hint'
+  };
 
-export const deleteTask = () => {
-  $('body').on('click', '.delete-item', function (evt) {
-    if ($(evt.currentTarget).data('type') == 'task') {
-      if (!confirm(Translator.trans('course.manage.task_delete_hint'))) {
-        return;
-      }
-    } else if ($(evt.currentTarget).data('type') == 'chapter') {
-      if (!confirm(Translator.trans('course.manage.chapter_delete_hint'))) {
-        return;
-      }
-    }
-    $.post($(evt.currentTarget).data('url'), function (data) {
-      if (data.success) {
-        notify('success', Translator.trans('site.delete_success_hint'));
-        $(evt.target).parents('.task-manage-item').remove();
-        sortablelist('#sortable-list');
-        console.log($('#sortable-list').children('li').length);
-        if($('#sortable-list').children('li').length < 1 && $('.js-task-empty').hasClass('hidden') ) {
-            $('.js-task-empty').removeClass('hidden');
-        }
-        document.location.reload();
-      } else {
-        notify('danger', Translator.trans('site.delete_fail_hint') + ':' + data.message);
-      }
-    });
-  });
-};
-
-export const publishTask = () => {
-  $('body').on('click', '.publish-item', (event) => {
-    $.post($(event.target).data('url'), function (data) {
-      if (data.success) {
-        var parentLi = $(event.target).closest('.task-manage-item');
-        notify('success', Translator.trans('course.manage.task_publish_success_hint'));
-        $(parentLi).find('.publish-item').addClass('hidden')
-        $(parentLi).find('.delete-item').addClass('hidden')
-        $(parentLi).find('.unpublish-item').removeClass('hidden')
-        $(parentLi).find('.publish-status').addClass('hidden')
-      } else {
-        notify('danger', Translator.trans('course.manage.task_publish_fail_hint') + ':' + data.message);
-      }
-    });
-  })
-};
-
-export const unpublishTask = () => {
-  $('body').on('click', '.unpublish-item', (event) => {
-    $.post($(event.target).data('url'), function (data) {
-      if (data.success) {
-        var parentLi = $(event.target).closest('.task-manage-item');
-        notify('success', Translator.trans('course.manage.task_unpublish_success_hint'));
-        $(parentLi).find('.publish-item').removeClass('hidden')
-        $(parentLi).find('.delete-item').removeClass('hidden')
-        $(parentLi).find('.unpublish-item').addClass('hidden')
-        $(parentLi).find('.publish-status').removeClass('hidden')
-      } else {
-        notify('danger', Translator.trans('course.manage.task_unpublish_fail_hint') + ':' + data.message);
-      }
-    });
-  })
+  publish('.js-publish-course', info);
 };
 
 export const showSettings = () => {
-  $("#sortable-list").on('click', '.js-item-content', (event) => {
+  $('#sortable-list').on('click', '.js-item-content', (event) => {
     console.log('click');
     let $this = $(event.currentTarget);
     let $li = $this.closest('.js-task-manage-item');
     if ($li.hasClass('active')) {
       $li.removeClass('active').find('.js-settings-list').stop().slideUp(500);
-    }
-    else {
+    } else {
       $li.addClass('active').find('.js-settings-list').stop().slideDown(500);
-      $li.siblings(".js-task-manage-item.active").removeClass('active').find('.js-settings-list').hide();
+      $li.siblings('.js-task-manage-item.active').removeClass('active').find('.js-settings-list').hide();
     }
   });
 };
@@ -186,28 +151,25 @@ export const showSettings = () => {
 export const TabChange = () => {
   $('[data-role="tab"]').click(function (event) {
     let $this = $(this);
-    $($this.data('tab-content')).removeClass("hidden").siblings('[data-role="tab-content"]').addClass('hidden');
+    $($this.data('tab-content')).removeClass('hidden').siblings('[data-role="tab-content"]').addClass('hidden');
   });
 };
 
-export const updateTaskNum = (container) => {
-  // let $container = $(container);
-  // $container.on('finished',function(){
-  //   $('#task-num').text($(container).find('i[data-role="task"]').length);
-  // })
-}
 
 export const TaskListHeaderFixed = () => {
   let $header = $('.js-task-list-header');
-  if(!$header.length){
+  const $headerSlot = $('.js-task-list-header__slot');
+  if (!$header.length) {
     return;
   }
   let headerTop = $header.offset().top;
-	$(window).scroll(function(event) {
-			if ($(window).scrollTop() >= headerTop) {
-				$header.addClass('fixed')
-			} else {
-				$header.removeClass('fixed');
-			}
-	});
-}
+  $(window).scroll(function (event) {
+    if ($(window).scrollTop() >= headerTop) {
+      $header.addClass('fixed');
+      $headerSlot.removeClass('hidden');
+    } else {
+      $header.removeClass('fixed');
+      $headerSlot.addClass('hidden');
+    }
+  });
+};

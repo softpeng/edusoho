@@ -8,7 +8,7 @@
 	<tr>
 		<th width="25%">{{'user.fields.username_label'|trans}}</th>
 		<td width="75%">
-			<a class="pull-right link-primary" href="{{ path('user_show', {id:user.id}) }}" target="_blank">{{'user.btn.homepage'|trans}}</a>
+			<a class="pull-right link-primary" href="{{ user_show_path({id:user.id}) }}" target="_blank">{{'user.btn.homepage'|trans}}</a>
 			{{ user.nickname }}
 		</td>
 	</tr>
@@ -16,8 +16,7 @@
 	<tr>
 		<th>{{'user.fields.email_label'|trans}}</th>
 		<td>
-		  {% set emailArr = user.email|split('@') %}
-	      {% if emailArr[1] != 'edusoho.net' %}
+	      {% if not is_system_generated_email(user.email) %}
 	        {{ user.email }}
 	      {% else %}
 	        {{'site.datagrid.empty'|trans}}
@@ -39,9 +38,9 @@
 	<tr>
 		<th>{{'user.fields.gender_label'|trans}}</th>
 		<td>
-			{% if profile.gender == 'mail' %}
+			{% if profile.gender == 'male' %}
 				{{'user.fields.gender.male'|trans}}
-			{% elseif profile.gender == 'femail' %}
+			{% elseif profile.gender == 'female' %}
 				{{'user.fields.gender.female'|trans}}
 			{% else %}
 				{{'site.datagrid.empty'|trans}}
@@ -85,8 +84,8 @@
 	<tr>
 		<th>{{'user.fields.phone_label'|trans}}</th>
 		<td>
-		{% if profile.mobile %}
-				{{ profile.mobile }}
+      {% if profile.mobile %}
+        {% include 'user-mobile-mask.html.twig' with { mobile: profile.mobile } %}
 			{% else %}
 				{{'site.datagrid.empty'|trans}}
 			{% endif %}
@@ -109,7 +108,7 @@
 		<td>
 		{% if profile.about %}
 				<div class="editor-text">
-				{{ profile.about | raw }}
+				{{ profile.about|cdn|raw }}
 				</div>
 			{% else %}
 				{{'site.datagrid.empty'|trans}}

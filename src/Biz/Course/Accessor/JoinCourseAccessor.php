@@ -3,6 +3,8 @@
 namespace Biz\Course\Accessor;
 
 use Biz\Accessor\AccessorAdapter;
+use Biz\Course\Service\CourseSetService;
+use Biz\MultiClass\Service\MultiClassService;
 
 class JoinCourseAccessor extends AccessorAdapter
 {
@@ -12,23 +14,33 @@ class JoinCourseAccessor extends AccessorAdapter
             return $this->buildResult('course.not_found');
         }
 
-        if ($course['status'] === 'draft') {
-            return $this->buildResult('course.unpublished', array('courseId' => $course['id']));
+        $courseSet = $this->getCourseSetService()->getCourseSet($course['courseSetId']);
+        if ('draft' === $course['status'] || 'draft' == $courseSet['status']) {
+            return $this->buildResult('course.unpublished', ['courseId' => $course['id']]);
         }
 
-        if ($course['status'] === 'closed') {
-            return $this->buildResult('course.closed', array('courseId' => $course['id']));
+        if ('closed' === $course['status'] || 'closed' == $courseSet['status']) {
+            return $this->buildResult('course.closed', ['courseId' => $course['id']]);
         }
 
-        if (!$course['buyable'] && $course['vipLevelId'] == 0) {
-            return $this->buildResult('course.not_buyable', array('courseId' => $course['id']));
+        if (!$course['buyable']) {
+            return $this->buildResult('course.not_buyable', ['courseId' => $course['id']]);
         }
 
         if ($this->isExpired($course)) {
-            return $this->buildResult('course.expired', array('courseId' => $course['id']));
+            return $this->buildResult('course.expired', ['courseId' => $course['id']]);
         }
         if ($course['buyExpiryTime'] && time() > $course['buyExpiryTime']) {
-            return $this->buildResult('course.buy_expired', array('courseId' => $course['id']));
+            return $this->buildResult('course.buy_expired', ['courseId' => $course['id']]);
+        }
+
+        if ($course['maxStudentNum'] > 0 && $course['maxStudentNum'] <= $course['studentNum']) {
+            return $this->buildResult('course.reach_max_student_num', ['courseId' => $course['id']]);
+        }
+
+        $multiClass = $this->getMultiClassService()->getMultiClassByCourseId($course['id']);
+        if (!empty($multiClass['maxStudentNum']) && $multiClass['maxStudentNum'] <= $course['studentNum']) {
+            return $this->buildResult('course.reach_max_student_num', ['courseId' => $course['id']]);
         }
 
         return null;
@@ -37,13 +49,29 @@ class JoinCourseAccessor extends AccessorAdapter
     private function isExpired($course)
     {
         $expiryMode = $course['expiryMode'];
-        if ($expiryMode === 'forever') {
+        if ('forever' === $expiryMode) {
             return false;
         }
-        if ($expiryMode === 'date' || $expiryMode === 'end_date') {
+        if ('date' === $expiryMode || 'end_date' === $expiryMode) {
             return time() > $course['expiryEndDate'];
         }
 
         return false;
+    }
+
+    /**
+     * @return CourseSetService
+     */
+    private function getCourseSetService()
+    {
+        return $this->biz->service('Course:CourseSetService');
+    }
+
+    /**
+     * @return MultiClassService
+     */
+    private function getMultiClassService()
+    {
+        return $this->biz->service('MultiClass:MultiClassService');
     }
 }

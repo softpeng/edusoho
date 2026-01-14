@@ -16,7 +16,7 @@
         <label for="startTime">{{'announcement.modal.write.startTime'|trans}}</label>
       </div>
       <div class="col-md-9 controls" style="z-index:2000;">
-        <input type="text" id="startTime"  name="startTime" class="form-control" value="{% if announcement.startTime|default('now') %}{{announcement.startTime|default('now')|date("Y-m-d H:i")}}{% endif %}">
+        <input type="text" id="startTime"  name="startTime" class="form-control" autocomplete="off" value="{% if announcement.startTime|default('now') %}{{announcement.startTime|default('now')|date("Y-m-d H:i")}}{% endif %}">
       </div>
     </div>
 
@@ -25,7 +25,7 @@
         <label for="endTime">{{'announcement.modal.write.endTime'|trans}}</label>
       </div>
       <div class="col-md-9 controls" style="z-index:2000;">
-        <input type="text" id="endTime"  name="endTime" class="form-control" value="{% if announcement.endTime|default(null) %}{{announcement.endTime|date("Y-m-d H:i")}}{% endif %}">
+        <input type="text" id="endTime"  name="endTime" class="form-control" autocomplete="off" value="{% if announcement.endTime|default(null) %}{{announcement.endTime|date("Y-m-d H:i")}}{% endif %}">
       </div>
     </div>
 

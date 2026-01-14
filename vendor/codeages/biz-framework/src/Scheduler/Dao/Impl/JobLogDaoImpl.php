@@ -7,7 +7,7 @@ use Codeages\Biz\Framework\Scheduler\Dao\JobLogDao;
 
 class JobLogDaoImpl extends GeneralDaoImpl implements JobLogDao
 {
-    protected $table = 'job_log';
+    protected $table = 'biz_scheduler_job_log';
 
     public function declares()
     {
@@ -19,6 +19,8 @@ class JobLogDaoImpl extends GeneralDaoImpl implements JobLogDao
             'orderbys' => array('created_time', 'id'),
             'conditions' => array(
                 'job_fired_id = :job_fired_id ',
+                'status = :status',
+                '`name` like :name',
             ),
         );
     }

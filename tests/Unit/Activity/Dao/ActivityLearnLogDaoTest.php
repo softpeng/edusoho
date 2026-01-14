@@ -9,45 +9,88 @@ class ActivityLearnLogDaoTest extends BaseDaoTestCase
 {
     public function testSearch()
     {
-        $expected = array();
+        $expected = [];
         $expected[] = $this->mockDataObject();
-        $expected[] = $this->mockDataObject(array('activityId' => 2));
-        $expected[] = $this->mockDataObject(array('userId' => 2));
+        $expected[] = $this->mockDataObject(['activityId' => 2]);
+        $expected[] = $this->mockDataObject(['userId' => 2]);
 
-        $testConditions = array(
-            array(
-                'condition' => array(),
+        $testConditions = [
+            [
+                'condition' => [],
                 'expectedResults' => $expected,
                 'expectedCount' => 3,
-            ),
-            array(
-                'condition' => array('userId' => 1),
-                'expectedResults' => array($expected[0], $expected[1]),
+            ],
+            [
+                'condition' => ['userId' => 1],
+                'expectedResults' => [$expected[0], $expected[1]],
                 'expectedCount' => 2,
-            ),
-            array(
-                'condition' => array('activityId' => 1),
-                'expectedResults' => array($expected[0], $expected[2]),
+            ],
+            [
+                'condition' => ['activityId' => 1],
+                'expectedResults' => [$expected[0], $expected[2]],
                 'expectedCount' => 2,
-            ),
-            array(
-                'condition' => array('userId' => 1, 'activityId' => 1),
-                'expectedResults' => array($expected[0]),
+            ],
+            [
+                'condition' => ['userId' => 1, 'activityId' => 1],
+                'expectedResults' => [$expected[0]],
                 'expectedCount' => 1,
-            ),
-            array(
-                'condition' => array('userId' => 2, 'activityId' => 2),
-                'expectedResults' => array(),
+            ],
+            [
+                'condition' => ['userId' => 2, 'activityId' => 2],
+                'expectedResults' => [],
                 'expectedCount' => 0,
-            ),
-        );
+            ],
+        ];
 
         $this->searchTestUtil($this->getDao(), $testConditions, $this->getCompareKeys());
     }
 
+    public function testCreate()
+    {
+        $result = $this->getDao()->create($this->getDefaultMockFields());
+
+        $this->assertEquals('finish', $result['event']);
+    }
+
+    public function testGetRecentFinishedLogByActivityIdAndUserId()
+    {
+        $log = $this->mockDataObject(['event' => 'finish', 'activityId' => 2, 'userId' => 2]);
+        $result = $this->getDao()->getRecentFinishedLogByActivityIdAndUserId(2, 2);
+
+        $this->assertEquals('finish', $result[0]['event']);
+    }
+
+    public function testCountLearnedDaysByActivityIdsAndUserId()
+    {
+        $this->mockActivity();
+        $log = $this->getDao()->create($this->getDefaultMockFields());
+        $result = $this->getDao()->countLearnedDaysByActivityIdsAndUserId([1], 1);
+
+        $this->assertEquals(1, $result);
+    }
+
+    public function testDeleteByActivityId()
+    {
+        $log = $this->getDao()->create($this->getDefaultMockFields());
+        $result = $this->getDao()->deleteByActivityId(1);
+
+        $this->assertEquals(1, $result);
+    }
+
+    public function testGetLastestByActivityIdAndUserId()
+    {
+        $log1 = $this->getDao()->create($this->getDefaultMockFields());
+        $log2 = $this->mockDataObject(['event' => 'unfinish', 'activityId' => 1, 'userId' => 1]);
+        $log3 = $this->mockDataObject(['event' => 'wait', 'activityId' => 1, 'userId' => 1]);
+
+        $result = $this->getDao()->getLastestByActivityIdAndUserId(1, 1);
+
+        $this->assertEquals('finish', $result['event']);
+    }
+
     protected function fetchAndAssembleIds(array $rawInput)
     {
-        $res = array();
+        $res = [];
         foreach ($rawInput as $val) {
             $res[] = $val['id'];
         }
@@ -77,20 +120,20 @@ class ActivityLearnLogDaoTest extends BaseDaoTestCase
 
     protected function getDefaultMockFields()
     {
-        return array(
+        return [
             'activityId' => 1,
             'userId' => 1,
             'mediaType' => 'video',
-            'event' => 'ffff',
-            'data' => array('a'),
+            'event' => 'finish',
+            'data' => ['a'],
             'learnedTime' => 1,
             'courseTaskId' => 1,
-        );
+        ];
     }
 
-    private function mockActivity($fields = array())
+    private function mockActivity($fields = [])
     {
-        $defaultFields = array(
+        $defaultFields = [
             'title' => 'asdf',
             'remark' => 'asdf',
             'mediaId' => 1,
@@ -102,7 +145,7 @@ class ActivityLearnLogDaoTest extends BaseDaoTestCase
             'fromUserId' => 1,
             'startTime' => 1,
             'endTime' => 10,
-        );
+        ];
 
         $fields = array_merge($defaultFields, $fields);
 

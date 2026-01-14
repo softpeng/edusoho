@@ -4,10 +4,11 @@ namespace ApiBundle\Api\Resource\Course;
 
 use ApiBundle\Api\Annotation\ApiConf;
 use ApiBundle\Api\ApiRequest;
-use ApiBundle\Api\Exception\ErrorCode;
 use ApiBundle\Api\Resource\AbstractResource;
-use Biz\Course\Service\CourseService;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Biz\Activity\Service\HomeworkActivityService;
+use Biz\Activity\Service\TestpaperActivityService;
+use Biz\Course\CourseException;
+use Codeages\Biz\ItemBank\Answer\Service\AnswerSceneService;
 
 class CourseItem extends AbstractResource
 {
@@ -19,72 +20,85 @@ class CourseItem extends AbstractResource
         $course = $this->getCourseService()->getCourse($courseId);
 
         if (!$course) {
-            throw new NotFoundHttpException('教学计划不存在', null, ErrorCode::RESOURCE_NOT_FOUND);
+            throw CourseException::NOTFOUND_COURSE();
         }
 
-        return $this->convertToLeadingItems($this->getCourseService()->findCourseItems($courseId), $request->query->get('onlyPublished', 0));
-    }
+        $items = $this->convertToLeadingItems(
+            $this->getCourseService()->findCourseItems($courseId),
+            $course,
+            $request->getHttpRequest()->isSecure(),
+            $request->query->get('fetchSubtitlesUrls', 0),
+            $request->query->get('onlyPublished', 0),
+            $request->query->get('showOptionalNum', 1)
+        );
 
-    private function convertToLeadingItems($originItems, $onlyPublishTask = false)
-    {
-        $newItems = array();
-        $number = 1;
-        foreach ($originItems as $originItem) {
-            $item = array();
-            if ($originItem['itemType'] == 'task') {
-                $item['type'] = 'task';
-                $item['seq'] = '0';
-                $item['number'] = strval($number++);
-                $item['title'] = $originItem['title'];
-                $item['task'] = $originItem;
-                $newItems[] = $item;
-                continue;
-            }
-
-            if ($originItem['itemType'] == 'chapter' && $originItem['type'] == 'lesson') {
-                $taskSeq = count($originItem['tasks']) > 1 ? 1 : 0;
-                foreach ($originItem['tasks'] as $task) {
-                    $item['type'] = 'task';
-                    $item['seq'] = strval($taskSeq);
-                    $item['number'] = strval($number);
-                    $item['title'] = $task['title'];
-                    $item['task'] = $task;
-                    $newItems[] = $item;
-                    $taskSeq++;
+        foreach ($items as &$item) {
+            if (!empty($item['tasks'])) {
+                foreach ($item['tasks'] as &$task) {
+                    if ('homework' == $task['type'] && !empty($task['activity'])) {
+                        $homeworkActivity = $this->getHomeworkActivityService()->get($task['activity']['mediaId']);
+                        $task['activity']['mediaId'] = $homeworkActivity['assessmentId'];
+                    }
+                    if ('testpaper' == $task['type'] && !empty($task['activity']['ext'])) {
+                        $testpaperActivity = $this->getTestpaperActivityService()->getActivity($task['activity']['mediaId']);
+                        $scene = $this->getAnswerSceneService()->get($testpaperActivity['answerSceneId']);
+                        if (!empty($scene)) {
+                            $task['activity']['ext']['doTimes'] = $scene['do_times'];
+                            $task['activity']['ext']['redoInterval'] = $scene['redo_interval'];
+                            $task['activity']['ext']['limitedTime'] = $scene['limited_time'];
+                        }
+                    }
                 }
-                $number++;
-                continue;
             }
-
-            $item['type'] = $originItem['type'];
-            $item['seq'] = '0';
-            $item['number'] = $originItem['number'];
-            $item['title'] = $originItem['title'];
-            $item['task'] =  null;
-            $newItems[] = $item;
         }
 
+        $request->query->has('format') ? $format = $request->query->get('format') : $format = 0;
 
+        if ($format) {
+            $filter = new CourseItemWithLessonFilter();
+            $filter->filters($items);
+            $items = $this->convertToTree($items);
+        }
 
-        return $onlyPublishTask ? $this->filterUnPublishTask($newItems) : $newItems;
+        return $items;
     }
 
-    private function filterUnPublishTask($items)
+    protected function convertToLeadingItems($originItems, $course, $isSsl, $fetchSubtitlesUrls, $onlyPublishTask = false, $showOptionalNum = 1)
     {
-        foreach ($items as $key => $item) {
-            if ($item['type'] == 'task' && $item['task']['status'] != 'published') {
-                unset($items[$key]);
-            }
-        }
+        return $this->container->get('api.util.item_helper')->convertToLeadingItemsV1($originItems, $course, $isSsl, $fetchSubtitlesUrls, $onlyPublishTask, $showOptionalNum);
+    }
 
-        return array_values($items);
+    protected function convertToTree($items)
+    {
+        return $this->container->get('api.util.item_helper')->convertToTree($items);
+    }
+
+    protected function getCourseService()
+    {
+        return $this->service('Course:CourseService');
     }
 
     /**
-     * @return CourseService
+     * @return HomeworkActivityService
      */
-    private function getCourseService()
+    protected function getHomeworkActivityService()
     {
-        return $this->service('Course:CourseService');
+        return $this->service('Activity:HomeworkActivityService');
+    }
+
+    /**
+     * @return TestpaperActivityService
+     */
+    protected function getTestpaperActivityService()
+    {
+        return $this->service('Activity:TestpaperActivityService');
+    }
+
+    /**
+     * @return AnswerSceneService
+     */
+    protected function getAnswerSceneService()
+    {
+        return $this->service('ItemBank:Answer:AnswerSceneService');
     }
 }

@@ -2,24 +2,24 @@
 
 namespace Biz\Content\Service\Impl;
 
+use AppBundle\Common\ArrayToolkit;
 use Biz\BaseService;
+use Biz\Common\CommonException;
+use Biz\Content\BlockException;
 use Biz\Content\Dao\BlockDao;
 use Biz\Content\Dao\BlockHistoryDao;
 use Biz\Content\Dao\BlockTemplateDao;
 use Biz\Content\Service\BlockService;
 use Biz\System\Service\LogService;
 use Biz\System\Service\SettingService;
-use AppBundle\Common\ArrayToolkit;
 
 class BlockServiceImpl extends BaseService implements BlockService
 {
     public function createBlockTemplate($blockTemplate)
     {
-        if (!ArrayToolkit::requireds($blockTemplate, array('code', 'mode', 'category', 'meta', 'data', 'templateName', 'title'))) {
-            throw $this->createServiceException('创建编辑区失败，缺少必要的字段');
+        if (!ArrayToolkit::requireds($blockTemplate, ['code', 'mode', 'category', 'meta', 'data', 'templateName', 'title'])) {
+            $this->createNewException(CommonException::ERROR_PARAMETER_MISSING());
         }
-        $blockTemplate['createdTime'] = time();
-        $blockTemplate['updateTime'] = time();
         $createdBlockTemplate = $this->getBlockTemplateDao()->create($blockTemplate);
 
         return $createdBlockTemplate;
@@ -37,7 +37,7 @@ class BlockServiceImpl extends BaseService implements BlockService
 
     public function getLatestBlockHistoriesByBlockIds($blockIds)
     {
-        $blockHistories = array();
+        $blockHistories = [];
         foreach ($blockIds as $key => $blockId) {
             $block = $this->getBlockDao()->get($blockId);
             $blockHistories[$block['blockTemplateId']] = $this->getBlockHistoryDao()->getLatestByBlockId($blockId);
@@ -53,7 +53,7 @@ class BlockServiceImpl extends BaseService implements BlockService
             $blockTemplate = $this->getBlockTemplate($id);
 
             if (empty($blockTemplate)) {
-                throw $this->createNotFoundException('block template not found');
+                $this->createNewException(BlockException::NOTFOUND_TEMPLATE());
             }
 
             $blockTemplate['blockTemplateId'] = $blockTemplate['id'];
@@ -73,32 +73,6 @@ class BlockServiceImpl extends BaseService implements BlockService
     public function getBlockHistory($id)
     {
         return $this->getBlockHistoryDao()->get($id);
-    }
-
-    public function generateBlockTemplateItems($block)
-    {
-        preg_match_all("/\(\((.+?)\)\)/", $block['template'], $matches);
-        while (list($key, $value) = each($matches[1])) {
-            $matches[1][$key] = trim($value);
-        }
-
-        $templateDatas = ($matches[1]) ? ($matches[1]) : '';
-        $templateItems = array();
-
-        if (empty($templateDatas)) {
-            return $templateItems;
-        } else {
-            $arr = array();
-            foreach ($templateDatas as &$item) {
-                $item = explode(':', $item);
-                $arr[] = array('title' => $item[0], 'type' => $item[1]);
-            }
-
-            $templateItems = ArrayToolkit::index($arr, 'title');
-            $templateItems = array_values($templateItems);
-
-            return $templateItems;
-        }
     }
 
     public function getBlockByCode($code)
@@ -131,7 +105,7 @@ class BlockServiceImpl extends BaseService implements BlockService
 
     public function getBlocksByBlockTemplateIdsAndOrgId($blockTemplateIds, $orgId)
     {
-        $blocks = array();
+        $blocks = [];
         foreach ($blockTemplateIds as $key => $blockTemplateId) {
             $blocks[] = $this->getBlockDao()->getByTemplateIdAndOrgId($blockTemplateId, $orgId);
         }
@@ -141,8 +115,8 @@ class BlockServiceImpl extends BaseService implements BlockService
 
     public function createBlock($block)
     {
-        if (!ArrayToolkit::requireds($block, array('code', 'data', 'content', 'blockTemplateId'))) {
-            throw $this->createInvalidArgumentException('创建编辑区失败，缺少必要的字段');
+        if (!ArrayToolkit::requireds($block, ['code', 'data', 'content', 'blockTemplateId'])) {
+            $this->createNewException(CommonException::ERROR_PARAMETER_MISSING());
         }
         $user = $this->getCurrentUser();
         $block['createdTime'] = time();
@@ -152,12 +126,12 @@ class BlockServiceImpl extends BaseService implements BlockService
         unset($block['mode']);
         $createdBlock = $this->getBlockDao()->create($block);
 
-        $blockHistoryInfo = array(
+        $blockHistoryInfo = [
             'blockId' => $createdBlock['id'],
             'content' => $createdBlock['content'],
             'userId' => $createdBlock['userId'],
             'createdTime' => time(),
-        );
+        ];
 
         $this->getBlockHistoryDao()->create($blockHistoryInfo);
 
@@ -175,23 +149,23 @@ class BlockServiceImpl extends BaseService implements BlockService
         $user = $this->getCurrentUser();
 
         if (!$block) {
-            throw $this->createNotFoundException('此编辑区不存在，更新失败!');
+            $this->createNewException(BlockException::NOTFOUND_BLOCK());
         }
         $fields['updateTime'] = time();
         unset($fields['mode']);
         $updatedBlock = $this->getBlockDao()->update($id, $fields);
 
-        $blockHistoryInfo = array(
+        $blockHistoryInfo = [
             'blockId' => $updatedBlock['id'],
             'content' => $updatedBlock['content'],
             'data' => $updatedBlock['data'],
             'userId' => $user['id'],
             'createdTime' => time(),
-        );
+        ];
 
         $this->getBlockHistoryDao()->create($blockHistoryInfo);
 
-        $this->getLogService()->info('system', 'update_block', "更新编辑区#{$id}", array('content' => $updatedBlock['content']));
+        $this->getLogService()->info('system', 'update_block', "更新编辑区#{$id}", ['content' => $updatedBlock['content']]);
 
         $blockTemplate = $this->getBlockTemplateDao()->get($updatedBlock['blockTemplateId']);
         $updatedBlock['id'] = $blockTemplate['id'];
@@ -212,13 +186,13 @@ class BlockServiceImpl extends BaseService implements BlockService
     public function getContentsByCodes(array $codes)
     {
         if (empty($codes)) {
-            throw $this->createInvalidArgumentException('获取内容失败，不允许查询空编号所对应的内容!');
+            $this->createNewException(BlockException::EMPTY_CODES());
         }
 
         $cdn = $this->getSettingService()->get('cdn');
         $cdnUrl = empty($cdn['enabled']) ? '' : $cdn['url'];
 
-        $contents = array();
+        $contents = [];
         foreach ($codes as $key => $value) {
             $block = $this->getBlockDao()->getByCode($value);
             if ($block) {
@@ -239,31 +213,30 @@ class BlockServiceImpl extends BaseService implements BlockService
     {
         $blockTemplate = $this->getBlockTemplateDao()->get($id);
         if (!$blockTemplate) {
-            throw $this->createServiceException('此编辑区不存在，更新失败!');
+            $this->createNewException(BlockException::NOTFOUND_TEMPLATE());
         }
 
-        return $this->getBlockTemplateDao()->update($id, array(
+        return $this->getBlockTemplateDao()->update($id, [
             'content' => $content,
-            'updateTime' => time(),
-        ));
+        ]);
     }
 
     public function recovery($blockId, $history)
     {
         $block = $this->getBlockDao()->get($blockId);
-        $blockTemplate = $this->getBlockTemplateDao()->get($block['blockTemplateId']);
         if (empty($block)) {
-            throw $this->createNotFoundException('此编辑区不存在，更新失败!');
+            $this->createNewException(BlockException::NOTFOUND_BLOCK());
         }
 
-        if ($blockTemplate['mode'] == 'template' && empty($history['data'])) {
-            throw $this->createNotFoundException('此编辑区数据不存在，更新失败!');
+        $blockTemplate = $this->getBlockTemplateDao()->get($block['blockTemplateId']);
+        if ('template' == $blockTemplate['mode'] && empty($history['data'])) {
+            $this->createNewException(BlockException::EMPTY_HISTORY());
         }
 
-        return $this->getBlockDao()->update($blockId, array(
+        return $this->getBlockDao()->update($blockId, [
             'content' => $history['content'],
             'data' => $history['data'],
-        ));
+        ]);
     }
 
     public function getBlockByTemplateIdAndOrgId($blockTemplateId, $orgId = 0)
@@ -294,7 +267,7 @@ class BlockServiceImpl extends BaseService implements BlockService
     {
         $result = $this->getBlockTemplateDao()->get($id);
         if (empty($result)) {
-            return array();
+            return [];
         }
 
         return $result;
@@ -319,9 +292,8 @@ class BlockServiceImpl extends BaseService implements BlockService
         $blockTemplate = $this->getBlockTemplateDao()->get($id);
 
         if (empty($blockTemplate)) {
-            throw $this->createNotFoundException('此编辑区模板不存在，更新失败!');
+            $this->createNewException(BlockException::NOTFOUND_TEMPLATE());
         }
-        $fields['updateTime'] = time();
         $updatedBlockTemplate = $this->getBlockTemplateDao()->update($id, $fields);
 
         $this->getLogService()->info('blockTemplate', 'update_block_template', "更新编辑区模板#{$id}");
@@ -337,6 +309,33 @@ class BlockServiceImpl extends BaseService implements BlockService
     public function searchBlockTemplates($conditions, $orderBy, $start, $limit)
     {
         return $this->getBlockTemplateDao()->search($conditions, $orderBy, $start, $limit);
+    }
+
+    public function getPosters()
+    {
+        $posters = [];
+        $theme = $this->getSettingService()->get('theme', []);
+        $topBanner = $this->getBlockDao()->getByCode($theme['uri'].':home_top_banner');
+        if (empty($topBanner)) {
+            $topBanner = $this->getBlockTemplateDao()->getByCode($theme['uri'].':home_top_banner');
+        }
+        if (!empty($topBanner)) {
+            $data = $topBanner['data'];
+        }
+        if (empty($data['posters'])) {
+            return $posters;
+        }
+        foreach ($data['posters'] as $poster) {
+            if (1 == $poster['status']) {
+                $item = [
+                    'image' => $poster['src'],
+                    'link' => ['type' => 'url', 'url' => $poster['href']],
+                ];
+                array_push($posters, $item);
+            }
+        }
+
+        return $posters;
     }
 
     /**

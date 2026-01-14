@@ -1,24 +1,35 @@
-{% set side_navs = {'tasks':'course.plan_task'|trans,'info': 'course.plan_setup'|trans,
-'marketing':'course.marketing_setup'|trans,'teachers':'course.teacher_setup'|trans,'students':'course.members_manage'|trans,'testpaper-check':'course.testpaper_check'|trans
-,'homework-check':'course.homework_check'|trans,'dashboard':'course.dashboard'|trans,'orders':'course.order'|trans, 'overview' :'course.plan_overview'|trans} %}
+{% set side_navs = {'tasks':'course.plan_task'|trans,'info': 'course.plan_base_info'|trans,'announcements': 'course.announcement_manage',
+  'marketing':'course.marketing_setup'|trans,'teachers':'course.teacher_setup'|trans,'students':'course.members_manage'|trans,'testpaper-check':'course.testpaper_check'|trans
+  ,'homework-check':'course.homework_check'|trans,'dashboard':'course.dashboard'|trans,'orders':'course.order'|trans, 'overview' :'course.plan_overview'|trans
+  ,'live-statistics':'course.live_statistics'|trans, 'replay':'course.replay_manage.content_title'|trans, 'wrong-questions': '学员错题'|trans, 'exit': 'course.members_manage'|trans} %}
 {% set menuType = 'course' %}
-{% if side_nav in ['base', 'detail', 'cover', 'question', 'testpaper', 'files','plan'] %}
-    {% set menuType = 'courseSet' %}
+{% if course_side_nav in ['base', 'detail', 'cover', 'question', 'testpaper', 'files','plan'] %}
+  {% set menuType = 'courseSet' %}
 {% endif %}
 
 {# 直播课程不需要显示计划发布功能 #}
-{% if courseSet.type != 'live' %}
-  <div class="panel-heading">
-    {{ side_navs[code]|trans }}
-    {% if btnGroup|default() %}
-      {% include 'course-manage/panel-header/' ~ code ~ '-btn-group.html.twig' with {code: side_nav} %}
+
+<div class="cd-main__title">
+  {{ side_navs[code]|trans }}
+</div>
+{% if btnGroup|default() %}
+  <div class="course-main-header__operation">
+    {% set smsSetting = setting('cloud_sms.sms_secondary_verification_export')|default('on') %}
+    {% if (smsSetting == 'on' or smsSetting == 1) %}
+{#      <button class="cd-btn  mhs cd-btn-sm pull-right cd-btn-primary course-order-js-export-btn" type="button"#}
+{#              id="student-add-btn" data-toggle="modal" data-target="#modal"><i#}
+{#                class="es-icon es-icon-filedownload cd-text-sm"></i> {{ 'form.btn.export'|trans }}</button>#}
+      <button class="btn btn-primary mhs course-order-js-export-btn" type="button" data-toggle="modal"
+              data-target="#modal"
+              data-url="{{ path('admin_v2_secondary_verification', {exportFileName:'order', targetFormId: 'order'}) }}">
+        {{ 'form.btn.export'|trans }}</button>
+      {% include 'export/export-modal.html.twig' %}
+    {% else %}
+      {% include 'export/export-btn.html.twig' with
+        {'exportFileName': 'order',
+            'exportWebpack': true,
+          'targetFormId': 'user-search-form'} %}
     {% endif %}
-  </div>
-{% else %}
-  <div class="panel-heading">
-    {{ side_navs[code]|trans }}
-    {% if btnGroup|default() %}
-      {% include 'course-manage/panel-header/' ~ code ~ '-btn-group.html.twig' with {code: side_nav} %}
-    {% endif %}
+
   </div>
 {% endif %}

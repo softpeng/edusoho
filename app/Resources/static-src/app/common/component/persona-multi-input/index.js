@@ -1,18 +1,20 @@
-import React, { Component } from 'react';
+import React from 'react';
 import MultiInput from '../multi-input';
 import List from './list';
 
 function initItem(dataSourceUi,data,index,props) {
   let obj = {
-    itemId:Math.random(),
+    itemId: Math.random(),
     nickname: data[props.nickname],
     isVisible: data[props.isVisible] == 1 ? true : false,
     avatar: data[props.avatar],
     seq: index,
-    id:data[props.id],
+    id: data[props.id],
+    isCanceledTeacherRoles: data.isCanceledTeacherRoles,
+    isLiveTeacher: data.isLiveTeacher,
     outputValue: {
       [props.id]: data[props.id],
-      [props.isVisible]: data[props.isVisible] ,
+      [props.isVisible]: data[props.isVisible],
     }
   }
   dataSourceUi.push(obj);
@@ -26,6 +28,21 @@ function updateChecked(dataSourceUi,id) {
     }
   })
 }
+
+
+function unRepeatItem(dataSourceUi) {
+  let temp = {};
+  return dataSourceUi.reduce(function(item, next) {
+    if (temp[next.id]) {
+      cd.message({ type:'danger', message: Translator.trans('course.manage.teacher.manage.repeat_tip') });
+    } else {
+      temp[next.id] = true;
+      item.push(next);
+    }
+    return item;
+  }, [])
+}
+
 
 export default class PersonaMultiInput extends MultiInput {
   constructor(props) {
@@ -59,7 +76,7 @@ export default class PersonaMultiInput extends MultiInput {
     }
   }
 
-  onChecked=(event)=> {
+  onChecked = (event)=> {
     let id = event.currentTarget.value;
     updateChecked(this.state.dataSourceUi,id);
     this.setState({
@@ -77,8 +94,9 @@ export default class PersonaMultiInput extends MultiInput {
     }
     initItem(this.state.dataSourceUi,data,this.state.dataSourceUi.length+1,this.props);
 
+    const dataSourceUi = unRepeatItem(this.state.dataSourceUi);
     this.setState({
-      dataSourceUi: this.state.dataSourceUi,
+      dataSourceUi: dataSourceUi,
     });
   }
 

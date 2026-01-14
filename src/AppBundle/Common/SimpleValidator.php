@@ -10,15 +10,14 @@ class SimpleValidator
     public static function email($value)
     {
         $value = (string) $value;
-        $valid = filter_var($value, FILTER_VALIDATE_EMAIL);
 
-        return $valid !== false;
+        return 1 === preg_match('/^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/', $value);
     }
 
-    public static function nickname($value, array $option = array())
+    public static function nickname($value, array $option = [])
     {
         $option = array_merge(
-            array('minLength' => 4, 'maxLength' => 18),
+            ['minLength' => 4, 'maxLength' => 36],
             $option
         );
 
@@ -35,16 +34,21 @@ class SimpleValidator
         return (bool) preg_match('/^[\x{4e00}-\x{9fa5}a-zA-z0-9_.·]+$/u', $value);
     }
 
-    public static function password($value, array $option = array())
+    public static function password($value, array $option = [])
     {
         return (bool) preg_match('/^[\S]{5,20}$/u', $value);
     }
 
+    public static function highPassword($value, array $option = [])
+    {
+        return (bool) preg_match('/^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[^\s\da-zA-Z])[\S]{8,32}$/u', $value);
+    }
+
     //真实姓名改成和nickname一样
-    public static function truename($value, array $option = array())
+    public static function truename($value, array $option = [])
     {
         $option = array_merge(
-            array('minLength' => 4, 'maxLength' => 18),
+            ['minLength' => 4, 'maxLength' => 36],
             $option
         );
 
@@ -68,12 +72,12 @@ class SimpleValidator
 
     public static function bankCardId($value)
     {
-        return (bool) preg_match('/^(\d{16}|\d{19})$/', $value);
+        return (bool) preg_match('/^(\d{16,19})$/', $value);
     }
 
     public static function mobile($value)
     {
-        return (bool) preg_match('/^1\d{10}$/', $value);
+        return (bool) ((11 == strlen($value)) && preg_match('/^1\d{10}$/', $value));
     }
 
     public static function numbers($value)
@@ -94,6 +98,11 @@ class SimpleValidator
     public static function qq($value)
     {
         return (bool) preg_match('/^[1-9]\d{4,}$/', $value);
+    }
+
+    public static function weixin($value)
+    {
+        return (bool) preg_match('/^[-_a-zA-Z0-9]{6,20}$/', $value);
     }
 
     public static function integer($value)

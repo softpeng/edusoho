@@ -48,6 +48,8 @@ interface FileService
      */
     public function uploadFile($group, File $file, $target = null);
 
+    public function addFiles($group, array $filePaths);
+
     /**
      * 删除文件.
      *
@@ -160,4 +162,6 @@ interface FileService
     public function getFilesByIds($ids);
 
     public function getImgFileMetaInfo($fileId, $scaledWidth, $scaledHeight);
+
+    public function findFilesByUris(array $uris);
 }

@@ -6,8 +6,6 @@ use Silex\Application;
 use AppBundle\Common\ArrayToolkit;
 use Symfony\Component\HttpFoundation\Request;
 
-use Biz\Course\Service\CourseService;
-
 class ChaosThreadsPosts extends BaseResource
 {
     public function post(Application $app, Request $request)
@@ -70,49 +68,62 @@ class ChaosThreadsPosts extends BaseResource
 
     public function getThreadPosts(Application $app, Request $request)
     {
+        $currentUser = $this->getCurrentUser();
         $start = $request->query->get('start', 0);
         $limit = $request->query->get('limit', 10);
+        if ($this->getCurrentUser()->isTeacher()) {
+            $members = $this->getCourseMemberService()->findTeacherMembersByUserId($currentUser['id']);
+            $courseIds = ArrayToolkit::column($members, 'courseId');
+            if (empty($courseIds)) {
+                $questionIds = array();
+            } else {
+                $threads = $this->getCourseThreadService()->searchThreads(array('courseIds' => $courseIds, 'type' => 'question'), array(), 0, PHP_INT_MAX);
+                $questionIds = ArrayToolkit::column($threads, 'id');
+            }
+        }
+        $threadPosts = $this->getCourseThreadService()->getMyLatestReplyPerThread(0, PHP_INT_MAX);
+        $threadPosts = ArrayToolkit::index($threadPosts, 'threadId');
+        $threadIds = ArrayToolkit::column($threadPosts, 'threadId');
+        $threadIds = isset($questionIds) ? array_merge($questionIds, $threadIds) : $threadIds;
 
-
-        $total = $this->getCourseThreadService()->getMyReplyThreadCount();
-        $start = $start == -1 ? rand(0, $total - 1) : $start;
-
-        $posts = $this->getCourseThreadService()->getMyLatestReplyPerThread($start, $limit);
-        if (empty($posts)) {
+        if (empty($threadIds)) {
             return array();
         }
-        $courseIds = ArrayToolkit::column($posts, 'courseId');
-        $courses = $this->getCourseService()->findCoursesByIds($courseIds);
+        $courseThreads = $this->getCourseThreadService()->searchThreads(array('ids' => $threadIds), 'postedNotStick', $start, $limit);
 
-        $courseSetIds = ArrayToolkit::column($courses, 'courseSetId');
-        $courseSets = $this->getCourseSetService()->findCourseSetsByIds($courseSetIds);
-
-        foreach ($posts as $key => &$post) {
-            $thread = $this->getCourseThreadService()->getThread(0, $post['threadId']);
-
-            $course = $courses[$post['courseId']];
-            $courseSet = $courseSets[$course['courseSetId']];
-
-            $smallPicture = empty($courseSet['cover']['small']) ? '' : $courseSet['cover']['small'];
-            $middlePicture = empty($courseSet['cover']['middle']) ? '' : $courseSet['cover']['middle'];
-            $largePicture = empty($courseSet['cover']['large']) ? '' : $courseSet['cover']['large'];
-            $course['smallPicture'] = $this->getFileUrl($smallPicture, 'course.png');
-            $course['middlePicture'] = $this->getFileUrl($middlePicture, 'course.png');
-            $course['largePicture'] = $this->getFileUrl($largePicture, 'course.png');
-
-            if ($course['courseType'] == CourseService::DEFAULT_COURSE_TYPE && $course['title'] == '默认教学计划') {
-                $course['title'] = $courseSet['title'];
-            } else {
-                $course['title'] = $courseSet['title'].'-'.$course['title'];
-            }
-
-            $post['type'] = $thread['type'];
-            $post['title'] = $thread['title'];
-            $post['content'] = convertAbsoluteUrl($post['content']);
-            $post['course'] = $this->filterCourse($course);
+        if (empty($courseThreads)) {
+            return array();
         }
 
-        return array_values($posts);
+        $courseIds = ArrayToolkit::column($courseThreads, 'courseId');
+        $courses = $this->getCourseService()->findCoursesByIds($courseIds);
+        $courseSets = $this->getCourseSetService()->findCourseSetsByCourseIds($courseIds);
+
+        foreach ($courses as $key => $course) {
+            $courses[$key]['courseSet'] = $courseSets[$course['courseSetId']];
+        }
+
+        $courses = $this->multicallFilter('Course', $courses);
+        $posts = $this->getCourseThreadService()->searchThreadPosts(array('threadIds' => ArrayToolkit::column($courseThreads, 'id'), 'isRead' => 0, 'exceptedUserId' => $currentUser['id']), array(), 0, PHP_INT_MAX);
+        $posts = ArrayToolkit::group($posts, 'threadId');
+
+        foreach ($courseThreads as $key => $thread) {
+            if (isset($courses[$thread['courseId']])) {
+                $thread = ArrayToolkit::rename($thread, array('private' => 'isPrivate'));
+                $thread['threadId'] = $thread['id'];
+                $thread['lessonId'] = $thread['taskId'];
+                $course = $courses[$thread['courseId']];
+                $thread['course'] = $this->filterCourse($course);
+                $thread['threadContent'] = convertAbsoluteUrl($thread['content']);
+                $thread['content'] = isset($threadPosts[$thread['id']]) ? convertAbsoluteUrl($threadPosts[$thread['id']]['content']) : '';
+                $thread['notReadPostNum'] = isset($posts[$thread['id']]) ? count($posts[$thread['id']]) : 0;
+                $courseThreads[$key] = $thread;
+            } else {
+                unset($courseThreads[$key]);
+            }
+        }
+
+        return $courseThreads;
     }
 
     protected function filterCourse($course)
@@ -127,12 +138,14 @@ class ChaosThreadsPosts extends BaseResource
             'largePicture',
             'createdTime',
         );
+
         return ArrayToolkit::parts($course, $keys);
     }
 
     public function filter($res)
     {
         $res['createdTime'] = date('c', $res['createdTime']);
+
         return $res;
     }
 
@@ -151,6 +164,9 @@ class ChaosThreadsPosts extends BaseResource
         return $this->getServiceKernel()->createService('Group:ThreadService');
     }
 
+    /**
+     * @return \Biz\Course\Service\Impl\CourseServiceImpl
+     */
     protected function getCourseService()
     {
         return $this->getServiceKernel()->createService('Course:CourseService');

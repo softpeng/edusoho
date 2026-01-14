@@ -15,7 +15,7 @@ class ActivityLearnLogDaoImpl extends GeneralDaoImpl implements ActivityLearnLog
     public function create($fields)
     {
         $month = date('m', time());
-        if ($month % 2 !== 0) {
+        if (0 !== $month % 2) {
             return parent::create($fields);
         }
         $lock = $this->getLock();
@@ -37,7 +37,7 @@ class ActivityLearnLogDaoImpl extends GeneralDaoImpl implements ActivityLearnLog
     private function isTableExists($subfix)
     {
         $sql = "SHOW tables LIKE '{$this->table()}_{$subfix}'";
-        $tables = $this->db()->fetchAll($sql, array());
+        $tables = $this->db()->fetchAll($sql, []);
 
         return !empty($tables);
     }
@@ -54,7 +54,7 @@ class ActivityLearnLogDaoImpl extends GeneralDaoImpl implements ActivityLearnLog
     {
         $sql = "SELECT * FROM {$this->table()} WHERE activityId = ? and userId = ? and event = 'finish'";
 
-        return $this->db()->fetchAll($sql, array($activityId, $userId)) ?: array();
+        return $this->db()->fetchAll($sql, [$activityId, $userId]) ?: [];
     }
 
     /**
@@ -64,50 +64,64 @@ class ActivityLearnLogDaoImpl extends GeneralDaoImpl implements ActivityLearnLog
      * 对activity_learn_log分表后无法使用该方式统计用户对某一课程的累计学习天数，应使用临时表的方式解决：
      * 即：定时将activity_learn_log原始数据按照业务进行精简汇总保存到某临时表中，从临时表查询所需数据
      *
-     * @param $courseId
+     * @param $activityIds
      * @param $userId
      *
      * @return int
      */
-    public function countLearnedDaysByCourseIdAndUserId($courseId, $userId)
+    public function countLearnedDaysByActivityIdsAndUserId($activityIds, $userId)
     {
+        if (empty($activityIds)) {
+            return 0;
+        }
+
+        $marks = str_repeat('?,', count($activityIds) - 1).'?';
         $sql = "SELECT count(distinct (from_unixtime(createdTime, '%Y-%m-%d')))
                 FROM {$this->table()}
-                WHERE userId = ? AND activityId IN (
-                    SELECT id FROM activity WHERE fromCourseId = ?
-                    )";
+                WHERE userId = ? AND activityId IN ({$marks});";
 
-        return $this->db()->fetchColumn($sql, array($userId, $courseId)) ?: 0;
+        return $this->db()->fetchColumn($sql, array_merge([$userId], $activityIds)) ?: 0;
     }
 
     public function deleteByActivityId($activityId)
     {
-        return $this->db()->delete($this->table(), array('activityId' => $activityId));
+        return $this->db()->delete($this->table(), ['activityId' => $activityId]);
     }
 
     public function getLastestByActivityIdAndUserId($activityId, $userId)
     {
         $sql = "SELECT * FROM {$this->table()} WHERE activityId = ? AND userId = ? ORDER BY createdTime DESC";
 
-        return $this->db()->fetchAssoc($sql, array($activityId, $userId));
+        return $this->db()->fetchAssoc($sql, [$activityId, $userId]);
+    }
+
+    public function deleteLimitByActivityId($activityId, $limit)
+    {
+        return $this->db()->executeUpdate("DELETE FROM {$this->table()} WHERE activityId = ? LIMIT {$limit};", [$activityId]);
     }
 
     public function declares()
     {
-        return array(
-            'orderbys' => array(
+        return [
+            'orderbys' => [
                 'createdTime',
-            ),
-            'serializes' => array(
+            ],
+            'serializes' => [
                 'data' => 'json',
-            ),
-            'conditions' => array(
+            ],
+            'conditions' => [
                 'activityId = :activityId',
-                'event_EQ = :event',
-                'event_NEQ <> :event',
+                'event = :event_EQ',
+                'event <> :event_NEQ',
                 'userId = :userId',
-            ),
-        );
+                'userId IN ( :userIds )',
+                'learnedTime >= :learnedTime_GE',
+                'learnedTime <= :learnedTime_LE',
+                'createdTime >= :createdTime_GE',
+                'createdTime <= :createdTime_LE',
+                'createdTime < :createdTime_LT',
+            ],
+        ];
     }
 
     /**

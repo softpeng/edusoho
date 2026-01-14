@@ -1,14 +1,14 @@
 import QuestionTypeBuilder from './question-type-builder';
 import CopyDeny from './copy-deny';
-import ActivityEmitter from "../../activity/activity-emitter";
-import notify from "common/notify";
+import ActivityEmitter from '../../activity/activity-emitter';
+import notify from 'common/notify';
 
 class DoTestBase
 {
   constructor($container) {
     this.$container = $container;
     this.answers = {};
-    this.usedTime = 0;
+    this.usedTime = $container.find('.js-used-time').length > 0 ? parseInt($container.find('.js-used-time').val()) : 0;
     this.$form = $container.find('form');
     this._initEvent();
     this._initUsedTimer();
@@ -45,7 +45,7 @@ class DoTestBase
     $current.siblings('.js-marking.hidden').removeClass('hidden');
     let id = $current.closest('.js-testpaper-question').attr('id');
     
-    $(`[data-anchor="#${id}"]`).find('.js-marking-card').toggleClass("hidden");
+    $(`[data-anchor="#${id}"]`).find('.js-marking-card').toggleClass('hidden');
   }
 
   _favoriteToggle(event) {
@@ -57,9 +57,9 @@ class DoTestBase
       $current.addClass('hidden').siblings('.js-favorite.hidden').data('url',response.url);  
       $current.addClass('hidden').siblings('.js-favorite.hidden').removeClass('hidden');
     })
-    .error(function(response){
-      notify('error', response.error.message);
-    })
+      .error(function(response){
+        notify('error', response.error.message);
+      });
   }
 
   _analysisToggle(event) {
@@ -100,12 +100,12 @@ class DoTestBase
       }else {
         $(item).removeClass('active');
       }
-    })
+    });
     let questionId = $input.attr('name');
-    this._renderBtnIndex(questionId,num>0?true:false)
+    this._renderBtnIndex(questionId,num>0?true:false);
   }
 
-   _renderBtnIndex(idNum,done = true,doing = false) {
+  _renderBtnIndex(idNum,done = true,doing = false) {
     let $btn = $(`[data-anchor="#question${idNum}"]`);
     if(done) {
       $btn.addClass('done');
@@ -115,7 +115,7 @@ class DoTestBase
     if(doing) {
       $btn.addClass('doing').siblings('.doing').removeClass('doing');
     }else {
-      $btn.removeClass('doing')
+      $btn.removeClass('doing');
     }
   }
   _showEssayInputEditor(event) {
@@ -135,10 +135,11 @@ class DoTestBase
 
       let editor = CKEDITOR.replace($longTextarea.attr('id'), {
         toolbar: 'Minimal',
+        fileSingleSizeLimit: app.fileSingleSizeLimit,
         filebrowserImageUploadUrl: $longTextarea.data('imageUploadUrl')
       });
 
-      editor.on('blur', e => {
+      editor.on('blur', () => {
         editor.updateElement();
         setTimeout(()=>{
           $longTextarea.val(editor.getData());
@@ -147,7 +148,7 @@ class DoTestBase
         }, 1);
       });
 
-      editor.on('instanceReady', function(e) {
+      editor.on('instanceReady', function() {
         this.focus();
 
         $textareaBtn.one('click', function() {
@@ -167,7 +168,7 @@ class DoTestBase
         }, 1);
       });
 
-      editor.on('insertHtml', function(e) {
+      editor.on('insertHtml', function() {
         editor.updateElement();
         setTimeout(function() {
           $longTextarea.val(editor.getData());
@@ -188,15 +189,16 @@ class DoTestBase
     let attachments = this._getAttachments();
 
     $.post(url,{data:values,usedTime:this.usedTime,attachments:attachments})
-    .done((response) => {})
-    .error(function (response) {
-      notify('error', response.error.message);
-    });
+      .done(() => {})
+      .error(function (response) {
+        notify('error', response.error.message);
+      });
   }
 
   _btnSubmit(event) {
     let $target = $(event.currentTarget);
     $target.button('loading');
+    clearInterval(this.saveTimer);
     this._submitTest($target.data('url'), $target.data('goto'));
   }
 
@@ -206,34 +208,34 @@ class DoTestBase
     let attachments = this._getAttachments();
 
     $.post(url,{data:values,usedTime:this.usedTime,attachments:attachments})
-    .done((response) => {
-      if (response.result) {
-        emitter.emit('finish', {data: ''});
-      }
+      .done((response) => {
+        if (response.result) {
+          emitter.emit('finish', {data: ''});
+        }
 
-      if (toUrl != '' || response.goto != '') {
-        window.location.href = toUrl;
-      } else if (response.goto != ''){
-        window.location.href = response.goto;
-      } else if (response.message != '') {
-        notify('error', response.message);
-      }
-    })
-    .error(function (response) {
-      notify('error', response.error.message);
-    });
+        if (toUrl != '' || response.goto != '') {
+          window.location.href = toUrl;
+        } else if (response.goto != ''){
+          window.location.href = response.goto;
+        } else if (response.message != '') {
+          notify('error', response.message);
+        }
+      })
+      .error(function (response) {
+        notify('error', response.error.message);
+      });
   }
 
   _getAnswers() {
     let values = {};
 
-    $('*[data-type]').each(function(index){
+    $('*[data-type]').each(function(){
       let questionId = $(this).attr('name');
       let type = $(this).data('type');
       const questionTypeBuilder = QuestionTypeBuilder.getTypeBuilder(type);
       let answer = questionTypeBuilder.getAnswer(questionId);
       values[questionId] = answer;
-    })
+    });
 
     return JSON.stringify(values);
   }
@@ -241,13 +243,13 @@ class DoTestBase
   _getAttachments() {
     let attachments = {};
 
-    $('[data-type="essay"]').each(function(index) {
+    $('[data-type="essay"]').each(function() {
       let questionId = $(this).attr('name');
       const questionTypeBuilder = QuestionTypeBuilder.getTypeBuilder('essay');
 
       let attachment = questionTypeBuilder.getAttachment(questionId);
       attachments[questionId] = attachment;
-    })
+    });
 
     return attachments;
   }
@@ -256,7 +258,7 @@ class DoTestBase
     if ($('input[name="testSuspend"]').length > 0) {
       let self = this;
       let url = $('input[name="testSuspend"]').data('url');
-      setInterval(function(){
+      this.saveTimer = setInterval(function(){
         self._suspendSubmit(url);
         let currentTime = new Date().getHours()+ ':' + new Date().getMinutes()+ ':' +new Date().getSeconds();
         notify('success',currentTime + Translator.trans('testpaper.widget.save_success_hint'));
@@ -265,12 +267,5 @@ class DoTestBase
   }
 
 }
-
-//临时方案，libs/vendor.js这个方法没有起作用
-/*$(document).ajaxSend(function(a, b, c) {
-  if (c.type == 'POST') {
-    b.setRequestHeader('X-CSRF-Token', $('meta[name=csrf-token]').attr('content'));
-  }
-});*/
 
 export default DoTestBase;

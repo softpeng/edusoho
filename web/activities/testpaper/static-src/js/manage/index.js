@@ -1,0 +1,1007 @@
+import { dateFormat, htmlEscape } from 'app/common/unit.js';
+import DateRangePicker from 'app/common/daterangepicker';
+import 'moment';
+
+let locale = {}
+let fixedTimeLocale = {}
+
+if (app.lang !== 'zh_CN') {
+  locale = {
+    'format': 'YYYY/MM/DD HH:mm',
+    'separator': '-',
+    'applyLabel': 'Apply',
+    'cancelLabel': 'Cancel',
+    'fromLabel': 'From',
+    'toLabel': 'To',
+    'customRangeLabel': 'Custom',
+    'weekLabel': 'W',
+    'daysOfWeek': [
+      'Su',
+      'Mo',
+      'Tu',
+      'We',
+      'Th',
+      'Fr',
+      'Sa'
+    ],
+    'monthNames': [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December'
+    ],
+    'firstDay': 1
+  };
+  fixedTimeLocale = {
+    'format': 'YYYY/MM/DD HH:mm',
+    'separator': '-',
+    'applyLabel': 'Apply',
+    'cancelLabel': 'Cancel',
+    'fromLabel': 'From',
+    'toLabel': 'To',
+    'customRangeLabel': 'Custom',
+    'weekLabel': 'W',
+    'daysOfWeek': [
+      'Su',
+      'Mo',
+      'Tu',
+      'We',
+      'Th',
+      'Fr',
+      'Sa'
+    ],
+    'monthNames': [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December'
+    ],
+    'firstDay': 1
+  };
+} else {
+  locale = {
+    'format': 'YYYY/MM/DD HH:mm',
+    'separator': '-',
+    'applyLabel': '确定',
+    'cancelLabel': '取消',
+    'fromLabel': '起始时间',
+    'toLabel': '结束时间',
+    'customRangeLabel': '自定义',
+    'weekLabel': 'W',
+    'daysOfWeek': [
+      '日',
+      '一',
+      '二',
+      '三',
+      '四',
+      '五',
+      '六'
+    ],
+    'monthNames': [
+      '一月',
+      '二月',
+      '三月',
+      '四月',
+      '五月',
+      '六月',
+      '七月',
+      '八月',
+      '九月',
+      '十月',
+      '十一月',
+      '十二月'
+    ],
+    'firstDay': 1
+  };
+  fixedTimeLocale = {
+    'format': 'YYYY/MM/DD HH:mm',
+    'separator': '-',
+    'applyLabel': '确定',
+    'cancelLabel': '取消',
+    'fromLabel': '起始时间',
+    'toLabel': '结束时间',
+    'customRangeLabel': '自定义',
+    'weekLabel': 'W',
+    'daysOfWeek': [
+      '日',
+      '一',
+      '二',
+      '三',
+      '四',
+      '五',
+      '六'
+    ],
+    'monthNames': [
+      '一月',
+      '二月',
+      '三月',
+      '四月',
+      '五月',
+      '六月',
+      '七月',
+      '八月',
+      '九月',
+      '十月',
+      '十一月',
+      '十二月'
+    ],
+    'firstDay': 1
+  };
+}
+
+class Testpaper {
+  constructor($element) {
+    this.$element = $element;
+    this.$form = this.$element.find('#step2-form');
+    this.$questionBankSelector = this.$element.find('#question-bank');
+    this.$testpaperTypeSelector = this.$element.find('#testpaper-type');
+    this.$testpaperSelector = this.$element.find('#testpaper-media');
+    this.$questionItemShow = this.$element.find('#questionItemShowDiv');
+    this.$scoreItem = this.$element.find('.js-score-form-group');
+    this.$rangeStartTime = $('.js-start-range')
+    this.$rangeDateInput = $('.js-realTimeRange-data');
+    this.$rangeFixedTime = $('.js-fixedTime-data');
+    this.$testDuration = $('.js-test-duration');
+    this.$fixedTimeTip = $('.js-fixed-time-tip');
+    this.$canUpdate = $('#canUpdate').val();
+    this.$validPeriodMode = $('#validPeriodMode').val();
+    this._init();
+  }
+
+  _init() {
+    dateFormat();
+    this.initDatePicker();
+    this.setValidateRule();
+    this.initQuestionBankSelector();
+    this.initTestPaperTypeSelector();
+    this.initTestPaperSelector();
+    this.initSelectTestPaper(this.$testpaperSelector.select2('data'));
+    this.initEvent();
+    this.initStepForm2();
+    this.initAddComment();
+    this.initFormItemData();
+    this.initAdvancedSettings();
+    this.validatorTestDuration();
+
+    window.ltc.on('getActivity', (msg) => {
+      window.ltc.emit('returnActivity', {
+        valid: this.validator.form(),
+        data: window.ltc.getFormSerializeObject($('#step2-form'))
+      });
+    });
+
+    window.ltc.on('getValidate', (msg) => {
+      window.ltc.emit('returnValidate', {
+        valid: this.validator.form(), context: {
+          score: this.$testpaperSelector.select2('data').score,
+        }
+      });
+      window.ltc.emit('returnValidate', { valid: this.validator.form() });
+    });
+
+    if ($('.form-switch').length) {
+      $('[data-toggle="switch"]').on('click', function () {
+        var $this = $(this);
+        var $parent = $this.parent();
+        var isEnable = $this.val();
+        var reverseEnable = isEnable == 1 ? 0 : 1;
+
+        if ($parent.hasClass('checked')) {
+          $parent.removeClass('checked');
+        } else {
+          $parent.addClass('checked');
+        }
+        $this.val(reverseEnable);
+        $this.next().val(reverseEnable);
+      });
+    }
+  }
+
+  initDatePicker() {
+    const todayYear=(new Date()).getFullYear();
+    const todayMonth=(new Date()).getMonth();
+    const todayDay=(new Date()).getDate();
+    const todayTime=(new Date(todayYear,todayMonth,todayDay,'23','59','59')).getTime();//毫秒
+    const validPeriodMode = $('[name="validPeriodMode"]:checked').val()
+
+    const activityId = $('#activityId').val()
+    const startTime = $('[name=startTime]').val()
+    const endTime = $('[name=endTime]').val()
+    this.$rangeDateInput.daterangepicker({
+      "timePicker": true,
+      "timePicker24Hour": true,
+      "timePickerSeconds": true,
+      'autoUpdateInput':false,
+      'minDate': new Date(),
+      'endDate': validPeriodMode == '1' ? endTime != '0' ? endTime : todayTime : todayTime,
+      'startDate': validPeriodMode == '1' ? activityId != '0' ? startTime : moment().startOf('seconds') : moment().startOf('seconds'),
+      locale,
+    });
+
+    this.$rangeDateInput.on('apply.daterangepicker', function(ev, picker) {
+      $('input[name=startTime]').val(picker.startDate.format('YYYY-MM-DD HH:mm:ss'))
+      $('input[name=endTime]').val(picker.endDate.format('YYYY-MM-DD HH:mm:ss'))
+      $(this).val(picker.startDate.format('YYYY-MM-DD HH:mm:ss') +' - ' + picker.endDate.format('YYYY-MM-DD HH:mm:ss'));
+    });
+
+    this.$rangeDateInput.on('show.daterangepicker', function () {
+      let height = $('#iframe-content').height();
+      document.getElementById('iframe-content').style.height = height + 240.8 + 'px';
+    })
+
+    this.$rangeDateInput.on('hide.daterangepicker', function () {
+      let height = $('#iframe-content').height();
+      document.getElementById('iframe-content').style.height = height - 240 + 'px';
+    })
+
+    this.$rangeStartTime.daterangepicker({
+      "timePicker": true,
+      'singleDatePicker': true,
+      "timePicker24Hour": true,
+      "timePickerSeconds": true,
+      'minDate': new Date(),
+      'startDate': validPeriodMode == '2' ? activityId != '0' ? startTime : moment().startOf('seconds') : moment().startOf('seconds'),
+      locale,
+    });
+
+    this.$rangeStartTime.on('apply.daterangepicker', function(ev, picker) {
+      $('input[name=startTime]').val(picker.startDate.format('YYYY-MM-DD HH:mm:ss'))
+      $(this).val(picker.startDate.format('YYYY-MM-DD HH:mm:ss'));
+    });
+
+    this.$rangeStartTime.on('show.daterangepicker', function () {
+      let height = $('#iframe-content').height();
+      document.getElementById('iframe-content').style.height = height + 240 + 'px';
+    })
+
+    this.$rangeStartTime.on('hide.daterangepicker', function () {
+      let height = $('#iframe-content').height();
+      document.getElementById('iframe-content').style.height = height - 240 + 'px';
+    })
+
+    this.$rangeFixedTime.daterangepicker({
+      timePicker: true,
+      timePicker24Hour: true,
+      autoUpdateInput: false,
+      minDate: new Date(),
+      endDate: validPeriodMode == '3' ? endTime != '0' ? endTime : todayTime : todayTime,
+      startDate: validPeriodMode == '3' ? activityId != '0' ? startTime : moment().startOf('minute') : moment().startOf('minute'),
+      locale: fixedTimeLocale,
+    });
+
+    const self = this;
+    this.$rangeFixedTime.on('apply.daterangepicker', function(ev, picker) {
+      $('input[name=startTime]').val(picker.startDate.format('YYYY-MM-DD HH:mm'))
+      $('input[name=endTime]').val(picker.endDate.format('YYYY-MM-DD HH:mm'))
+      $(this).val(picker.startDate.format('YYYY-MM-DD HH:mm') +' - ' + picker.endDate.format('YYYY-MM-DD HH:mm'));
+      const diffMs = picker.endDate - picker.startDate;
+      const diffInMinutes = Math.floor(diffMs / (1000 * 60));
+      $('#length').val(diffInMinutes);
+      self.validatorTestDuration();
+    });
+
+    this.$rangeFixedTime.on('show.daterangepicker', function () {
+      if ($('#questionItemShowDiv').is(':visible')) {
+        $('#iframe-content').height($('#iframe-content').height() + 500);
+      } else {
+        $('#iframe-content').height($('#iframe-content').height() + 240);
+      }
+    })
+
+    this.$rangeFixedTime.on('hide.daterangepicker', function () {
+      if ($('#questionItemShowDiv').is(':visible')) {
+        $('#iframe-content').height($('#iframe-content').height() - 500);
+      } else {
+        $('#iframe-content').height($('#iframe-content').height() - 240);
+      }
+    })
+  }
+
+  initFormItemData() {
+    const activityId = $('#activityId').val()
+    const validPeriodMode = $('[name="validPeriodMode"]:checked').val()
+
+    if (activityId == 0) return
+
+    const startTime = $('[name=startTime]').val()
+    const endTime = $('[name=endTime]').val()
+    const defaultStartTime = startTime == '0' ? '' : startTime
+    const defaultEndTime = endTime == '0' ? '' : endTime
+
+    if(validPeriodMode == 1) {
+      defaultStartTime == '' && defaultEndTime == '' ? this.$rangeDateInput.val() : this.$rangeDateInput.val(defaultStartTime + ' - ' + defaultEndTime)
+    } else if(validPeriodMode == 2) {
+      this.$rangeStartTime.val(defaultStartTime)
+    } else if (validPeriodMode == 3) {
+      defaultStartTime == '' && defaultEndTime == '' ? this.$rangeFixedTime.val() : this.$rangeFixedTime.val(defaultStartTime + ' - ' + defaultEndTime)
+    }
+  }
+
+  initAdvancedSettings() {
+    $('#toggle-advanced-settings').on('click', function() {
+      var $advancedSettings = $('#advanced-settings');
+      var $icon = $(this).find('.es-icon');
+
+      if ($icon.hasClass('es-icon-xiangshang')) {
+        $icon.removeClass('es-icon-xiangshang').addClass('es-icon-xiangxia');
+      } else {
+        $icon.removeClass('es-icon-xiangxia').addClass('es-icon-xiangshang');
+      }
+
+      if ($advancedSettings.css('display') === 'none') {
+        $advancedSettings.css('display', 'block');
+      } else {
+        $advancedSettings.css('display', 'none');
+      }
+    });
+  }
+
+  setValidateRule() {
+    $.validator.addMethod('arithmeticFloat', function (value, element) {
+      return this.optional(element) || /^[0-9]+(\.[0-9]?)?$/.test(value);
+    }, $.validator.format(Translator.trans('activity.testpaper_manage.arithmetic_float_error_hint')));
+
+    $.validator.addMethod('examLength', function (value, element) {
+      if ($('input[name="exam_mode"]').val() == 0 && value <= 0) {
+        return false;
+      }
+
+      return true;
+    }, $.validator.format(Translator.trans('course.plan_task.activity_manage.testpaper.mock_tips4')));
+
+    $.validator.addMethod("maxDuration", function(value, element) {
+      const startTime = $('[name="startTime"]').val();
+      const endTime = $('[name="endTime"]').val();
+
+      if (!startTime || !endTime || $('[name="validPeriodMode"]:checked').val() != 3) return true;
+
+      const startDate = new Date(startTime);
+      const endDate = new Date(endTime);
+      const diffMs = endDate - startDate;
+      const TEN_HOURS_IN_MS = 10 * 60 * 60 * 1000;
+
+      if (diffMs > TEN_HOURS_IN_MS) {
+        $('.js-test-duration').hide();
+      }
+
+      return diffMs <= TEN_HOURS_IN_MS;
+    }, "固定考试时间不能超过10个小时");
+
+    $.validator.addMethod("minDuration", function(value, element) {
+      const startTime = $('[name="startTime"]').val();
+      const endTime = $('[name="endTime"]').val();
+
+      if (!startTime || !endTime || $('[name="validPeriodMode"]:checked').val() != 3) return true;
+
+      const startDate = new Date(startTime);
+      const endDate = new Date(endTime);
+      const diffMs = endDate - startDate;
+
+      if (diffMs <= 0) {
+        $('.js-test-duration').hide();
+      }
+
+      return diffMs > 0;
+    }, "考试时间需大于0");
+  }
+
+  initEvent() {
+    this.$element.find('#question-bank').on('change', event => this.changeQuestionBank(event));
+    this.$element.find('#testpaper-type').on('change', event => this.changeTestpaperType(event));
+    this.$element.find('#testpaper-media').on('change', event => this.changeTestPaper(event));
+    this.$element.find('input[name=validPeriodMode]').on('change', event => this.showRedoExamination(event));
+    this.$element.find('input[name=isLimitDoTimes]').on('change', event => this.showRedoInterval(event));
+    this.$element.find('input[name="testMode"]').on('change', event => this.startTimeCheck(event));
+    this.$element.find('.js-testpaper-mode').on('click', event => this.switchExamMode(event));
+  }
+
+  initAddComment() {
+    let $customCommentTable = $('#customCommentTable');
+    let ii = $customCommentTable.find('tr').length;
+    $('#addComment').on('click', function () {
+      let tr = '<tr>\n' +
+        '              <td class="form-inline">\n' +
+        '                <input type="text" class="form-control" name="start[' + ii + ']" style="width: 47px; padding: 6px;"> -\n' +
+        '                <input type="text" class="form-control" name="end[' + ii + ']" style="width: 47px; padding: 6px;">\n' +
+        '              </td>\n' +
+        '              <td class="form-inline">\n' +
+        '                <textarea name="comment[' + ii + ']" rows="1" maxlength="1500" class="form-control js-comment-content" style="width: 310px;margin-right: 15px;"></textarea>\n' +
+        '                <div class="default-comment">\n' +
+        '                  <a href="javascript:;" class="js-default-comment">' + Translator.trans('activity.testpaper_manage.default_comment') + '</a>\n' +
+        '                   <div class="default-comment-list hidden">' +
+        '                   <div class="default-comment-list__item js-default-comment-item">' + Translator.trans('activity.testpaper_manage.default_comment1') + '</div>' +
+        '                    <div class="default-comment-list__item js-default-comment-item">' + Translator.trans('activity.testpaper_manage.default_comment2') + '</div>' +
+        '                    <div class="default-comment-list__item js-default-comment-item">' + Translator.trans('activity.testpaper_manage.default_comment3') + '</div>' +
+        '                    <div class="default-comment-list__item js-default-comment-item">' + Translator.trans('activity.testpaper_manage.default_comment4') + '</div>' +
+        '                    <div class="default-comment-list__item js-default-comment-item">' + Translator.trans('activity.testpaper_manage.default_comment5') + '</div>' +
+        '                  </div>' +
+        '                </div>\n' +
+        '              </td>\n' +
+        '              <td class="form-inline vertical-middle">\n' +
+        '                <a href="javascript:;" class="js-comment-remove">' + Translator.trans('activity.testpaper_manage.comment_remove') + '</a>\n' +
+        '              </td>\n' +
+        '            </tr>';
+      $customCommentTable.append(tr);
+      $customCommentTable.removeClass('hidden');
+      ii++;
+    });
+    $customCommentTable.on('input', '.js-comment-content', function (e) {
+      const scrollHeight = e.target.scrollHeight - 12;
+      $(this).height(scrollHeight);
+    });
+    $customCommentTable.on('click', '.js-comment-remove', function () {
+      $(this).parent().parent().remove();
+      if($customCommentTable.find('tr').length == 1) {
+        $customCommentTable.addClass('hidden')
+      }
+    });
+
+    $customCommentTable.on('click', '.js-default-comment-item', function () {
+      $(this).parent().parent().siblings('.js-comment-content').val($(this).text());
+    });
+  }
+
+  initStepForm2() {
+    this.validator = this.$form.validate({
+      onkeyup: false,
+      rules: {
+        title: {
+          required: true,
+          trim: true,
+          byte_maxlength: 100,
+          course_title: true,
+        },
+        testpaperId: {
+          required: true,
+          digits: true,
+          min: 1,
+        },
+        length: {
+          required: () => $('[name="validPeriodMode"]:checked').val() != 3,
+          digits: () => $('[name="validPeriodMode"]:checked').val() != 3,
+          examLength: () => $('[name="validPeriodMode"]:checked').val() != 3
+        },
+        doTimes: {
+          required: () => $('[name="isLimitDoTimes"]:checked').val() == 1,
+          optional_range: {
+            optional: () => $('[name="isLimitDoTimes"]:checked').val() == 0,
+            range: [1, 100],
+          },
+          digits: true,
+          // section_number: () => $('[name="isLimitDoTimes"]:checked').val() == 1 ? /^([1-9][0-9]{0,1}|100)$/ : '',
+        },
+        rangeTime: {
+          required: () => $('[name="validPeriodMode"]:checked').val() == 1,
+        },
+        rangeStartTime: {
+          required: () => $('[name="validPeriodMode"]:checked').val() == 2,
+        },
+        rangeFixedTime: {
+          required: () => $('[name="validPeriodMode"]:checked').val() == 3,
+          maxDuration: true,
+          minDuration: true
+        },
+        redoInterval: {
+          required: function () {
+            return $('[name="isLimitDoTimes"]:checked').val() == 0;
+          },
+          arithmeticFloat: true,
+          max: 1000000000
+        }
+      },
+      messages: {
+        testpaperId: {
+          required: Translator.trans('activity.testpaper_manage.media_error_hint'),
+          min: Translator.trans('activity.testpaper_manage.media_error_hint'),
+        },
+        redoInterval: {
+          required: Translator.trans('validate.required.message', { 'display': Translator.trans('validate.valid_enter.retest.interval') }),
+          max: Translator.trans('activity.testpaper_manage.max_error_hint')
+        },
+        length: {
+          required: Translator.trans('validate.required.message', { 'display': Translator.trans('course.plan_task.activity_manage.testpaper.time_limit') }),
+        },
+        doTimes: {
+          required: Translator.trans('validate.valid_enter_a_positive.integer')
+        },
+        rangeTime: {
+          required: Translator.trans('validate.valid_rangetime.required')
+        },
+        rangeStartTime: {
+          required: Translator.trans('validate.valid_starttime.required'),
+        },
+        rangeFixedTime: {
+          required: Translator.trans('validate.valid_fixedtime.required')
+        },
+      }
+    });
+  }
+
+  initSelectTestPaper($selected) {
+    let mediaId = parseInt($selected.id);
+    if (mediaId) {
+      this.getItemsTable(this.$testpaperSelector.data('getTestpaperItems'), mediaId);
+      if (!$('input[name="title"]').val()) {
+        $('input[name="title"]').val($selected.text);
+      }
+      this.initScoreSlider();
+    } else {
+      $('#questionItemShowDiv').hide();
+      $('#js-test-and-comment').hide();
+    }
+  }
+
+  initSelectRandomTestPaper($selected) {
+    let mediaId = parseInt($selected.id);
+    if (mediaId) {
+      this.getItemsTable(this.$testpaperSelector.data('getTestpaperItems'), mediaId);
+      if (!$('input[name="title"]').val()) {
+        $('input[name="title"]').val($selected.text);
+      }
+      this.initScoreSlider();
+    } else {
+      $('#questionItemShowDiv').hide();
+      $('#js-test-and-comment').hide();
+    }
+  }
+
+  initEmptyTestPaperTypeSelector() {
+    this.$testpaperSelector.select2({
+      data: [
+        {
+          id: '0',
+          text: Translator.trans('activity.testpaper_manage.media_type_required'),
+          selected: true,
+        }
+      ],
+    });
+  }
+
+  initEmptyTestPaperSelector() {
+    this.$testpaperSelector.select2({
+      data: [
+        {
+          id: '0',
+          text: Translator.trans('activity.testpaper_manage.media_required'),
+          selected: true,
+        }
+      ],
+    });
+  }
+
+  initAjaxTestPaperTypeSelector() {
+    let self = this;
+    this.$testpaperTypeSelector.removeClass('hidden');
+    this.$testpaperTypeSelector.select2({
+      ajax: {
+        url: self.$testpaperTypeSelector.data('url'),
+        dataType: 'json',
+        quietMillis: 250,
+        results: function (data) {
+          if (data && Array.isArray(data.assessmentType)) {
+            let results = data.assessmentType.map(function(type) {
+              return {
+                id: type,
+                text: Translator.trans('activity.testpaper_'+type)
+              };
+            });
+            return {
+              results: results
+            };
+          } else {
+            return {
+              results: []
+            };
+          }
+        }
+      },
+      initSelection: function (element, callback) {
+        let testPaperType = $('#testPaperType').val();
+        let data = {
+          id: element.val(),
+          text: testPaperType ? Translator.trans('activity.testpaper_'+testPaperType) : Translator.trans('activity.testpaper_manage.media_type_required'),
+        };
+
+        callback(data);
+      },
+    });
+  }
+
+
+  initAjaxTestPaperSelector() {
+    let self = this;
+    let typeSelected = this.$testpaperTypeSelector.select2('data');
+    let type = typeSelected ? typeSelected.id : 0;
+
+    let baseUrl = self.$testpaperSelector.data('url');
+    let url = '';
+    if (type == 0) {
+      url = baseUrl + `?type=${$('#testPaperType').val()}`;
+    }else {
+      baseUrl = baseUrl.replace(/([&?]type=)[^&]+/, '');
+      url = baseUrl.includes('?') ? `${baseUrl}&type=${type}` : `${baseUrl}?type=${type}`;
+    }
+    this.$testpaperSelector.select2({
+      ajax: {
+        url: url,
+        dataType: 'json',
+        quietMillis: 250,
+        data: function (term, page) {
+          return {
+            keyword: term,
+            page: page,
+          };
+        },
+        results: function (data, page) {
+          let results = [];
+
+          $.each(data.testPapers, function (index, testPaper) {
+            results.push({
+              id: testPaper.id,
+              text: testPaper.name,
+              score: testPaper.score,
+            });
+          });
+
+          return {
+            results: results,
+            more: page * 10 < data.openCount,
+          };
+        },
+      },
+      initSelection: function (element, callback) {
+        let testPaperName = $('#testPaperName').val();
+        let testPaperId = element.val();
+        let testPaperScore = $('#score-condition').data('score');
+        if (!parseInt(testPaperId)) {
+          testPaperName = '';
+        }
+        let data = {
+          id: testPaperId,
+          text: testPaperName ? testPaperName : Translator.trans('activity.testpaper_manage.media_required'),
+          score: testPaperScore,
+        };
+
+        callback(data);
+      },
+      formatSelection: function (data) {
+        return data.text;
+      },
+      dropdownAutoWidth: true,
+    });
+    this.$testpaperSelector.removeClass('hidden');
+  }
+
+  initQuestionBankSelector() {
+    this.$questionBankSelector.select2({
+      treeview: true,
+      dropdownAutoWidth: true,
+      treeviewInitState: 'collapsed',
+      placeholderOption: 'first',
+      formatResult: function (item) {
+        let text = htmlEscape(item.text);
+        if (!item.id) {
+          return text;
+        }
+        return `<div class="select2-result-text"><span class="select2-match"></span><span><i class="es-icon es-icon-tiku"></i>${text}</span></div>`;
+      },
+      dropdownCss: {
+        width: ''
+      },
+    });
+  }
+
+  initTestPaperTypeSelector() {
+    if ($('#testPaperName').val()) {
+      this.initAjaxTestPaperTypeSelector();
+    } else {
+      this.initEmptyTestPaperTypeSelector();
+    }
+  }
+
+  initTestPaperSelector() {
+    if ($('#testPaperName').val()) {
+      this.initAjaxTestPaperSelector();
+    } else {
+      this.initEmptyTestPaperSelector();
+    }
+  }
+
+  changeQuestionBank(event) {
+    let $helpBlock = $('.js-help-block');
+    $helpBlock.addClass('hidden');
+    this.$testpaperSelector.addClass('hidden');
+    this.$testpaperTypeSelector.addClass('hidden');
+    this.$questionItemShow.hide();
+    this.$scoreItem.hide();
+    this.$testpaperSelector.val('0');
+    this.$testpaperTypeSelector.val('0');
+    let selected = this.$questionBankSelector.select2('data');
+    let bankId = selected.id;
+    if (!parseInt(bankId)) {
+      this.initEmptyTestPaperSelector();
+      return;
+    }
+    let url = this.$questionBankSelector.data('url');
+    url = url.replace(/[0-9]/, bankId);
+    let self = this;
+    $.post(url, function (resp) {
+      if (resp.totalCount === 0) {
+        $helpBlock.addClass('color-danger').removeClass('hidden').text(Translator.trans('queston_bank.testpaper.empty_tips')).show();
+        return;
+      }
+      if (resp.openCount === 0) {
+        $helpBlock.removeClass('color-danger').removeClass('hidden').text(Translator.trans('queston_bank.testpaper.no_open_tips')).show();
+        return;
+      }
+      self.$testpaperTypeSelector.data('url', url);
+      self.initAjaxTestPaperTypeSelector();
+    }).error(function (e) {
+      cd.message({ type: 'danger', message: e.responseJson.error.message });
+    });
+  }
+
+  changeTestpaperType(event) {
+    let $helpBlock = $('.js-help-block');
+    $helpBlock.addClass('hidden');
+    this.$testpaperSelector.addClass('hidden');
+    this.$questionItemShow.hide();
+    this.$scoreItem.hide();
+    this.$testpaperSelector.val('0');
+
+    let selected = this.$questionBankSelector.select2('data');
+    let bankId = selected.id;
+    if (!parseInt(bankId)) {
+      this.initEmptyTestPaperSelector();
+      return;
+    }
+    let typeSelected = this.$testpaperTypeSelector.select2('data');
+    let type = typeSelected.id;
+    let url = this.$testpaperTypeSelector.data('url')+'?type='+type;
+    let self = this;
+    $.post(url, function (resp) {
+      if (resp.totalCount === 0) {
+        $helpBlock.addClass('color-danger').removeClass('hidden').text(Translator.trans('queston_bank.testpaper.empty_tips')).show();
+        self.initEmptyTestPaperSelector();
+        return;
+      }
+      if (resp.openCount === 0) {
+        $helpBlock.removeClass('color-danger').removeClass('hidden').text(Translator.trans('queston_bank.testpaper.no_open_tips')).show();
+        self.initEmptyTestPaperSelector();
+        return;
+      }
+      self.$testpaperSelector.data('url', url);
+      self.initAjaxTestPaperSelector();
+    }).error(function (e) {
+      cd.message({ type: 'danger', message: e.responseJson.error.message });
+    });
+  }
+
+  changeTestPaper(event) {
+    let $selected = this.$testpaperSelector.select2('data');
+    let typeSelected = this.$testpaperTypeSelector.select2('data');
+    let type = typeSelected.id;
+    if (type == 'regular') {
+      this.initSelectTestPaper($selected);
+    }else if (type == 'random') {
+      this.initSelectRandomTestPaper($selected);
+    }
+  }
+
+  showRedoExamination(event) {
+    const $this = $(event.currentTarget);
+    this.validator.resetForm(['rangeFixedTime']);
+    $('#length').val(null)
+    $('[name=startTime]').val('0')
+    $('[name=endTime]').val('0')
+    $('.js-redo-interval-form-group').show();
+    $('.js-fixed-time-form-group').show();
+    $('input[name=rangeTime]').val('');
+    $('input[name=rangeStartTime]').val('');
+    $('input[name=rangeFixedTime]').val('');
+    this.$testDuration.hide();
+    this.validatorTestDuration();
+
+    if ($this.val() == 0) {
+      this.$rangeDateInput.attr('type', 'hidden');
+      this.$rangeStartTime.attr('type', 'hidden');
+      this.$rangeFixedTime.attr('type', 'hidden');
+    } else if ($this.val() == 1) {
+      this.$rangeDateInput.attr('type', 'test');
+      this.$rangeStartTime.attr('type', 'hidden');
+      this.$rangeFixedTime.attr('type', 'hidden');
+    } else if ($this.val() == 2) {
+      this.$rangeDateInput.attr('type', 'hidden');
+      this.$rangeStartTime.attr('type', 'test');
+      this.$rangeFixedTime.attr('type', 'hidden');
+    } else if ($this.val() == 3) {
+      this.$rangeDateInput.attr('type', 'hidden');
+      this.$rangeStartTime.attr('type', 'hidden');
+      this.$rangeFixedTime.attr('type', 'test');
+      $('input[type="radio"][name="isLimitDoTimes"][value="0"]').prop('checked', false);
+      $('input[type="radio"][name="isLimitDoTimes"][value="1"]').prop('checked', true);
+      $('.js-examinations-num').attr('type', 'text');
+      $('input[type="text"][name="doTimes"]').val('1');
+      $('.js-redo-interval-form-group').hide();
+      $('.js-fixed-time-form-group').hide();
+    }
+  }
+
+  validatorTestDuration() {
+    const startTime = $('[name=startTime]').val()
+    const endTime = $('[name=endTime]').val()
+    const validPeriodMode = $('[name="validPeriodMode"]:checked').val()
+    if (validPeriodMode == 3) {
+      $('.js-redo-interval-form-group').hide();
+      $('.js-fixed-time-form-group').hide();
+    }
+    if (startTime != 0 && endTime != 0 && validPeriodMode == 3) {
+
+      const TEN_HOURS_IN_MS = 10 * 60 * 60 * 1000;
+      const startDate = new Date(startTime);
+      const endDate = new Date(endTime);
+      const diffMs = endDate - startDate;
+      const diffMinutes = Math.floor(diffMs / (1000 * 60)) % 60;
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+      if ($('#examMode').val() == 0) {
+        this.$fixedTimeTip
+          .text('模拟考试时长必须 > 0')
+          .show();
+      } else {
+        this.$fixedTimeTip
+          .text('练习考试时长必须 > 0')
+          .show();
+      }
+
+      if (startTime != 0 && endTime != 0) {
+        this.validator.element('#rangeFixedTime');
+      }
+
+      if (diffMs > 0 && diffMs <= TEN_HOURS_IN_MS) {
+        this.$testDuration
+          .text(diffHours > 0 ? `考试时长： ${diffHours}小时${diffMinutes}分钟` : `考试时长： ${diffMinutes}分`)
+          .css('color', 'rgba(0, 0, 0, 0.56)')
+          .show();
+      }
+    } else {
+      this.$fixedTimeTip.hide();
+    }
+  }
+
+  showRedoInterval(event) {
+    const $this = $(event.currentTarget);
+
+    if ($this.val() == 1) {
+      $('.js-examinations-num').attr('type', 'text');
+    }
+
+    if ($this.val() == 0) {
+      $('.js-examinations-num').attr('type', 'hidden');
+    }
+  }
+
+  getItemsTable(url, testpaperId) {
+    $.post(url, { testpaperId: testpaperId }, function (html) {
+      $('#questionItemShowTable').html(html);
+      $('#questionItemShowDiv').show();
+    });
+  }
+
+  initScoreSlider() {
+    let score = 0;
+    if (this.$testpaperSelector.select2('data').score) {
+      score = Number(this.$testpaperSelector.select2('data').score);
+    } else {
+      score = Number($('#score-condition').data('score'));
+    }
+    $('.js-score-total').text(score);
+    let passScore = score * $('#score-condition').data('pass');
+
+
+    if (passScore % 1 != 0) {
+      passScore = Number(passScore.toFixed(1));
+    }
+
+    if (score % 1 != 0) {
+      score = Number(score.toFixed(1));
+    }
+
+    let scoreSlider = document.getElementById('score-slider');
+    let option = {
+      start: passScore,
+      connect: [true, false],
+      tooltips: [true],
+      step: 0.1,
+      range: {
+        'min': 0,
+        'max': score
+      }
+    };
+
+    if (this.scoreSlider) {
+      this.scoreSlider.destroy();
+    }
+
+    this.scoreSlider = noUiSlider.create(scoreSlider, option);
+
+    if (!this.$canUpdate && this.$validPeriodMode == 3) {
+      scoreSlider.setAttribute('disabled', true);
+    }
+
+    scoreSlider.noUiSlider.on('update', function (values, handle) {
+      let rate = values[handle] / score;
+      let percentage = (rate * 100).toFixed(0);
+      $('.noUi-tooltip').text(`${percentage}%`);
+      $('.js-score-tooltip').css('left', `${percentage}%`);
+      let jsPassScore = percentage / 100 * score
+
+      if (jsPassScore % 1 != 0) {
+        jsPassScore = Number(jsPassScore.toFixed(1));
+      }
+
+      $('.js-passScore').text(jsPassScore);
+      $('#finishData').val(percentage / 100);
+    });
+
+    let tooltipInnerText = Translator.trans('activity.testpaper_manage.qualified_score_hint', { 'passScore': '<span class="js-passScore">' + passScore + '</span>' });
+    let html = `<div class="score-tooltip js-score-tooltip"><div class="tooltip top" role="tooltip" style="">
+      <div class="tooltip-arrow"></div>
+      <div class="tooltip-inner ">
+        ${tooltipInnerText}
+      </div>
+      </div></div>`;
+    $('.noUi-handle').append(html);
+    $('.noUi-tooltip').text(`${(passScore / score * 100).toFixed(0)}%`);
+    $('.js-score-tooltip').css('left', `${(passScore / score * 100).toFixed(0)}%`);
+    $('#js-test-and-comment').show();
+  }
+
+  switchExamMode(event) {
+    if (!this.$canUpdate && this.$validPeriodMode == 3) {
+      return;
+    }
+
+    const $this = $(event.currentTarget);
+    const examModeValue = $this.data('value');
+
+    if (examModeValue == 0) {
+      this.$fixedTimeTip.text('模拟考试时长必须 > 0');
+    } else {
+      this.$fixedTimeTip.text('练习考试时长必须 > 0');
+    }
+
+    this.$element.find('#examMode').val(examModeValue);
+    this.$element.find('.js-testpaper-mode').removeClass('active');
+    $this.addClass('active');
+    $('.js-mode-helpblock').removeClass('hidden')
+
+    if (examModeValue == '0') {
+      $('.js-enable_facein').removeClass('hidden')
+      $('label[for="length"]').addClass('control-label-required')
+      $('.js-mode-helpblock.js-mode-helpblock-1').addClass('hidden')
+    } else if (examModeValue == '1') {
+      $('.js-enable_facein').addClass('hidden')
+      $('label[for="length"]').removeClass('control-label-required')
+      $('.js-mode-helpblock.js-mode-helpblock-0').addClass('hidden')
+    }
+  }
+}
+
+new Testpaper($('#iframe-content'));

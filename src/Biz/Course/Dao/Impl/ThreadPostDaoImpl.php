@@ -11,12 +11,13 @@ class ThreadPostDaoImpl extends GeneralDaoImpl implements ThreadPostDao
 
     public function searchByUserIdGroupByThreadId($userId, $start, $limit)
     {
-        $builder = $this->createQueryBuilder(array('userId' => $userId))
+        $this->filterStartLimit($start, $limit);
+        $builder = $this->createQueryBuilder(['userId' => $userId])
             ->select('course_thread_post.*')
             ->where('id in (SELECT MAX(id) AS id FROM `course_thread_post` WHERE userId = :userId GROUP BY threadId)')
             ->addOrderBy('id', 'desc')
-            ->setFirstResult(intval($start))
-            ->setMaxResults(intval($limit));
+            ->setFirstResult($start)
+            ->setMaxResults($limit);
 
         return $builder->execute()->fetchAll();
     }
@@ -34,30 +35,49 @@ class ThreadPostDaoImpl extends GeneralDaoImpl implements ThreadPostDao
     {
         $sql = "DELETE FROM {$this->table} WHERE threadId = ?";
 
-        return $this->db()->executeUpdate($sql, array($threadId));
+        return $this->db()->executeUpdate($sql, [$threadId]);
     }
 
     public function deleteByCourseId($courseId)
     {
-        return $this->db()->delete($this->table(), array('courseId' => $courseId));
+        return $this->db()->delete($this->table(), ['courseId' => $courseId]);
+    }
+
+    public function deleteByUserId($userId)
+    {
+        return $this->db()->delete($this->table(), ['userId' => $userId]);
+    }
+
+    public function findThreadIds($conditions)
+    {
+        $builder = $this->createQueryBuilder($conditions)
+            ->select('threadId');
+
+        return $builder->execute()->fetchAll(0) ?: [];
     }
 
     public function declares()
     {
-        return array(
-            'timestamps' => array('createdTime'),
-            'orderbys' => array('createdTime'),
-            'conditions' => array(
+        return [
+            'timestamps' => ['createdTime'],
+            'orderbys' => ['createdTime'],
+            'conditions' => [
                 'updatedTime >= :updatedTime_GE',
+                'createdTime >= :createdTime_GE',
                 'courseSetId = :courseSetId',
                 'courseId = :courseId',
                 'courseId IN ( :courseIds)',
                 'taskId = :taskId',
                 'threadId = :threadId',
+                'threadId IN ( :threadIds)',
                 'userId = :userId',
+                'userId != :exceptedUserId',
                 'isElite = :isElite',
+                'isRead = :isRead',
                 'content LIKE :content',
-            ),
-        );
+                'auditStatus = :auditStatus',
+                'auditStatus != :excludeAuditStatus',
+            ],
+        ];
     }
 }

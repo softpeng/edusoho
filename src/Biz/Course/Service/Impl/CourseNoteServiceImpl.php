@@ -2,17 +2,23 @@
 
 namespace Biz\Course\Service\Impl;
 
+use AppBundle\Common\ArrayToolkit;
 use Biz\BaseService;
+use Biz\Common\CommonException;
+use Biz\Course\CourseException;
+use Biz\Course\CourseNoteException;
 use Biz\Course\Dao\CourseNoteDao;
 use Biz\Course\Dao\CourseNoteLikeDao;
 use Biz\Course\Service\CourseNoteService;
 use Biz\Course\Service\CourseService;
 use Biz\Course\Service\MemberService;
+use Biz\Sensitive\Service\SensitiveService;
 use Biz\System\Service\LogService;
 use Biz\Task\Service\TaskService;
+use Biz\Task\TaskException;
 use Biz\User\Service\UserService;
+use Biz\User\UserException;
 use Codeages\Biz\Framework\Event\Event;
-use AppBundle\Common\ArrayToolkit;
 
 class CourseNoteServiceImpl extends BaseService implements CourseNoteService
 {
@@ -28,10 +34,10 @@ class CourseNoteServiceImpl extends BaseService implements CourseNoteService
      */
     public function countCourseNoteByCourseId($courseId)
     {
-        return $this->countCourseNotes(array(
+        return $this->countCourseNotes([
             'courseId' => $courseId,
             'status' => CourseNoteService::PUBLIC_STATUS,
-        ));
+        ]);
     }
 
     public function getCourseNoteByUserIdAndTaskId($userId, $taskId)
@@ -41,16 +47,16 @@ class CourseNoteServiceImpl extends BaseService implements CourseNoteService
 
     public function findPublicNotesByCourseSetId($courseSetId)
     {
-        $conditions = array(
+        $conditions = [
             'courseSetId' => $courseSetId,
             'status' => 1,
-        );
+        ];
 
         return $this->searchNotes(
             $conditions,
-            array(
+            [
                 'createdTime' => 'DESC',
-            ),
+            ],
             0,
             $this->countCourseNotes($conditions)
         );
@@ -63,16 +69,16 @@ class CourseNoteServiceImpl extends BaseService implements CourseNoteService
      */
     public function findPublicNotesByCourseId($courseId)
     {
-        $conditions = array(
+        $conditions = [
             'courseId' => $courseId,
             'status' => CourseNoteService::PUBLIC_STATUS,
-        );
+        ];
 
         return $this->searchNotes(
             $conditions,
-            array(
+            [
                 'createdTime' => 'DESC',
-            ),
+            ],
             0,
             $this->countCourseNotes($conditions)
         );
@@ -99,8 +105,8 @@ class CourseNoteServiceImpl extends BaseService implements CourseNoteService
 
     public function saveNote(array $note)
     {
-        if (!ArrayToolkit::requireds($note, array('taskId', 'courseId', 'content'))) {
-            throw $this->createInvalidArgumentException('缺少必要的字段，保存笔记失败');
+        if (!ArrayToolkit::requireds($note, ['taskId', 'courseId', 'content'])) {
+            $this->createNewException(CommonException::ERROR_PARAMETER_MISSING());
         }
 
         $this->getCourseService()->tryTakeCourse($note['courseId']);
@@ -108,43 +114,45 @@ class CourseNoteServiceImpl extends BaseService implements CourseNoteService
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('user is not log in');
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         $task = $this->getTaskService()->getTask($note['taskId']);
 
         if (empty($task)) {
-            throw $this->createNotFoundException('task not found');
+            $this->createNewException(TaskException::NOTFOUND_TASK());
         }
 
         $course = $this->getCourseService()->getCourse($task['courseId']);
 
         if (empty($course)) {
-            throw $this->createNotFoundException('course not found. #'.$task['courseId']);
+            $this->createNewException(CourseException::NOTFOUND_COURSE());
         } else {
             $note['courseSetId'] = $course['courseSetId'];
         }
 
-        $note = ArrayToolkit::filter($note, array(
+        $note = ArrayToolkit::filter($note, [
             'courseId' => 0,
             'courseSetId' => 0,
             'taskId' => 0,
             'content' => '',
             'status' => 0,
-        ));
+        ]);
 
         $note['content'] = $this->purifyHtml($note['content']) ?: '';
+        $sensitiveCheckResult = $this->getSensitiveService()->sensitiveCheckResult($note['content'], 'course_note');
+        $note['content'] = $sensitiveCheckResult['content'];
         $note['length'] = $this->calculateContentLength($note['content']);
 
         $existNote = $this->getCourseNoteByUserIdAndTaskId($user['id'], $note['taskId']);
         if (!$existNote) {
             $note['userId'] = $user['id'];
             $note = $this->getNoteDao()->create($note);
-            $this->dispatchEvent('course.note.create', $note);
+            $this->dispatchEvent('course.note.create', $note, ['sensitiveResult' => $sensitiveCheckResult]);
         } else {
             unset($note['id']);
             $note = $this->getNoteDao()->update($existNote['id'], $note);
-            $this->dispatchEvent('course.note.update', new Event($note, array('preStatus' => $existNote['status'])));
+            $this->dispatchEvent('course.note.update', new Event($note, ['preStatus' => $existNote['status'], 'sensitiveResult' => $sensitiveCheckResult]));
         }
 
         return $note;
@@ -155,13 +163,13 @@ class CourseNoteServiceImpl extends BaseService implements CourseNoteService
         $note = $this->getNote($id);
 
         if (empty($note)) {
-            throw $this->createNotFoundException(sprintf('笔记%s不存在，删除失败', $id));
+            $this->createNewException(CourseNoteException::NOTFOUND_NOTE());
         }
 
         $currentUser = $this->getCurrentUser();
 
         if (!$this->hasPermission($currentUser, $note)) {
-            throw $this->createServiceException('你没有权限删除笔记');
+            $this->createNewException(CourseNoteException::NO_PERMISSION());
         }
 
         $this->getNoteDao()->delete($id);
@@ -180,11 +188,16 @@ class CourseNoteServiceImpl extends BaseService implements CourseNoteService
         }
     }
 
+    public function deleteNotesByUserId($userId)
+    {
+        return $this->getNoteDao()->deleteByUserId($userId);
+    }
+
     public function waveLikeNum($id, $num)
     {
-        $this->getNoteDao()->wave(array($id), array(
+        $this->getNoteDao()->wave([$id], [
             'likeNum' => $num,
-        ));
+        ]);
     }
 
     public function like($noteId)
@@ -192,25 +205,25 @@ class CourseNoteServiceImpl extends BaseService implements CourseNoteService
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('用户还未登录,不能点赞。');
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         $note = $this->getNote($noteId);
         if (empty($note)) {
-            throw $this->createNotFoundException('笔记不存在，或已删除。');
+            $this->createNewException(CourseNoteException::NOTFOUND_NOTE());
         }
 
         $like = $this->getNoteLikeByNoteIdAndUserId($noteId, $user['id']);
 
         if (!empty($like)) {
-            throw $this->createAccessDeniedException('不可重复对一条笔记点赞！');
+            $this->createNewException(CourseNoteException::DUPLICATE_LIKE());
         }
 
-        $noteLike = array(
+        $noteLike = [
             'noteId' => $noteId,
             'userId' => $user['id'],
             'createdTime' => time(),
-        );
+        ];
 
         $this->dispatchEvent('course.note.liked', $note);
         $like = $this->getNoteLikeDao()->create($noteLike);
@@ -222,12 +235,17 @@ class CourseNoteServiceImpl extends BaseService implements CourseNoteService
     {
         $user = $this->getCurrentUser();
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('用户还未登录,不能点赞。');
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         $note = $this->getNote($noteId);
         if (empty($note)) {
-            throw $this->createNotFoundException('笔记不存在，或已删除。');
+            $this->createNewException(CourseNoteException::NOTFOUND_NOTE());
+        }
+
+        $noteLike = $this->getNoteLikeByNoteIdAndUserId($noteId, $user['id']);
+        if (empty($noteLike)) {
+            $this->createNewException(CourseNoteException::NOTFOUND_NOTE_LIKE());
         }
 
         $this->getNoteLikeDao()->deleteByNoteIdAndUserId($noteId, $user['id']);
@@ -282,15 +300,15 @@ class CourseNoteServiceImpl extends BaseService implements CourseNoteService
      */
     public function countCourseNoteByCourseSetId($courseSetId)
     {
-        return $this->countCourseNotes(array(
+        return $this->countCourseNotes([
             'courseSetId' => $courseSetId,
             'status' => CourseNoteService::PUBLIC_STATUS,
-        ));
+        ]);
     }
 
     protected function calculateContentLength($content)
     {
-        $content = strip_tags(trim(str_replace(array('\\t', '\\r\\n', '\\r', '\\n'), '', $content)));
+        $content = strip_tags(trim(str_replace(['\\t', '\\r\\n', '\\r', '\\n'], '', $content)));
 
         return mb_strlen($content, 'utf-8');
     }
@@ -300,15 +318,16 @@ class CourseNoteServiceImpl extends BaseService implements CourseNoteService
      *
      * @return array
      *
-     * @throws \Codeages\Biz\Framework\Service\Exception\ServiceException
+     * @throws CommonException
+     * @throws \Exception
      */
     protected function prepareSearchNoteConditions($conditions)
     {
         $conditions = array_filter($conditions);
 
         if (isset($conditions['keywordType']) && isset($conditions['keyword'])) {
-            if (!in_array($conditions['keywordType'], array('content', 'courseId', 'courseSetId', 'courseTitle'))) {
-                throw $this->createServiceException('keywordType参数不正确');
+            if (!in_array($conditions['keywordType'], ['content', 'courseId', 'courseSetId', 'courseTitle'])) {
+                $this->createNewException(CommonException::ERROR_PARAMETER());
             }
 
             $conditions[$conditions['keywordType']] = $conditions['keyword'];
@@ -379,5 +398,13 @@ class CourseNoteServiceImpl extends BaseService implements CourseNoteService
     protected function getCourseMemberService()
     {
         return $this->biz->service('Course:MemberService');
+    }
+
+    /**
+     * @return SensitiveService
+     */
+    protected function getSensitiveService()
+    {
+        return $this->biz->service('Sensitive:SensitiveService');
     }
 }

@@ -2,8 +2,11 @@
 
 namespace Topxia\Api\Resource;
 
-use Silex\Application;
+use AppBundle\Util\H5LiveEntryToken;
 use Biz\CloudPlatform\CloudAPIFactory;
+use Biz\Course\Service\MemberService;
+use Biz\Live\Service\LiveService;
+use Silex\Application;
 use Symfony\Component\HttpFoundation\Request;
 
 class LessonLiveTickets extends BaseResource
@@ -12,7 +15,7 @@ class LessonLiveTickets extends BaseResource
     {
         $task = $this->getTaskService()->getTask($id);
         $activity = $this->getActivityService()->getActivity($task['activityId'], true);
-        if ($task['type'] != 'live') {
+        if ('live' != $task['type']) {
             return $this->error('5001', '非直播课程');
         }
 
@@ -24,10 +27,11 @@ class LessonLiveTickets extends BaseResource
 
         $user = $this->getCurrentUser();
 
-        $params = array();
+        $params = [];
         $params['id'] = $user['id'];
-        $params['nickname'] = $user['nickname'];
-        $params['role'] = 'student';
+        $params['displayName'] = $user['nickname'];
+        $params['nickname'] = $user['nickname'].'_'.$user['id'];
+        $params['role'] = $this->getCourseMemberService()->getUserLiveroomRoleByCourseIdAndUserIdAndActivityId($task['courseId'], $user['id'], $task['activityId']);
 
         // android, iphone
         if ($request->request->get('device')) {
@@ -37,9 +41,18 @@ class LessonLiveTickets extends BaseResource
         }
 
         try {
-            $ticket = CloudAPIFactory::create('leaf')->post("/liverooms/{$activity['ext']['liveId']}/tickets", $params);
+            if (!empty($activity['syncId'])) {
+                $ticket = $this->getS2B2CFacadeService()->getS2B2CService()->getLiveEntryTicket($activity['ext']['liveId'], $params);
+            } else {
+                $ticket = CloudAPIFactory::create('leaf')->post("/liverooms/{$activity['ext']['liveId']}/tickets", $params);
+            }
         } catch (\Exception $e) {
             return $this->error('5003', '进入直播教室失败！');
+        }
+        if ($this->getLiveService()->isESLive($activity['ext']['liveProvider'])) {
+            $maker = new H5LiveEntryToken();
+            $token = $maker->make($task['courseId'], $task['activityId']);
+            $ticket['roomUrl'] = "{$request->getSchemeAndHttpHost()}/es_live/h5_entry/{$token}";
         }
 
         return $ticket;
@@ -69,6 +82,22 @@ class LessonLiveTickets extends BaseResource
     protected function getActivityService()
     {
         return $this->getServiceKernel()->createService('Activity:ActivityService');
+    }
+
+    /**
+     * @return MemberService
+     */
+    protected function getCourseMemberService()
+    {
+        return $this->createService('Course:MemberService');
+    }
+
+    /**
+     * @return LiveService
+     */
+    protected function getLiveService()
+    {
+        return $this->createService('Live:LiveService');
     }
 
     public function filter($res)

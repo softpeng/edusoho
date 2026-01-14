@@ -6,9 +6,9 @@ use Codeages\Biz\Framework\Context\Biz;
 
 class HtmlExtension extends \Twig_Extension
 {
-    protected $scripts = array();
+    protected $scripts = [];
 
-    protected $csses = array();
+    protected $csses = [];
 
     protected $container;
 
@@ -22,15 +22,16 @@ class HtmlExtension extends \Twig_Extension
 
     public function getFunctions()
     {
-        $options = array('is_safe' => array('html'));
+        $options = ['is_safe' => ['html']];
 
-        return array(
-            new \Twig_SimpleFunction('select_options', array($this, 'selectOptions'), $options),
-            new \Twig_SimpleFunction('radios', array($this, 'radios'), $options),
-            new \Twig_SimpleFunction('checkboxs', array($this, 'checkboxs'), $options),
-            new \Twig_SimpleFunction('field_value', array($this, 'fieldValue'), $options),
-            new \Twig_SimpleFunction('countdown', array($this, 'countdown'), $options),
-        );
+        return [
+            new \Twig_SimpleFunction('select_options', [$this, 'selectOptions'], $options),
+            new \Twig_SimpleFunction('radios', [$this, 'radios'], $options),
+            new \Twig_SimpleFunction('cd_radios', [$this, 'cdRadios'], $options),
+            new \Twig_SimpleFunction('checkboxs', [$this, 'checkboxs'], $options),
+            new \Twig_SimpleFunction('field_value', [$this, 'fieldValue'], $options),
+            new \Twig_SimpleFunction('countdown', [$this, 'countdown'], $options),
+        ];
     }
 
     /**
@@ -66,6 +67,7 @@ class HtmlExtension extends \Twig_Extension
         }
 
         foreach ($choices as $value => $name) {
+            $name = htmlspecialchars($name);
             if ($selected == $value) {
                 $html .= "<option value=\"{$value}\" selected=\"selected\">{$name}</option>";
             } else {
@@ -91,12 +93,27 @@ class HtmlExtension extends \Twig_Extension
         return $html;
     }
 
-    public function checkboxs($name, $choices, $checkeds = array())
+    public function cdRadios($name, $choices, $checked = null, $disable = null)
+    {
+        $html = '';
+
+        foreach ($choices as $value => $label) {
+            if ($checked == $value) {
+                $html .= "<label class=\"cd-radio checked {$disable}\"><input type=\"radio\" name=\"{$name}\" value=\"{$value}\" {$disable} checked=\"checked\" data-toggle=\"cd-radio\"> {$label}</label>";
+            } else {
+                $html .= "<label class=\"cd-radio {$disable}\"><input type=\"radio\" name=\"{$name}\" value=\"{$value}\" {$disable} data-toggle=\"cd-radio\"> {$label}</label>";
+            }
+        }
+
+        return $html;
+    }
+
+    public function checkboxs($name, $choices, $checkeds = [])
     {
         $html = '';
 
         if (!is_array($checkeds)) {
-            $checkeds = array($checkeds);
+            $checkeds = [$checkeds];
         }
 
         foreach ($choices as $value => $label) {
@@ -137,7 +154,7 @@ class HtmlExtension extends \Twig_Extension
         return 'topxia_html_twig';
     }
 
-    private function trans($key, $parameters = array())
+    private function trans($key, $parameters = [])
     {
         return $this->container->get('translator')->trans($key, $parameters);
     }

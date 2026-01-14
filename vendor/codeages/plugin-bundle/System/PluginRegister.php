@@ -107,10 +107,9 @@ class PluginRegister
     public function refreshInstalledPluginConfiguration()
     {
         $plugins = $this->biz->service('CodeagesPluginBundle:AppService')->findAllPlugins();
-
         $installeds = array();
         foreach ($plugins as $plugin) {
-            if ($plugin['code'] == 'MAIN' || $plugin['protocol'] < 3) {
+            if ($plugin['protocol'] < 3) {
                 continue;
             }
             $installeds[$plugin['code']] = array(
@@ -133,7 +132,7 @@ class PluginRegister
         $routing = array();
 
         foreach ($plugins as $plugin) {
-            foreach (array('' => 'routing.yml', 'admin' => 'routing_admin.yml') as $prefix => $filename) {
+            foreach (array('' => 'routing.yml', 'admin' => 'routing_admin.yml', 'admin/v2' => 'routing_admin_v2.yml') as $prefix => $filename) {
                 if ($plugin['protocol'] < 3) {
                     continue;
                 }
@@ -142,7 +141,8 @@ class PluginRegister
                 $filePath = sprintf('%s/%s', $this->pluginRootDir, $resourcePath);
 
                 if ($fs->exists($filePath)) {
-                    $routing["_plugin_{$plugin['code']}_{$prefix}"] = array(
+                    $name = str_replace('/', '_', $prefix);
+                    $routing["_plugin_{$plugin['code']}_{$name}"] = array(
                         'resource' => '@'.$resourcePath,
                         'prefix' => '/'.$prefix,
                     );

@@ -1,17 +1,30 @@
-{% extends (course_count(course.courseSetId) > 1 ? 'course' : 'courseset') ~ '-manage/layout.html.twig' %}
+{% extends 'course-manage/layout.html.twig' %}
 
 {% block title %}{{'course.homework_check'|trans}} - {{ course.title }} - {{ parent() }}{% endblock %}
-{% set side_nav = 'homework-check' %}
+{% set course_side_nav = 'homework-check' %}
 
-{% block main %}
-  <div class="panel panel-default">
-    {% include 'course-manage/panel-header/course-publish-header.html.twig' with {code: side_nav} %}
-    <div class="panel-body">
-      {% if isTeacher is defined and not isTeacher %}
-        <span class="color-danger">{{'course.homework_check.no_permission_tips'|trans}}</span>
-      {% endif %}
+{% do script(['libs/vue.js', 'app/js/course-manage/testpaper-check/index.js']) %}
+{% do css(['app/css/main-ant.css']) %}
 
-      {{ render(controller('AppBundle:Testpaper/Manage:checkList',{request:app.request,targetId:course.id, targetType: 'course',type:'homework',testpaperIds:homeworkIds})) }}
-    </div>
+
+{% block main_heading %}
+  <div class="cd-main__title">
+    {% block page_title %}{{ 'course.homework_check'|trans }}{% endblock %}
+  </div>
+  <div class="testpaper-check-title">
+    <div id="app"></div>
+  </div>
+  <input type="hidden" value="course" class="js-testpaper-check-header">
+  <input type="hidden" value="{{course.id}}" class="js-testpaper-check-targetid">
+  <input type="hidden" value="homework" class="js-testpaper-check-type">
+{% endblock %}
+
+{% block main_body %}
+  <div class="js-task-list">
+    {% if not hasCourseManageRole %}
+      <span class="color-danger">{{'course.homework_check.no_permission_tips'|trans}}</span>
+    {% endif %}
+
+    {{ render(controller('AppBundle:Testpaper/Manage:checkList',{request:app.request,targetId:course.id, targetType: 'course',type:'homework'})) }}
   </div>
 {% endblock %}

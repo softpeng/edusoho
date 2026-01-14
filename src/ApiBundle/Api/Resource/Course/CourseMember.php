@@ -4,14 +4,15 @@ namespace ApiBundle\Api\Resource\Course;
 
 use ApiBundle\Api\Annotation\ApiConf;
 use ApiBundle\Api\ApiRequest;
-use ApiBundle\Api\Exception\ErrorCode;
 use ApiBundle\Api\Resource\AbstractResource;
+use Biz\Course\CourseException;
 use Biz\Course\Service\CourseService;
-use Biz\Course\Service\CourseSetService;
+use Biz\Course\Service\LearningDataAnalysisService;
 use Biz\Course\Service\MemberService;
-use Biz\Order\Service\OrderService;
+use Biz\Exception\UnableJoinException;
+use Biz\MemberOperation\Service\MemberOperationService;
+use Biz\User\Service\UserService;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class CourseMember extends AbstractResource
 {
@@ -23,18 +24,27 @@ class CourseMember extends AbstractResource
         $conditions = $request->query->all();
         $conditions['courseId'] = $courseId;
         $conditions['locked'] = 0;
+        if (isset($conditions['userKeyword']) && '' != $conditions['userKeyword']) {
+            $conditions['userIds'] = $this->getUserService()->getUserIdsByKeyword($conditions['userKeyword']);
+        }
+        unset($conditions['userKeyword']);
 
         list($offset, $limit) = $this->getOffsetAndLimit($request);
-        $members = $this->service('Course:MemberService')->searchMembers(
+        $members = $this->getMemberService()->searchMembers(
             $conditions,
-            array('createdTime' => 'DESC'),
+            ['createdTime' => 'DESC'],
             $offset,
             $limit
         );
+        $members = $this->getLearningDataAnalysisService()->fillCourseProgress($members);
+        $members = $this->convertJoinedChannel($members);
+        foreach ($members as &$member) {
+            $member['remark'] = in_array($member['remark'], ['site.join_by_free', 'site.join_by_purchase']) ? '' : $member['remark'];
+        }
 
-        $total = $this->service('Course:MemberService')->countMembers($conditions);
+        $total = $this->getMemberService()->countMembers($conditions);
 
-        $this->getOCUtil()->multiple($members, array('userId'));
+        $this->getOCUtil()->multiple($members, ['userId']);
 
         return $this->makePagingObject($members, $total, $offset, $limit);
     }
@@ -45,7 +55,8 @@ class CourseMember extends AbstractResource
     public function get(ApiRequest $request, $courseId, $userId)
     {
         $courseMember = $this->getMemberService()->getCourseMember($courseId, $userId);
-        $this->getOCUtil()->single($courseMember, array('userId'));
+        $this->getOCUtil()->single($courseMember, ['userId']);
+
         return $courseMember;
     }
 
@@ -54,13 +65,7 @@ class CourseMember extends AbstractResource
         $course = $this->getCourseService()->getCourse($courseId);
 
         if (!$course) {
-            throw new NotFoundHttpException('教学计划不存在', null, ErrorCode::RESOURCE_NOT_FOUND);
-        }
-
-        $access = $this->getCourseService()->canJoinCourse($courseId);
-
-        if ($access['code'] != 'success') {
-            throw new BadRequestHttpException($access['msg']);
+            throw CourseException::NOTFOUND_COURSE();
         }
 
         $member = $this->getMemberService()->getCourseMember($courseId, $this->getCurrentUser()->getId());
@@ -70,7 +75,8 @@ class CourseMember extends AbstractResource
         }
 
         if ($member) {
-            $this->getOCUtil()->single($member, array('userId'));
+            $this->getOCUtil()->single($member, ['userId']);
+
             return $member;
         }
 
@@ -79,64 +85,43 @@ class CourseMember extends AbstractResource
 
     private function tryJoin($course)
     {
-        $member = null;
-
-        if ($course['buyable']) {
-            $member = $this->freeJoin($course);
+        try {
+            $this->getCourseService()->tryFreeJoin($course['id']);
+        } catch (UnableJoinException $e) {
+            throw new BadRequestHttpException($e->getMessage(), $e, $e->getCode());
         }
 
-        if ($member) {
-            return $member;
-        }
-
-        if ($course['vipLevelId'] > 0) {
-            $member = $this->vipJoin($course);
+        $member = $this->getMemberService()->getCourseMember($course['id'], $this->getCurrentUser()->getId());
+        if (!empty($member)) {
+            $this->getLogService()->info('course', 'join_course', "加入 教学计划《{$course['title']}》", ['courseId' => $course['id'], 'title' => $course['title'] ? $course['title'] : $course['courseSetTitle']]);
         }
 
         return $member;
     }
 
-    private function freeJoin($course)
+    private function convertJoinedChannel($members)
     {
-        if ($course['isFree'] == 1 || $course['price'] == 0) {
-            $member = $this->getMemberService()->becomeStudent($course['id'], $this->getCurrentUser()->id);
-
-            $courseSet = $this->getCourseSetService()->getCourseSet($course['courseSetId']);
-
-            $systemOrder = array(
-                'userId' => $this->getCurrentUser()->id,
-                'title' => "购买课程《{$courseSet['title']}》- {$course['title']}",
-                'targetType' => OrderService::TARGETTYPE_COURSE,
-                'targetId' => $course['id'],
-                'amount' => 0,
-                'totalPrice' => $course['price'],
-                'snPrefix' => OrderService::SNPREFIX_C,
-                'payment' => '',
-            );
-
-            $order = $this->getOrderService()->createSystemOrder($systemOrder);
-            $this->getMemberService()->updateMember($member['id'], array(
-                'orderId' => $order['id']
-            ));
-
-            return $member;
-        } else {
-            return null;
+        foreach ($members as &$member) {
+            if ('import_join' === $member['joinedChannel']) {
+                $records = $this->getMemberOperationService()->searchRecords(['target_type' => 'course', 'target_id' => $member['courseId'], 'user_id' => $member['userId'], 'operate_type' => 'join'], ['id' => 'DESC'], 0, 1);
+                if (!empty($records)) {
+                    $operator = $this->getUserService()->getUser($records[0]['operator_id']);
+                    $member['joinedChannelText'] = "{$operator['nickname']}添加";
+                }
+            } else {
+                $member['joinedChannelText'] = ['free_join' => '免费加入', 'buy_join' => '购买加入', 'vip_join' => '会员加入'][$member['joinedChannel']] ?? '';
+            }
         }
+
+        return $members;
     }
 
-    private function vipJoin($course)
+    /**
+     * @return \Biz\System\Service\Impl\LogServiceImpl
+     */
+    private function getLogService()
     {
-        if (!$this->isPluginInstalled('vip')) {
-            return null;
-        }
-
-        list($success, $message) = $this->service('VipPlugin:Vip:VipFacadeService')->joinCourse($course['id']);
-        if ($success) {
-            return $this->getMemberService()->getCourseMember($course['id'], $this->getCurrentUser()->getId());
-        } else {
-            return null;
-        }
+        return $this->service('System:LogService');
     }
 
     /**
@@ -148,26 +133,34 @@ class CourseMember extends AbstractResource
     }
 
     /**
-     * @return OrderService
-     */
-    private function getOrderService()
-    {
-        return $this->service('Order:OrderService');
-    }
-
-    /**
-     * @return CourseSetService
-     */
-    private function getCourseSetService()
-    {
-        return $this->service('Course:CourseSetService');
-    }
-
-    /**
      * @return CourseService
      */
     private function getCourseService()
     {
         return $this->service('Course:CourseService');
+    }
+
+    /**
+     * @return LearningDataAnalysisService
+     */
+    private function getLearningDataAnalysisService()
+    {
+        return $this->service('Course:LearningDataAnalysisService');
+    }
+
+    /**
+     * @return UserService
+     */
+    private function getUserService()
+    {
+        return $this->service('User:UserService');
+    }
+
+    /**
+     * @return MemberOperationService
+     */
+    private function getMemberOperationService()
+    {
+        return $this->service('MemberOperation:MemberOperationService');
     }
 }

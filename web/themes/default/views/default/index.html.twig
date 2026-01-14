@@ -48,41 +48,39 @@
                         {{ lazy_img(filepath(classroom.middlePicture, 'classroom.png'), 'img-responsive', classroom.title, 'lazyload_class.png') }}
                       </a>
                       <div class="class-body">
-                        <h3 class="class-title">
+                        <h3 class="class-title text-overflow">
                           <a href="{{ path('classroom_show', {id:classroom.id}) }}">{{ classroom.title }}</a>
                         </h3>
                         <div class="class-metas">
-                          {% if teachers %}
-                            <span class="class-teacher">
-                      <i class="es-icon es-icon-people"></i>
+                          <span class="class-teacher">
+                            {% if teachers %}
+                              <i class="es-icon es-icon-people"></i>
                               {% for teacher in teachers %}
                                 {% if loop.index <= 5 %}
                                   {# {{ web_macro.user_link(teacher,'teacher-nickname mrl') }} #}
-                                  <a class="teacher-nickname mrl"
-                                    href="{{ path('user_show', {id:teacher.id}) }}">{{ teacher.nickname }}</a>
+                                  <a class="teacher-nickname mrl" href="{{ user_show_path({id:teacher.id}) }}">{{ teacher.nickname }}</a>
                                 {% endif %}
                               {% endfor %}
-                    </span>
-                          {% endif %}
-                          <span class="class-student hidden-md"><i
-                              class="es-icon es-icon-people"></i>{{ classroom.studentNum + classroom.auditorNum }}</span>
-                          <span class="class-price">
-
-                        {% if setting('coin.coin_enabled') and setting('coin.price_type') == 'Coin' %}
-                          {% if classroom.price > 0 %}
-                            {{ classroom.price * setting('coin.cash_rate') }} {{ setting('coin.coin_name', '虚拟币') }}
-                          {% else %}
-                            免费
-                          {% endif %}
-                        {% else %}
-                          {% if classroom.price > 0 %}
-                            {{ classroom.price }}元
-                          {% else %}
-                            免费
-                          {% endif %}
-                        {% endif %}
-
-                      </span>
+                            {% endif %}
+                          </span>
+                          <span class="class-student hidden-md"><i class="es-icon es-icon-people"></i>{{ classroom.studentNum + classroom.auditorNum }}</span>
+                          {% if classroom.hidePrice != '1' %}
+                            <span class="class-price">
+                              {% if setting('coin.coin_enabled') and setting('coin.price_type') == 'Coin' %}
+                                {% if classroom.price > 0 %}
+                                  {{ classroom.price * setting('coin.cash_rate') }} {{ setting('coin.coin_name', '虚拟币') }}
+                                {% else %}
+                                  免费
+                                {% endif %}
+                              {% else %}
+                                {% if classroom.price > 0 %}
+                                  {{ classroom.price }}元
+                                {% else %}
+                                  免费
+                                {% endif %}
+                              {% endif %}
+                            </span>
+                          {% endif  %}
                         </div>
                         <div class="course-num">共{{ classroom.courseNum }}课程</div>
                       </div>
@@ -169,7 +167,7 @@
                         <div class="vip-img col-sm-3 ">
                           <a href="{{ path('vip_course_explore', {levelId:level.id}) }}">
                             <img class="img-responsive"
-                              src="{{ level.icon|default(asset('assets/img/default/vip-default.png')) }}"
+                              src="{{ level.icon|default(asset('assets/img/default/vip.png')) }}"
                               alt="{{ level.name }}">
                           </a>
                         </div>
@@ -182,9 +180,9 @@
                           {% if setting('coin.coin_enabled') and setting('coin.price_type') == 'Coin' %}
                             <h4> {{ set_price((level.monthPrice) * (setting('coin.cash_rate'))) }}{{ setting('coin.coin_name') }}</h4>
                           {% else %}
-                            <h4>¥&nbsp;{{ level.monthPrice }}</h4>
+                            <h4>¥&nbsp;{{ level.monthPrice |default(0) }}</h4>
                           {% endif %}
-                          <h4><a href="{{ path('vip_buy') }}" class="btn btn-success">立即购买</a></h4>
+                          <h4><a href="{{ path('vip') }}" class="btn btn-success">立即购买</a></h4>
                         </div>
                       </div>
                     </li>
@@ -267,7 +265,9 @@
           </div>
         {% endif %}
 
-        {{ render(controller('AppBundle:Default:latestReviewsBlock',{number:5})) }}
+        {% if setting('goods_setting.show_review', '1') == 1 %}
+          {{ render(controller('AppBundle:Default:latestReviewsBlock',{number:5})) }}
+        {% endif %}
 
         {# 最热话题 #}
         {% if setting('group').group_show|default(1) %}
@@ -324,9 +324,9 @@
           {% endif %}
         </a>
 
-        <div class="course-body">
+        <div class="course-body ellipsis">
 
-          <h4 class="course-title"><a href="{{ path('course_show', {id: courseSet.defaultCourseId}) }}">{{ courseSet.title }}</a>
+          <h4 class="course-title"><a href="{{ path('course_show', {id: courseSet.defaultCourseId}) }}">{{ courseSet.title|raw }}</a>
 
           </h4>
           <div class="course-price-info">
@@ -337,33 +337,35 @@
             <div class="live-course-lesson mbs">
               {% if task %}
                 <span class="text-success fsm mrm">{{ task.startTime|date('n月j日 H:i') }} ~ {{ task.endTime|date('H:i') }}</span>
-                <span class="text-muted fsm mrm">第{{ task.number }}任务</span>
+                <span class="text-muted fsm mrm">第{{ task.number }}{{ setting('course.task_name')|default('admin.setting_course.task'|trans) }}</span>
               {% endif %}
             </div>
           {% else %}
-            <div class="course-about ellipsis">{{ courseSet.subtitle }}</div>
+            <div class="theme-default-course-about ellipsis">{{ courseSet.subtitle|raw }}</div>
           {% endif %}
-        </div>
 
-        <div class="course-footer clearfix">
+          <div class="default-theme course-footer clearfix">
 
-          {% set teacher = courseSet.teachers|first|default(null) %}
-          {% if teacher %}
-            <div class="teacher">{{ web_macro.user_avatar(teacher,'pull-left','teacher-avatar') }}
-              <a class="teacher-nickname ellipsis" href="{{ path('user_show', {id:teacher.id}) }}">
-                {{ teacher.nickname }}
-              </a>
-              <span class="teacher-title ellipsis">{{ teacher.title }}</span>
-            </div>
-          {% endif %}
-          <div class="course-metas">
-            <span class="stars-{{ (courseSet.rating)|number_format }}">&nbsp;</span>
-            {% if setting('course.show_student_num_enabled', '1') == 1 %}
-              <span class="divider"></span>
-              <span class="text-muted mrm mls">
-                <strong>{{ courseSet.studentNum }}</strong>
-                {{ setting('default.user_name', '学员'|trans) }}
-              </span>
+            {% set teacher = courseSet.teachers|first|default(null) %}
+            {% if teacher %}
+              <div class="teacher">{{ web_macro.user_avatar(teacher,'pull-left','teacher-avatar') }}
+                <a class="teacher-nickname ellipsis" href="{{ user_show_path({id:teacher.id}) }}">
+                  {{ teacher.nickname }}
+                </a>
+                <span class="teacher-title ellipsis">{{ teacher.title }}</span>
+              </div>
+            {% endif %}
+            {% if setting('goods_setting.show_review', '1') == 1 %}
+              <div class="course-metas">
+                <span class="stars-{{ (courseSet.rating)|number_format }}">&nbsp;</span>
+                {% if setting('course.show_student_num_enabled', '1') == 1 %}
+                  <span class="divider"></span>
+                  <span class="text-muted mrm mls">
+                    <strong>{{ courseSet.studentNum }}</strong>
+                    {{ setting('default.user_name', '学员'|trans) }}
+                  </span>
+                {% endif %}
+              </div>
             {% endif %}
           </div>
         </div>
@@ -402,7 +404,7 @@
           {% if course.type == 'liveOpen' %}
             {% set lessons = data('OpenCourseLessons',{courseId:course.id,count:1}) %}
 
-            <div class="live-course-lesson mbs">
+            <div class="theme-default-live-course live-course-lesson mbs">
               {% if lessons %}
                 <span
                   class="text-success fsm mrm">{{ lessons[0].startTime|date('n月j日 H:i') }} ~ {{ lessons[0].endTime|date('H:i') }}</span>
@@ -410,24 +412,26 @@
             </div>
 
           {% else %}
-            <div class="course-about ellipsis">{{ course.subtitle }}</div>
+            <div class="theme-default-course-about ellipsis">{{ course.subtitle }}</div>
           {% endif %}
 
-          <div class="course-footer clearfix">
+          <div class="default-theme course-footer clearfix">
 
             {% set teacher = course.teachers|first|default(null) %}
             {% if teacher %}
               <div class="teacher">
                 {{ web_macro.user_avatar(teacher,'pull-left','teacher-avatar') }}
                 <a class="teacher-nickname ellipsis"
-                  href="{{ path('user_show', {id:teacher.id}) }}">{{ teacher.nickname }}</a>
+                  href="{{ user_show_path({id:teacher.id}) }}">{{ teacher.nickname }}</a>
                 <span class="teacher-title ellipsis">{{ teacher.title }}</span>
               </div>
             {% endif %}
             <div class="course-metas">
               <span class="text-muted mrm"><i class="es-icon es-icon-removeredeye"></i>{{ course.hitNum }}</span>
               <span class="text-muted mrm"><i class="es-icon es-icon-thumbup"></i>{{ course.likeNum }}</span>
-              <span class="text-muted mrm"><i class="es-icon es-icon-textsms"></i>{{ course.postNum }}</span>
+              {% if setting('openCourse.show_comment', '1') == 1 %}
+                <span class="text-muted mrm"><i class="es-icon es-icon-textsms"></i>{{ course.postNum }}</span>
+              {% endif %}
             </div>
           </div>
         </div>

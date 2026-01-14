@@ -1,5 +1,6 @@
 import notify from 'common/notify';
-import { initThread, initThreadReplay } from './thread-opreate';
+import {initThread, initThreadReplay} from './thread-opreate';
+import Api from 'common/api';
 
 initThread();
 initThreadReplay();
@@ -13,47 +14,37 @@ function checkUrl(url) {
 
 let addBtnClicked = false;
 
-$('#add-btn').click(function () {
-  $(this).addClass('disabled');
-  var url = $(this).data('url');
-  $.post(url, function (data) {
-    if (data.status == 'success') {
-      window.location.reload();
-    } else {
-      notify('danger', Translator.trans(data.message));
-    }
-  });
-});
-
-if ($('#exit-btn').length > 0) {
-  $('#exit-btn').click(function () {
-    if (!confirm(Translator.trans('group.manage.member_exit_hint'))) {
-      return false;
-    }
-
-    var url = $(this).data('url');
-    $.post(url, function (data) {
-      if (data.status == 'success') {
-        window.location.reload();
+$('#thread-list').on('click', '.uncollect-btn, .collect-btn', function (e) {
+  let $this = $(this);
+  if ($this.hasClass('uncollect-btn')) {
+    Api.favorite.unfavorite({
+      data: {
+        'targetType': $this.data('targetType'),
+        'targetId': $this.data('targetId'),
+      }
+    }).then((res) => {
+      $this.hide();
+      if ($this.hasClass('collect-btn')) {
+        $this.parent().find('.uncollect-btn').show();
       } else {
-        notify('danger', Translator.trans(data.message));
+        $this.parent().find('.collect-btn').show();
       }
     });
-  })
-
-}
-
-$('#thread-list').on('click', '.uncollect-btn, .collect-btn', function () {
-  let $this = $(this);
-
-  $.post($this.data('url'), function () {
-    $this.hide();
-    if ($this.hasClass('collect-btn')) {
-      $this.parent().find('.uncollect-btn').show();
-    } else {
-      $this.parent().find('.collect-btn').show();
-    }
-  });
+  } else if ($this.hasClass('collect-btn')) {
+    Api.favorite.favorite({
+      data: {
+        'targetType': $this.data('targetType'),
+        'targetId': $this.data('targetId'),
+      }
+    }).then((res) => {
+      $this.hide();
+      if ($this.hasClass('collect-btn')) {
+        $this.parent().find('.uncollect-btn').show();
+      } else {
+        $this.parent().find('.collect-btn').show();
+      }
+    });
+  }
 });
 
 $('.attach').tooltip();
@@ -79,7 +70,6 @@ if ($('.group-post-list').length > 0) {
 
     }
 
-    ;
     $(this).hide();
     $('#unreply-' + postId).show();
     $('.reply-' + postId).css('display', '');

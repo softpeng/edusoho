@@ -1,0 +1,34 @@
+{% import "admin-v2/macro.html.twig" as admin_macro %}
+
+<table class="table table-condensed table-noborder table-overflow">
+  <thead>
+  <tr>
+    <th width="52%">{{ 'admin.homepage.top_search.keyword_th'|trans }}</th>
+    <th width="30%">{{ 'admin.homepage.top_search.search_number_th'|trans }}</th>
+    <th width="18%"></th>
+  </tr>
+  </thead>
+  <tbody>
+  {% for  searchRanking in searchRankings %}
+    {% if searchRanking.words %}
+      <tr>
+        <td data-toggle="tooltip" data-trigger="hover" data-placement="top" title="{{ searchRanking.words }}">
+          <a class="link-primary" target="_blank"
+             href="{{ path('cloud_search',{q:searchRanking.words}) }}">{{ searchRanking.words }}</a>
+        </td>
+        <td class="text-middle" style="display: block;">
+          <div class="search-count js-cloud-search" data-count="{{ searchRanking.amount }}"></div>
+        </td>
+        <td>{{ searchRanking.amount }}</td>
+      </tr>
+    {% endif %}
+  {% else %}
+    <td><div class="empty">{{ 'admin.homepage.top_search.empty'|trans }}</div></td>
+  {% endfor %}
+  </tbody>
+</table>
+<script type="text/javascript">
+$('[data-toggle="tooltip"]').tooltip({
+  html: true,
+});
+</script>

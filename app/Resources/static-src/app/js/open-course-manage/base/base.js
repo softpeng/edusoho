@@ -36,7 +36,7 @@ export default class Base {
       },
       initSelection: function (element, callback) {
         var data = [];
-        $(element.val().split(",")).each(function () {
+        $(element.val().split(',')).each(function () {
           data.push({
             id: this,
             name: this
@@ -57,48 +57,56 @@ export default class Base {
       multiple: true,
       maximumSelectionSize: 20,
       placeholder: Translator.trans('open_course.tag_required_hint'),
-      width: 'off',
-      multiple: true,
       createSearchChoice: function () {
         return null;
       },
-      maximumSelectionSize: 20
     });
   }
 
   initValidator() {
     let $form = $('#course-form');
     let validator = $form.validate({
+      currentDom: '#course-create-btn',
+      ajax: true,
       rules: {
         title: {
-          required: true
-        },
-        subtitle: {
           required: true,
-          maxlength: 70,
+          byte_maxlength: 200,
+          trim: true,
+          course_title: true,
         },
+      },
+      submitSuccess: (data) => {
+        cd.message({ type: 'success', message: Translator.trans('site.save_success_hint') });
+        window.location.reload();
       }
-    })
+    });
 
     $('#course-create-btn').click(() => {
       if (validator.form()) {
+        $('#course-about-field').val(this.editor.getData());
         $form.submit();
       }
-    })
+    });
   }
 
   initCkeditor() {
+    let self = this;
     if ($('#course-about-field').length > 0) {
-      CKEDITOR.replace('course-about-field', {
+      self.editor = CKEDITOR.replace('course-about-field', {
         allowedContent: true,
-        toolbar: 'Detail',
+        toolbar: [
+          { items: [ 'FontSize', 'JustifyLeft', 'JustifyCenter', 'JustifyRight', 'JustifyBlock'] },
+          { items: [ 'Bold', 'Italic', 'Underline', 'TextColor', '-', 'RemoveFormat', 'PasteText', '-', 'NumberedList', 'BulletedList','Indent', 'Outdent', '-', 'Link', 'Unlink', 'uploadpictures', 'CodeSnippet', 'Iframe', '-', 'Source', 'kityformula', '-', 'Maximize'] }
+        ],
+        fileSingleSizeLimit: app.fileSingleSizeLimit,
         filebrowserImageUploadUrl: $('#course-about-field').data('imageUploadUrl')
       });
     }
   }
 
   initCategory() {
-    $('[data-role="tree-select"], [name="categoryId"]').select2({
+    $('[name="categoryId"]').select2({
       treeview: true,
       dropdownAutoWidth: true,
       treeviewInitState: 'collapsed',

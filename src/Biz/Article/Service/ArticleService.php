@@ -2,8 +2,10 @@
 
 namespace Biz\Article\Service;
 
-use Codeages\Biz\Framework\Service\Exception\AccessDeniedException;
-use Codeages\Biz\Framework\Service\Exception\NotFoundException;
+use Biz\Article\ArticleException;
+use Biz\Article\CategoryException;
+use Biz\System\Annotation\Log;
+use Biz\User\UserException;
 
 interface ArticleService
 {
@@ -12,7 +14,8 @@ interface ArticleService
     /**
      * @param $currentArticleId
      *
-     * @throws NotFoundException
+     * @throws ArticleException
+     * @throws CategoryException
      *
      * @return array
      */
@@ -21,7 +24,8 @@ interface ArticleService
     /**
      * @param $currentArticleId
      *
-     * @throws NotFoundException
+     * @throws ArticleException
+     * @throws CategoryException
      *
      * @return array
      */
@@ -55,9 +59,10 @@ interface ArticleService
      * @param $id
      * @param $property
      *
-     * @throws NotFoundException
+     * @throws ArticleException
      *
      * @return int
+     * @Log(module="article",action="update_property",funcName="getArticle",param="id")
      */
     public function setArticleProperty($id, $property);
 
@@ -65,9 +70,10 @@ interface ArticleService
      * @param $id
      * @param $property
      *
-     * @throws NotFoundException
+     * @throws ArticleException
      *
      * @return int
+     * @Log(module="article",action="cancel_property",funcName="getArticle",param="id")
      */
     public function cancelArticleProperty($id, $property);
 
@@ -76,7 +82,8 @@ interface ArticleService
      *
      * @param $id
      *
-     * @throws NotFoundException
+     * @throws ArticleException
+     * @Log(module="article",action="trash",funcName="getArticle")
      */
     public function trashArticle($id);
 
@@ -85,7 +92,7 @@ interface ArticleService
      *
      * @param $id
      *
-     * @throws NotFoundException
+     * @throws ArticleException
      *
      * @return bool
      */
@@ -94,14 +101,18 @@ interface ArticleService
     /**
      * batch delete articles at trash.
      *
-     * @param array $ids
-     *
-     * @throws NotFoundException
+     * @throws ArticleException
      *
      * @return mixed
      */
     public function deleteArticlesByIds(array $ids);
 
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="article",action="removeThumb",funcName="getArticle")
+     */
     public function removeArticlethumb($id);
 
     /**
@@ -109,8 +120,8 @@ interface ArticleService
      *
      * @param $articleId
      *
-     * @throws NotFoundException
-     * @throws AccessDeniedException
+     * @throws ArticleException
+     * @throws UserException
      *
      * @return array
      */
@@ -119,7 +130,8 @@ interface ArticleService
     /**
      * @param $articleId
      *
-     * @throws NotFoundException
+     * @throws ArticleException
+     * @throws UserException
      */
     public function cancelLike($articleId);
 
@@ -127,8 +139,20 @@ interface ArticleService
 
     public function count($articleId, $field, $diff);
 
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="article",action="publish",funcName="getArticle")
+     */
     public function publishArticle($id);
 
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="article",action="unpublish",funcName="getArticle")
+     */
     public function unpublishArticle($id);
 
     public function changeIndexPicture($options);
@@ -136,4 +160,6 @@ interface ArticleService
     public function findPublishedArticlesByTagIdsAndCount($tagIds, $count);
 
     public function findRelativeArticles($articleId, $num = 3);
+
+    public function findArticlesByLikeTitle($title);
 }

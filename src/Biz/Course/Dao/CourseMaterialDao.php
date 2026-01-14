@@ -2,9 +2,9 @@
 
 namespace Biz\Course\Dao;
 
-use Codeages\Biz\Framework\Dao\GeneralDaoInterface;
+use Codeages\Biz\Framework\Dao\AdvancedDaoInterface;
 
-interface CourseMaterialDao extends GeneralDaoInterface
+interface CourseMaterialDao extends AdvancedDaoInterface
 {
     public function findByCopyIdAndLockedCourseIds($copyId, $courseIds);
 
@@ -21,4 +21,12 @@ interface CourseMaterialDao extends GeneralDaoInterface
     public function searchDistinctFileIds($conditions, $orderBys, $start, $limit);
 
     public function countGroupByFileId($conditions);
+
+    public function findMaterialsByIds($ids);
+
+    public function countGroupByCourseSetId($conditions, $start, $limit);
+
+    public function countDistinctCourseSet($conditions);
+
+    public function countCourseSetGroupByFileId($conditions);
 }

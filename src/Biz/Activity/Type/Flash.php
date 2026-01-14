@@ -2,61 +2,61 @@
 
 namespace Biz\Activity\Type;
 
-use Biz\Activity\Config\Activity;
 use AppBundle\Common\ArrayToolkit;
+use Biz\Activity\Config\Activity;
 use Biz\Activity\Dao\FlashActivityDao;
 use Biz\Activity\Service\ActivityService;
 use Biz\CloudPlatform\Client\CloudAPIIOException;
+use Biz\Common\CommonException;
 
 class Flash extends Activity
 {
-    public function isFinished($activityId)
-    {
-        $activity = $this->getActivityService()->getActivity($activityId);
-        $flash = $this->getFlashActivityDao()->get($activity['mediaId']);
-
-        $result = $this->getTaskResultService()->getMyLearnedTimeByActivityId($activityId);
-        $result /= 60;
-
-        return !empty($result) && $result >= $flash['finishDetail'];
-    }
-
     protected function registerListeners()
     {
     }
 
     public function create($fields)
     {
-        $default = array(
+        if (empty($fields['media'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $media = json_decode($fields['media'], true);
+
+        if (empty($media['id'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $fields['mediaId'] = $media['id'];
+
+        $default = [
             'finishDetail' => 1,
             'finishType' => 'time',
-        );
+        ];
         $fields = array_merge($default, $fields);
 
-        $flash = ArrayToolkit::parts($fields, array(
+        $flash = ArrayToolkit::parts($fields, [
             'mediaId',
             'finishType',
             'finishDetail',
-        ));
+        ]);
 
-        $biz = $this->getBiz();
-        $flash['createdUserId'] = $biz['user']['id'];
+        $user = $this->getCurrentUser();
+        $flash['createdUserId'] = $user['id'];
 
         $flash = $this->getFlashActivityDao()->create($flash);
 
         return $flash;
     }
 
-    public function copy($activity, $config = array())
+    public function copy($activity, $config = [])
     {
-        $biz = $this->getBiz();
+        $user = $this->getCurrentUser();
         $flash = $this->getFlashActivityDao()->get($activity['mediaId']);
-        $newFlash = array(
+        $newFlash = [
             'mediaId' => $flash['mediaId'],
             'finishType' => $flash['finishType'],
             'finishDetail' => $flash['finishDetail'],
-            'createdUserId' => $biz['user']['id'],
-        );
+            'createdUserId' => $user['id'],
+        ];
 
         return $this->getFlashActivityDao()->create($newFlash);
     }
@@ -74,39 +74,54 @@ class Flash extends Activity
 
     public function update($targetId, &$fields, $activity)
     {
-        $updateFields = ArrayToolkit::parts($fields, array(
+        if (empty($fields['media'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $media = json_decode($fields['media'], true);
+
+        if (empty($media['id'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $fields['mediaId'] = $media['id'];
+        $updateFields = ArrayToolkit::parts($fields, [
             'mediaId',
             'finishType',
             'finishDetail',
-        ));
+        ]);
 
         return $this->getFlashActivityDao()->update($targetId, $updateFields);
     }
 
     public function delete($targetId)
     {
+        $flash = $this->getFlashActivityDao()->get($targetId);
+        $this->getUploadFileService()->updateUsedCount($flash['mediaId']);
+
         return $this->getFlashActivityDao()->delete($targetId);
     }
 
     public function get($targetId)
     {
         $flashActivity = $this->getFlashActivityDao()->get($targetId);
-        $flashActivity['file'] = $this->getUploadFileService()->getFullFile($flashActivity['mediaId']);
+
+        if ($flashActivity) {
+            $flashActivity['file'] = $this->getUploadFileService()->getFullFile($flashActivity['mediaId']);
+        }
 
         return $flashActivity;
     }
 
-    public function find($targetIds)
+    public function find($targetIds, $showCloud = 1)
     {
         $flashActivities = $this->getFlashActivityDao()->findByIds($targetIds);
         $mediaIds = ArrayToolkit::column($flashActivities, 'mediaId');
         try {
             $files = $this->getUploadFileService()->findFilesByIds(
                 $mediaIds,
-                $showCloud = 1
+                $showCloud
             );
         } catch (CloudAPIIOException $e) {
-            $files = array();
+            $files = [];
         }
 
         if (empty($files)) {
@@ -126,6 +141,11 @@ class Flash extends Activity
     public function materialSupported()
     {
         return true;
+    }
+
+    public function findWithoutCloudFiles($targetIds)
+    {
+        return $this->getFlashActivityDao()->findByIds($targetIds);
     }
 
     /**

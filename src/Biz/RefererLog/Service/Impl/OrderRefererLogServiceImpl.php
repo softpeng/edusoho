@@ -2,9 +2,10 @@
 
 namespace Biz\RefererLog\Service\Impl;
 
-use Biz\BaseService;
-use Biz\RefererLog\Dao\OrderRefererLogDao;
 use AppBundle\Common\ArrayToolkit;
+use Biz\BaseService;
+use Biz\Common\CommonException;
+use Biz\RefererLog\Dao\OrderRefererLogDao;
 use Biz\RefererLog\Service\OrderRefererLogService;
 
 class OrderRefererLogServiceImpl extends BaseService implements OrderRefererLogService
@@ -16,8 +17,8 @@ class OrderRefererLogServiceImpl extends BaseService implements OrderRefererLogS
 
     public function addOrderRefererLog($fields)
     {
-        if (!ArrayToolkit::requireds($fields, array('refererLogId', 'orderId', 'targetId', 'targetType', 'sourceTargetId', 'sourceTargetId'))) {
-            throw $this->createServiceException('缺少字段,添加OrderRefererLog失败');
+        if (!ArrayToolkit::requireds($fields, ['refererLogId', 'orderId', 'targetId', 'targetType', 'sourceTargetId', 'sourceTargetId'])) {
+            $this->createNewException(CommonException::ERROR_PARAMETER_MISSING());
         }
 
         $fields['createdTime'] = time();
@@ -35,11 +36,11 @@ class OrderRefererLogServiceImpl extends BaseService implements OrderRefererLogS
         return $this->getOrderRefererLogDao()->delete($id);
     }
 
-    public function searchOrderRefererLogs($conditions, $orderBy, $start, $limit, $groupBy = '')
+    public function searchOrderRefererLogs($conditions, $orderBy, $start, $limit)
     {
         $conditions = $this->prepareConditions($conditions);
 
-        return $this->getOrderRefererLogDao()->searchOrderRefererLogs($conditions, $orderBy, $start, $limit, $groupBy);
+        return $this->getOrderRefererLogDao()->searchOrderRefererLogs($conditions, $orderBy, $start, $limit);
     }
 
     public function searchOrderRefererLogCount($conditions, $groupBy = '')

@@ -2,38 +2,44 @@
 
 namespace AppBundle\Controller;
 
+use AppBundle\Common\CurlToolkit;
+use AppBundle\Common\Exception\AccessDeniedException;
+use AppBundle\Common\FileToolkit;
+use AppBundle\Common\SmsToolkit;
+use AppBundle\Component\OAuthClient\OAuthClientFactory;
 use Biz\Content\Service\FileService;
+use Biz\MultiClass\Service\MultiClassService;
+use Biz\SCRM\Service\SCRMService;
 use Biz\Sensitive\Service\SensitiveService;
 use Biz\System\Service\LogService;
 use Biz\System\Service\SettingService;
+use Biz\System\SettingException;
 use Biz\User\Service\AuthService;
 use Biz\User\Service\UserFieldService;
-use AppBundle\Common\SmsToolkit;
-use AppBundle\Common\CurlToolkit;
-use AppBundle\Common\FileToolkit;
-use Symfony\Component\HttpFoundation\Request;
+use Biz\User\Support\PasswordValidator;
+use Biz\User\Support\RoleHelper;
+use Biz\WeChat\Service\WeChatService;
+use Codeages\Biz\Pay\Service\AccountService;
+use Symfony\Component\Form\Extension\Core\Type\PasswordType;
 use Symfony\Component\HttpFoundation\File\File;
-use AppBundle\Component\OAuthClient\OAuthClientFactory;
-use Codeages\Biz\Framework\Service\Exception\NotFoundException;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class SettingsController extends BaseController
 {
     public function profileAction(Request $request)
     {
         $user = $this->getCurrentUser();
-
         $profile = $this->getUserService()->getUserProfile($user['id']);
-
-        $name = 250;
-
         $profile['title'] = $user['title'];
-
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
+            $avatars = $request->request->get('covers');
+            if (!empty($avatars)) {
+                $this->getUserService()->changeAvatar($user['id'], json_decode($avatars, true));
+            }
             $profile = $request->request->get('profile');
-
             if (!((strlen($user['verifiedMobile']) > 0) && (isset($profile['mobile'])))) {
-                $this->getUserService()->updateUserProfile($user['id'], $profile);
-
+                $this->getUserService()->updateUserProfile($user['id'], $profile, false);
                 $this->setFlashMessage('success', 'site.save.success');
             } else {
                 $this->setFlashMessage('danger', 'user.settings.profile.unable_change_bind_mobile');
@@ -41,21 +47,18 @@ class SettingsController extends BaseController
 
             return $this->redirect($this->generateUrl('settings'));
         }
-
         $fields = $this->getUserFieldService()->getEnabledFieldsOrderBySeq();
-
-        if (array_key_exists('idcard', $profile) && $profile['idcard'] == '0') {
+        if (array_key_exists('idcard', $profile) && '0' == $profile['idcard']) {
             $profile['idcard'] = '';
         }
-
         $fromCourse = $request->query->get('fromCourse');
 
-        return $this->render('settings/profile.html.twig', array(
+        return $this->render('settings/profile.html.twig', [
             'profile' => $profile,
             'fields' => $fields,
             'fromCourse' => $fromCourse,
             'user' => $user,
-        ));
+        ]);
     }
 
     public function approvalSubmitAction(Request $request)
@@ -63,29 +66,45 @@ class SettingsController extends BaseController
         $user = $this->getCurrentUser();
         $profile = $this->getUserService()->getUserProfile($user['id']);
         $profile['idcard'] = substr_replace($profile['idcard'], '************', 4, 12);
+        $approval = $this->getUserService()->getLastestApprovalByUserIdAndStatus($user['id'], $user['approvalStatus']);
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $faceImg = $request->files->get('faceImg');
             $backImg = $request->files->get('backImg');
 
             if (abs(filesize($faceImg)) > 2 * 1024 * 1024 || abs(filesize($backImg)) > 2 * 1024 * 1024
-                || !FileToolkit::isImageFile($backImg) || !FileToolkit::isImageFile($faceImg)) {
+                || !FileToolkit::isImageFile($backImg) || !FileToolkit::isImageFile($faceImg)
+                || false == getimagesize($faceImg) || false == getimagesize($backImg)) {
                 $this->setFlashMessage('danger', 'user.settings.verification.photo_require_tips');
 
-                return $this->render('settings/approval.html.twig', array(
+                return $this->render('settings/approval.html.twig', [
                     'profile' => $profile,
-                ));
+                ]);
             }
 
             $directory = $this->container->getParameter('topxia.upload.private_directory').'/approval';
-            $this->getUserService()->applyUserApproval($user['id'], $request->request->all(), $faceImg, $backImg, $directory);
+            $this->getUserService()->applyUserApproval(
+                $user['id'],
+                $request->request->all(),
+                $faceImg,
+                $backImg,
+                $directory
+            );
 
             return $this->redirect($this->generateUrl('setting_approval_submit'));
         }
 
-        return $this->render('settings/approval.html.twig', array(
+        return $this->render('settings/approval.html.twig', [
             'profile' => $profile,
-        ));
+            'approval' => $approval,
+        ]);
+    }
+
+    public function qualificationAction()
+    {
+        return $this->render('settings/qualification.html.twig', [
+            'user_id' => $this->getCurrentUser()->getId(),
+        ]);
     }
 
     public function nicknameAction(Request $request)
@@ -93,28 +112,27 @@ class SettingsController extends BaseController
         $user = $this->getCurrentUser();
 
         $isNickname = $this->getSettingService()->get('user_partner');
-
-        if ($isNickname['nickname_enabled'] == 0) {
+        if (0 == $isNickname['nickname_enabled']) {
             return $this->redirect($this->generateUrl('settings'));
         }
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $nickname = $request->request->get('nickname');
 
             if ($this->getSensitiveService()->scanText($nickname)) {
-                $this->setFlashMessage('danger', 'user.settings.basic_info.illegal_nickname');
+                return $this->createJsonResponse(['message' => 'user.settings.basic_info.illegal_nickname'], 403);
+            }
 
-                return $this->redirect($this->generateUrl('settings'));
+            list($result, $message) = $this->getAuthService()->checkUsername($nickname);
+
+            if ('success' !== $result && $user['nickname'] != $nickname) {
+                return $this->createJsonResponse(['message' => $message], 403);
             }
 
             $this->getAuthService()->changeNickname($user['id'], $nickname);
-            $this->setFlashMessage('success', 'user.settings.basic_info.nickname_change_successfully');
 
-            return $this->redirect($this->generateUrl('settings'));
+            return $this->createJsonResponse(['message' => 'user.settings.basic_info.nickname_change_successfully']);
         }
-
-        return $this->render('settings/nickname.html.twig', array(
-        ));
     }
 
     public function nicknameCheckAction(Request $request)
@@ -123,354 +141,209 @@ class SettingsController extends BaseController
         $currentUser = $this->getUserService()->getCurrentUser();
 
         if ($currentUser['nickname'] == $nickname) {
-            return $this->createJsonResponse(array('success' => true, 'message' => ''));
+            return $this->createJsonResponse(['success' => true, 'message' => '']);
         }
 
         list($result, $message) = $this->getAuthService()->checkUsername($nickname);
 
-        if ($result === 'success') {
-            $response = array('success' => true, 'message' => '');
+        if ('success' === $result) {
+            $response = ['success' => true, 'message' => ''];
         } else {
-            $response = array('success' => false, 'message' => $message);
+            $response = ['success' => false, 'message' => $message];
         }
 
         return $this->createJsonResponse($response);
-    }
-
-    public function avatarAction(Request $request)
-    {
-        $user = $this->getCurrentUser();
-
-        $form = $this->createFormBuilder()
-            ->add('avatar', 'file')
-            ->getForm();
-
-        $hasPartnerAuth = $this->getAuthService()->hasPartnerAuth();
-
-        if ($hasPartnerAuth) {
-            $partnerAvatar = $this->getAuthService()->getPartnerAvatar($user['id'], 'big');
-        } else {
-            $partnerAvatar = null;
-        }
-
-        $fromCourse = $request->query->get('fromCourse');
-        $goto = $request->query->get('goto');
-
-        return $this->render('settings/avatar.html.twig', array(
-            'form' => $form->createView(),
-            'user' => $this->getUserService()->getUser($user['id']),
-            'partnerAvatar' => $partnerAvatar,
-            'fromCourse' => $fromCourse,
-            'goto' => $goto,
-        ));
-    }
-
-    public function avatarCropAction(Request $request)
-    {
-        $currentUser = $this->getCurrentUser();
-
-        if ($request->getMethod() === 'POST') {
-            $options = $request->request->all();
-            $this->getUserService()->changeAvatar($currentUser['id'], $options['images']);
-
-            return $this->redirect($this->generateUrl('settings_avatar'));
-        }
-
-        $fileId = $request->getSession()->get('fileId');
-        list($pictureUrl, $naturalSize, $scaledSize) = $this->getFileService()->getImgFileMetaInfo($fileId, 270, 270);
-        $goto = $request->query->get('goto');
-
-        return $this->render('settings/avatar-crop.html.twig', array(
-            'pictureUrl' => $pictureUrl,
-            'naturalSize' => $naturalSize,
-            'scaledSize' => $scaledSize,
-            'goto' => $goto,
-        ));
     }
 
     public function avatarCropModalAction(Request $request)
     {
         $currentUser = $this->getCurrentUser();
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $options = $request->request->all();
             $this->getUserService()->changeAvatar($currentUser['id'], $options['images']);
             $user = $this->getUserService()->getUser($currentUser['id']);
             $avatar = $this->getWebExtension()->getFpath($user['largeAvatar']);
 
-            return $this->createJsonResponse(array(
+            return $this->createJsonResponse([
                 'status' => 'success',
-                'avatar' => $avatar, ));
+                'avatar' => $avatar,
+            ]);
         }
 
         $fileId = $request->getSession()->get('fileId');
         list($pictureUrl, $naturalSize, $scaledSize) = $this->getFileService()->getImgFileMetaInfo($fileId, 270, 270);
 
-        return $this->render('settings/avatar-crop-modal.html.twig', array(
+        return $this->render('settings/avatar-crop-modal.html.twig', [
             'pictureUrl' => $pictureUrl,
             'naturalSize' => $naturalSize,
             'scaledSize' => $scaledSize,
-        ));
+        ]);
     }
 
-    public function avatarFetchPartnerAction(Request $request)
+    //传头像，新的交互
+    public function profileAvatarCropModalAction(Request $request)
     {
         $currentUser = $this->getCurrentUser();
 
-        if (!$this->getAuthService()->hasPartnerAuth()) {
-            throw $this->createNotFoundException();
+        if ('POST' === $request->getMethod()) {
+            $options = $request->request->all();
+            $result = $this->getUserService()->changeAvatar($currentUser['id'], $options['images']);
+            $image = $this->getWebExtension()->getFpath($result['largeAvatar']);
+
+            return $this->createJsonResponse([
+                'image' => $image,
+            ], 200);
         }
 
-        $url = $this->getAuthService()->getPartnerAvatar($currentUser['id'], 'big');
+        return $this->render('settings/profile-avatar-crop-modal.html.twig');
+    }
 
-        if (empty($url)) {
-            $this->setFlashMessage('danger', 'user.settings.avatar.fetch_form_partner_error');
+    public function assistantQrCodeCropModalAction(Request $request)
+    {
+        $currentUser = $this->getCurrentUser();
 
-            return $this->createJsonResponse(true);
+        if ('POST' === $request->getMethod()) {
+            $options = $request->request->all();
+            $result = $this->getUserService()->changeAssistantQrCode($currentUser['id'], $options['images']);
+            $image = $this->getWebExtension()->getFpath($result['weChatQrCode']);
+
+            return $this->createJsonResponse([
+                'image' => $image,
+            ], 200);
         }
 
-        $imgUrl = $request->request->get('imgUrl');
-        $file = new File($this->downloadImg($imgUrl));
-        $groupCode = 'tmp';
-        $imgs = array(
-            'large' => array('200', '200'),
-            'medium' => array('120', '120'),
-            'small' => array('48', '48'),
-        );
-        $options = array(
-            'x' => '0',
-            'y' => '0',
-            'x2' => '200',
-            'y2' => '200',
-            'w' => '200',
-            'h' => '200',
-            'width' => '200',
-            'height' => '200',
-            'imgs' => $imgs,
-        );
-
-        if (empty($options['group'])) {
-            $options['group'] = 'default';
-        }
-
-        $record = $this->getFileService()->uploadFile($groupCode, $file);
-        $parsed = $this->getFileService()->parseFileUri($record['uri']);
-        $filePaths = FileToolKit::cropImages($parsed['fullpath'], $options);
-
-        $fields = array();
-
-        foreach ($filePaths as $key => $value) {
-            $file = $this->getFileService()->uploadFile($options['group'], new File($value));
-            $fields[] = array(
-                'type' => $key,
-                'id' => $file['id'],
-            );
-        }
-
-        if (isset($options['deleteOriginFile']) && $options['deleteOriginFile'] == 0) {
-            $fields[] = array(
-                'type' => 'origin',
-                'id' => $record['id'],
-            );
-        } else {
-            $this->getFileService()->deleteFileByUri($record['uri']);
-        }
-
-        $this->getUserService()->changeAvatar($currentUser['id'], $fields);
-
-        return $this->createJsonResponse(true);
+        return $this->render('settings/assistant-qrcode-crop-modal.html.twig');
     }
 
     public function securityAction(Request $request)
     {
         $user = $this->getCurrentUser();
-
-        if (!$user['setup'] || stripos($user['email'], '@eduoho.net') != false) {
-            return $this->redirect($this->generateUrl('settings_setup'));
-        }
-
         $hasLoginPassword = strlen($user['password']) > 0;
-        $hasPayPassword = strlen($user['payPassword']) > 0;
-        $userSecureQuestions = $this->getUserService()->getUserSecureQuestionsByUserId($user['id']);
-        $hasFindPayPasswordQuestion = (isset($userSecureQuestions)) && (count($userSecureQuestions) > 0);
+        $hasPayPassword = $this->getAccountService()->isPayPasswordSetted($user['id']);
+        $hasFindPayPasswordQuestion = $this->getAccountService()->isSecurityAnswersSetted($user['id']);
         $hasVerifiedMobile = (isset($user['verifiedMobile']) && (strlen($user['verifiedMobile']) > 0));
+        $verifiedMobile = $hasVerifiedMobile ? $user['verifiedMobile'] : '';
+        $hasEmail = strlen($user['email']) > 0 && false === stripos($user['email'], '@edusoho.net');
+
+        $email = $hasEmail ? $user['email'] : '';
+        $hasVerifiedEmail = $user['emailVerified'];
 
         $cloudSmsSetting = $this->getSettingService()->get('cloud_sms');
-        $showBindMobile = (isset($cloudSmsSetting['sms_enabled'])) && ($cloudSmsSetting['sms_enabled'] == '1')
-            && (isset($cloudSmsSetting['sms_bind'])) && ($cloudSmsSetting['sms_bind'] == 'on');
+        $showBindMobile = (isset($cloudSmsSetting['sms_enabled'])) && ('1' == $cloudSmsSetting['sms_enabled'])
+            && (isset($cloudSmsSetting['sms_bind'])) && ('on' == $cloudSmsSetting['sms_bind']);
 
-        $itemScore = floor(100.0 / (3.0 + ($showBindMobile ? 1.0 : 0)));
-        $progressScore = 1 + ($hasLoginPassword ? $itemScore : 0) + ($hasPayPassword ? $itemScore : 0) + ($hasFindPayPasswordQuestion ? $itemScore : 0) + ($showBindMobile && $hasVerifiedMobile ? $itemScore : 0);
+        $itemScore = floor(100.0 / (4.0 + ($showBindMobile ? 1.0 : 0)));
+        $progressScore = 1 + ($hasLoginPassword ? $itemScore : 0) + ($hasPayPassword ? $itemScore : 0) + ($hasFindPayPasswordQuestion ? $itemScore : 0) + ($showBindMobile && $hasVerifiedMobile ? $itemScore : 0) + ($hasVerifiedEmail ? $itemScore : 0);
 
         if ($progressScore <= 1) {
             $progressScore = 0;
         }
 
-        return $this->render('settings/security.html.twig', array(
+        return $this->render('settings/security.html.twig', [
             'progressScore' => $progressScore,
             'hasLoginPassword' => $hasLoginPassword,
             'hasPayPassword' => $hasPayPassword,
             'hasFindPayPasswordQuestion' => $hasFindPayPasswordQuestion,
             'hasVerifiedMobile' => $hasVerifiedMobile,
-        ));
+            'verifiedMobile' => $verifiedMobile,
+            'hasEmail' => $hasEmail,
+            'email' => $email,
+            'hasVerifiedEmail' => $hasVerifiedEmail,
+        ]);
     }
 
     public function payPasswordAction(Request $request)
     {
         $user = $this->getCurrentUser();
 
-        $hasPayPassword = strlen($user['payPassword']) > 0;
+        if ('POST' === $request->getMethod()) {
+            $passwords = $request->request->all();
 
-        if ($hasPayPassword) {
-            return $this->redirect($this->generateUrl('settings_reset_pay_password'));
-        }
+            $validatePassed = $this->getAuthService()->checkPassword(
+                $user['id'],
+                $passwords['currentUserLoginPassword']
+            );
 
-        $form = $this->createFormBuilder()
-            ->add('currentUserLoginPassword', 'password')
-            ->add('newPayPassword', 'password')
-            ->add('confirmPayPassword', 'password')
-            ->getForm();
+            if (!$validatePassed) {
+                return $this->createJsonResponse(
+                    ['message' => 'user.settings.security.pay_password_set.incorrect_login_password'],
+                    403
+                );
+            } else {
+                $this->getAccountService()->setPayPassword($user['id'], $passwords['newPayPassword']);
 
-        if ($user->isLogin() && empty($user['password'])) {
-            $request->getSession()->set('_target_path', $this->generateUrl('settings_pay_password'));
-
-            return $this->redirect($this->generateUrl('settings_setup_password'));
-        }
-
-        if ($request->getMethod() === 'POST') {
-            $form->bind($request);
-
-            if ($form->isValid()) {
-                $passwords = $form->getData();
-
-                if (!$this->getAuthService()->checkPassword($user['id'], $passwords['currentUserLoginPassword'])) {
-                    $this->setFlashMessage('danger', 'user.settings.security.pay_password_set.incorrect_login_password');
-
-                    return $this->redirect($this->generateUrl('settings_pay_password'));
-                } else {
-                    $this->getAuthService()->changePayPassword($user['id'], $passwords['currentUserLoginPassword'], $passwords['newPayPassword']);
-                    $this->setFlashMessage('success', 'user.settings.security.pay_password_set.success');
-                }
-
-                return $this->redirect($this->generateUrl('settings_reset_pay_password'));
+                return $this->createJsonResponse(['message' => 'user.settings.security.pay_password_set.success']);
             }
         }
 
-        return $this->render('settings/pay-password.html.twig', array(
-            'form' => $form->createView(),
-        ));
-    }
-
-    public function setPayPasswordAction(Request $request)
-    {
-        $user = $this->getCurrentUser();
-
-        $hasPayPassword = strlen($user['payPassword']) > 0;
-
-        if ($hasPayPassword) {
-            return $this->createJsonResponse('不能直接设置新支付密码。');
-        }
-
-        $form = $this->createFormBuilder()
-            ->add('currentUserLoginPassword', 'password')
-            ->add('newPayPassword', 'password')
-            ->add('confirmPayPassword', 'password')
-            ->getForm();
-
-        if ($request->getMethod() === 'POST') {
-            $form->bind($request);
-
-            if ($form->isValid()) {
-                $passwords = $form->getData();
-
-                if (!$this->getAuthService()->checkPassword($user['id'], $passwords['currentUserLoginPassword'])) {
-                    return $this->createJsonResponse(array('ACK' => 'fail', 'message' => '当前用户登录密码不正确，请重试！'));
-                } else {
-                    $this->getAuthService()->changePayPassword($user['id'], $passwords['currentUserLoginPassword'], $passwords['newPayPassword']);
-
-                    return $this->createJsonResponse(array('ACK' => 'success', 'message' => '新支付密码设置成功！'));
-                }
-            }
-        }
-
-        return $this->render('settings/pay-password-modal.html.twig', array(
-            'form' => $form->createView(),
-        ));
+        return $this->render('settings/pay-password.html.twig');
     }
 
     public function setPasswordAction(Request $request)
     {
         $user = $this->getCurrentUser();
 
-        if (!empty($user['password'])) {
-            throw new \RuntimeException('登录密码已设置，请勿重复设置');
-        }
-
         $form = $this->createFormBuilder()
-            ->add('newPassword', 'password')
-            ->add('confirmPassword', 'password')
+            ->add('newPassword', PasswordType::class)
+            ->add('confirmPassword', PasswordType::class)
             ->getForm();
 
-        if ($request->getMethod() === 'POST') {
-            $form->bind($request);
+        if ('POST' === $request->getMethod()) {
+            $form->handleRequest($request);
 
             if ($form->isValid()) {
                 $passwords = $form->getData();
                 $this->getUserService()->changePassword($user['id'], $passwords['newPassword']);
                 $form = $this->createFormBuilder()
-                    ->add('currentUserLoginPassword', 'password')
-                    ->add('newPayPassword', 'password')
-                    ->add('confirmPayPassword', 'password')
+                    ->add('currentUserLoginPassword', PasswordType::class)
+                    ->add('newPayPassword', PasswordType::class)
+                    ->add('confirmPayPassword', PasswordType::class)
                     ->getForm();
 
-                return $this->render('settings/pay-password-modal.html.twig', array(
+                return $this->render('settings/pay-password-modal.html.twig', [
                     'form' => $form->createView(),
-                ));
+                ]);
             }
         }
 
-        return $this->render('settings/password-modal.html.twig', array(
+        return $this->render('settings/password-modal.html.twig', [
             'form' => $form->createView(),
-        ));
+        ]);
     }
 
     public function resetPayPasswordAction(Request $request)
     {
         $user = $this->getCurrentUser();
 
-        $form = $this->createFormBuilder()
-        // ->add('currentUserLoginPassword','password')
-            ->add('oldPayPassword', 'password')
-            ->add('newPayPassword', 'password')
-            ->add('confirmPayPassword', 'password')
-            ->getForm();
-
         if ($user->isLogin() && empty($user['password'])) {
-            $request->getSession()->set('_target_path', $this->generateUrl('settings_reset_pay_password'));
-
-            return $this->redirect($this->generateUrl('settings_setup_password'));
+            return $this->redirect(
+                $this->generateUrl('settings_setup_password', ['targetPath' => 'settings_reset_pay_password'])
+            );
         }
 
-        if ($request->getMethod() === 'POST') {
-            $form->bind($request);
+        if ('POST' === $request->getMethod()) {
+            $passwords = $request->request->all();
 
-            if ($form->isValid()) {
-                $passwords = $form->getData();
+            $validatePassed = $this->getAccountService()->validatePayPassword(
+                $user['id'],
+                $passwords['oldPayPassword']
+            );
 
-                if (!($this->getUserService()->verifyPayPassword($user['id'], $passwords['oldPayPassword']))) {
-                    $this->setFlashMessage('danger', 'user.settings.security.pay_password_set.incorrect_pay_password');
-                } else {
-                    $this->getAuthService()->changePayPasswordWithoutLoginPassword($user['id'], $passwords['newPayPassword']);
-                    $this->setFlashMessage('success', 'user.settings.security.pay_password_set.reset_success');
-                }
+            if (!$validatePassed) {
+                return $this->createJsonResponse(
+                    ['message' => 'user.settings.security.pay_password_set.incorrect_pay_password'],
+                    403
+                );
+            } else {
+                $this->getAccountService()->setPayPassword($user['id'], $passwords['newPayPassword']);
 
-                return $this->redirect($this->generateUrl('settings_reset_pay_password'));
+                return $this->createJsonResponse(['message' => 'user.settings.security.pay_password_set.reset_success']
+                );
             }
         }
 
-        return $this->render('settings/reset-pay-password.html.twig', array(
-            'form' => $form->createView(),
-        ));
+        return $this->render('settings/reset-pay-password.html.twig');
     }
 
     protected function setPayPasswordPage($request, $userId)
@@ -478,52 +351,64 @@ class SettingsController extends BaseController
         $token = $this->getUserService()->makeToken('pay-password-reset', $userId, strtotime('+1 day'));
         $request->request->set('token', $token);
 
-        return $this->forward('AppBundle:Settings:updatePayPassword', array(
+        return $this->forward('AppBundle:Settings:updatePayPassword', [
             'request' => $request,
-        ));
+        ]);
     }
 
     protected function updatePayPasswordReturn($form, $token)
     {
-        return $this->render('settings/update-pay-password-from-email-or-secure-questions.html.twig', array(
+        return $this->render('settings/update-pay-password-from-email-or-secure-questions.html.twig', [
             'form' => $form->createView(),
             'token' => $token ?: null,
-        ));
+        ]);
     }
 
     public function updatePayPasswordAction(Request $request)
     {
-        $token = $this->getUserService()->getToken('pay-password-reset', $request->query->get('token') ?: $request->request->get('token'));
+        $token = $this->getUserService()->getToken(
+            'pay-password-reset',
+            $request->query->get('token') ?: $request->request->get('token')
+        );
 
         if (empty($token)) {
             throw new \RuntimeException('Bad Token!');
         }
 
         $form = $this->createFormBuilder()
-            ->add('payPassword', 'password')
-            ->add('confirmPayPassword', 'password')
-            ->add('currentUserLoginPassword', 'password')
+            ->add('payPassword', PasswordType::class)
+            ->add('confirmPayPassword', PasswordType::class)
+            ->add('currentUserLoginPassword', PasswordType::class)
             ->getForm();
 
-        if ($request->getMethod() === 'POST') {
-            $form->bind($request);
+        if ('POST' === $request->getMethod()) {
+            $form->handleRequest($request);
 
             if ($form->isValid()) {
                 $data = $form->getData();
 
                 if ($data['payPassword'] != $data['confirmPayPassword']) {
-                    $this->setFlashMessage('danger', 'user.settings.security.pay_password_set.twice_pay_password_mismatch');
+                    $this->setFlashMessage(
+                        'danger',
+                        'user.settings.security.pay_password_set.twice_pay_password_mismatch'
+                    );
 
                     return $this->updatePayPasswordReturn($form, $token);
                 }
 
                 if ($this->getAuthService()->checkPassword($token['userId'], $data['currentUserLoginPassword'])) {
-                    $this->getAuthService()->changePayPassword($token['userId'], $data['currentUserLoginPassword'], $data['payPassword']);
+                    $this->getAccountService()->setPayPassword($token['userId'], $data['payPassword']);
                     $this->getUserService()->deleteToken('pay-password-reset', $token['token']);
 
-                    return $this->render('settings/pay-password-success.html.twig');
+                    return $this->render('settings/pay-password-success.html.twig', [
+                        'goto' => $this->generateUrl('settings_security', [], UrlGeneratorInterface::ABSOLUTE_URL),
+                        'duration' => 3,
+                    ]);
                 } else {
-                    $this->setFlashMessage('danger', 'user.settings.security.pay_password_set.incorrect_login_password');
+                    $this->setFlashMessage(
+                        'danger',
+                        'user.settings.security.pay_password_set.incorrect_login_password'
+                    );
                 }
             }
         }
@@ -531,32 +416,53 @@ class SettingsController extends BaseController
         return $this->updatePayPasswordReturn($form, $token);
     }
 
-    protected function findPayPasswordActionReturn($userSecureQuestions, $hasSecurityQuestions, $hasVerifiedMobile)
-    {
-        $questionNum = mt_rand(0, 2);
-        $question = $userSecureQuestions[$questionNum]['securityQuestionCode'];
-
-        return $this->render('settings/find-pay-password.html.twig', array(
-            'question' => $question,
-            'questionNum' => $questionNum,
-            'hasSecurityQuestions' => $hasSecurityQuestions,
-            'hasVerifiedMobile' => $hasVerifiedMobile,
-        ));
-    }
-
     public function findPayPasswordAction(Request $request)
     {
         $user = $this->getCurrentUser();
-        $userSecureQuestions = $this->getUserService()->getUserSecureQuestionsByUserId($user['id']);
-        $hasSecurityQuestions = null !== $userSecureQuestions && count($userSecureQuestions) > 0;
+        $hasLoginPassword = strlen($user['password']) > 0;
+        $hasPayPassword = $this->getAccountService()->isPayPasswordSetted($user['id']);
+        $userSecureQuestions = $this->getAccountService()->findSecurityAnswersByUserId($user['id']);
+        $hasFindPayPasswordQuestion = (isset($userSecureQuestions)) && (count($userSecureQuestions) > 0);
+        $hasVerifiedMobile = (isset($user['verifiedMobile']) && (strlen($user['verifiedMobile']) > 0));
+        $verifiedMobile = $hasVerifiedMobile ? $user['verifiedMobile'] : '';
+
+        return $this->render('settings/find-pay-password.html.twig', [
+            'hasLoginPassword' => $hasLoginPassword,
+            'hasPayPassword' => $hasPayPassword,
+            'hasFindPayPasswordQuestion' => $hasFindPayPasswordQuestion,
+            'hasVerifiedMobile' => $hasVerifiedMobile,
+            'verifiedMobile' => $verifiedMobile,
+        ]);
+    }
+
+    protected function findPayPasswordByQuestionActionReturn(
+        $userSecureQuestions,
+        $hasSecurityQuestions,
+        $hasVerifiedMobile
+    ) {
+        $questionNum = mt_rand(0, 2);
+        $questionKey = $userSecureQuestions[$questionNum]['question_key'];
+
+        return $this->render('settings/find-pay-password-by-question.html.twig', [
+            'questionKey' => $questionKey,
+            'hasSecurityQuestions' => $hasSecurityQuestions,
+            'hasVerifiedMobile' => $hasVerifiedMobile,
+        ]);
+    }
+
+    public function findPayPasswordByQuestionAction(Request $request)
+    {
+        $user = $this->getCurrentUser();
+        $userSecureQuestions = $this->getAccountService()->findSecurityAnswersByUserId($user['id']);
+        $hasSecurityQuestions = $this->getAccountService()->isSecurityAnswersSetted($user['id']);
         $verifiedMobile = $user['verifiedMobile'];
         $hasVerifiedMobile = null !== $verifiedMobile && strlen($verifiedMobile) > 0;
         $canSmsFind = ($hasVerifiedMobile) &&
-            ($this->setting('cloud_sms.sms_enabled') == '1') &&
-            ($this->setting('cloud_sms.sms_forget_pay_password') == 'on');
+            ('1' == $this->setting('cloud_sms.sms_enabled')) &&
+            ('on' == $this->setting('cloud_sms.sms_forget_pay_password'));
 
         if ((!$hasSecurityQuestions) && ($canSmsFind)) {
-            return $this->redirect($this->generateUrl('settings_find_pay_password_by_sms', array()));
+            return $this->redirect($this->generateUrl('settings_find_pay_password_by_sms', []));
         }
 
         if (!$hasSecurityQuestions) {
@@ -565,19 +471,24 @@ class SettingsController extends BaseController
             return $this->forward('AppBundle:Settings:securityQuestions');
         }
 
-        if ($request->getMethod() === 'POST') {
-            $questionNum = $request->request->get('questionNum');
+        if ('POST' === $request->getMethod()) {
+            $questionKey = $request->request->get('questionKey');
             $answer = $request->request->get('answer');
 
-            $userSecureQuestion = $userSecureQuestions[$questionNum];
-
-            $isAnswerRight = $this->getUserService()->verifyInSaltOut(
-                $answer, $userSecureQuestion['securityAnswerSalt'], $userSecureQuestion['securityAnswer']);
+            $isAnswerRight = $this->getAccountService()->validateSecurityAnswer(
+                $user['id'],
+                $questionKey,
+                $answer
+            );
 
             if (!$isAnswerRight) {
                 $this->setFlashMessage('danger', 'user.settings.security.pay_password_find.wrong_answer');
 
-                return $this->findPayPasswordActionReturn($userSecureQuestions, $hasSecurityQuestions, $hasVerifiedMobile);
+                return $this->findPayPasswordByQuestionActionReturn(
+                    $userSecureQuestions,
+                    $hasSecurityQuestions,
+                    $hasVerifiedMobile
+                );
             }
 
             $this->setFlashMessage('success', 'user.settings.security.pay_password_find.correct_answer');
@@ -585,32 +496,37 @@ class SettingsController extends BaseController
             return $this->setPayPasswordPage($request, $user['id']);
         }
 
-        return $this->findPayPasswordActionReturn($userSecureQuestions, $hasSecurityQuestions, $hasVerifiedMobile);
+        return $this->findPayPasswordByQuestionActionReturn(
+            $userSecureQuestions,
+            $hasSecurityQuestions,
+            $hasVerifiedMobile
+        );
     }
 
     public function findPayPasswordBySmsAction(Request $request)
     {
         $scenario = 'sms_forget_pay_password';
 
-        if ($this->setting('cloud_sms.sms_enabled') != '1' || $this->setting("cloud_sms.{$scenario}") !== 'on') {
-            return $this->render('settings/edu-cloud-error.html.twig', array());
+        if ('1' != $this->setting('cloud_sms.sms_enabled') || 'on' !== $this->setting("cloud_sms.{$scenario}")) {
+            return $this->render('settings/edu-cloud-error.html.twig', []);
         }
 
         $currentUser = $this->getCurrentUser();
 
-        $userSecureQuestions = $this->getUserService()->getUserSecureQuestionsByUserId($currentUser['id']);
-        $hasSecurityQuestions = null !== $userSecureQuestions && count($userSecureQuestions) > 0;
+        $hasSecurityQuestions = $this->getAccountService()->isSecurityAnswersSetted($currentUser['id']);
         $verifiedMobile = $currentUser['verifiedMobile'];
         $hasVerifiedMobile = null !== $verifiedMobile && strlen($verifiedMobile) > 0;
 
         if (!$hasVerifiedMobile) {
             $this->setFlashMessage('danger', 'user.settings.security.pay_password_find.unbind_mobile');
 
-            return $this->redirect($this->generateUrl('settings_bind_mobile', array(
-            )));
+            return $this->redirect(
+                $this->generateUrl('settings_bind_mobile', [
+                ])
+            );
         }
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             if ($currentUser['verifiedMobile'] != $request->request->get('mobile')) {
                 $this->setFlashMessage('danger', 'user.settings.security.pay_password_find.by_mobile.mismatch');
                 SmsToolkit::clearSmsSession($request, $scenario);
@@ -628,11 +544,12 @@ class SettingsController extends BaseController
         }
 
         response:
-        return $this->render('settings/find-pay-password-by-sms.html.twig', array(
+
+        return $this->render('settings/find-pay-password-by-sms.html.twig', [
             'hasSecurityQuestions' => $hasSecurityQuestions,
             'hasVerifiedMobile' => $hasVerifiedMobile,
             'verifiedMobile' => $verifiedMobile,
-        ));
+        ]);
     }
 
     protected function securityQuestionsActionReturn($hasSecurityQuestions, $userSecureQuestions)
@@ -642,139 +559,181 @@ class SettingsController extends BaseController
         $question3 = null;
 
         if ($hasSecurityQuestions) {
-            $question1 = $userSecureQuestions[0]['securityQuestionCode'];
-            $question2 = $userSecureQuestions[1]['securityQuestionCode'];
-            $question3 = $userSecureQuestions[2]['securityQuestionCode'];
+            $question1 = $userSecureQuestions[0]['question_key'];
+            $question2 = $userSecureQuestions[1]['question_key'];
+            $question3 = $userSecureQuestions[2]['question_key'];
         }
 
-        return $this->render('settings/security-questions.html.twig', array(
+        return $this->render('settings/security-questions.html.twig', [
             'hasSecurityQuestions' => $hasSecurityQuestions,
             'question1' => $question1,
             'question2' => $question2,
             'question3' => $question3,
-        ));
+        ]);
     }
 
     public function securityQuestionsAction(Request $request)
     {
         $user = $this->getCurrentUser();
-        $userSecureQuestions = $this->getUserService()->getUserSecureQuestionsByUserId($user['id']);
+        $userSecureQuestions = $this->getAccountService()->findSecurityAnswersByUserId($user['id']);
         $hasSecurityQuestions = (isset($userSecureQuestions)) && (count($userSecureQuestions) > 0);
 
         if ($user->isLogin() && empty($user['password'])) {
-            $request->getSession()->set('_target_path', $this->generateUrl('settings_security_questions'));
-
-            return $this->redirect($this->generateUrl('settings_setup_password'));
+            return $this->redirect(
+                $this->generateUrl('settings_setup_password', ['targetPath' => 'settings_security_questions'])
+            );
         }
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             if (!$this->getAuthService()->checkPassword($user['id'], $request->request->get('userLoginPassword'))) {
-                $this->setFlashMessage('danger', 'user.settings.security.questions.set.incorrect_password');
-
-                return $this->securityQuestionsActionReturn($hasSecurityQuestions, $userSecureQuestions);
+                return $this->createJsonResponse(
+                    ['message' => 'user.settings.security.questions.set.incorrect_password'],
+                    403
+                );
             }
 
             if ($hasSecurityQuestions) {
-                throw new \RuntimeException('您已经设置过安全问题，不可再次修改。');
+                return $this->createJsonResponse(
+                    ['message' => 'user.settings.security.questions.set.not_modify_aligin_hint'],
+                    403
+                );
             }
 
             if ($request->request->get('question-1') == $request->request->get('question-2')
                 || $request->request->get('question-1') == $request->request->get('question-3')
                 || $request->request->get('question-2') == $request->request->get('question-3')) {
-                throw new \RuntimeException('2个问题不能一样。');
+                return $this->createJsonResponse(
+                    ['message' => 'user.settings.security.security_questions.type_duplicate_hint'],
+                    403
+                );
             }
 
-            $fields = array(
-                'securityQuestion1' => $request->request->get('question-1'),
-                'securityAnswer1' => $request->request->get('answer-1'),
-                'securityQuestion2' => $request->request->get('question-2'),
-                'securityAnswer2' => $request->request->get('answer-2'),
-                'securityQuestion3' => $request->request->get('question-3'),
-                'securityAnswer3' => $request->request->get('answer-3'),
-            );
-            $this->getUserService()->addUserSecureQuestionsWithUnHashedAnswers($user['id'], $fields);
-            $this->setFlashMessage('success', 'user.settings.security.questions.set.success');
-            $hasSecurityQuestions = true;
-            $userSecureQuestions = $this->getUserService()->getUserSecureQuestionsByUserId($user['id']);
+            $fields[$request->request->get('question-1')] = $request->request->get('answer-1');
+            $fields[$request->request->get('question-2')] = $request->request->get('answer-2');
+            $fields[$request->request->get('question-3')] = $request->request->get('answer-3');
+
+            $this->getAccountService()->setSecurityAnswers($user['id'], $fields);
+
+            return $this->createJsonResponse(['message' => 'user.settings.security.questions.set.success']);
         }
 
         return $this->securityQuestionsActionReturn($hasSecurityQuestions, $userSecureQuestions);
     }
 
-    protected function bindMobileReturn($hasVerifiedMobile, $setMobileResult, $verifiedMobile)
-    {
-        return $this->render('settings/bind-mobile.html.twig', array(
-            'hasVerifiedMobile' => $hasVerifiedMobile,
-            'setMobileResult' => $setMobileResult,
-            'verifiedMobile' => $verifiedMobile,
-        ));
-    }
-
     public function bindMobileAction(Request $request)
     {
-        $currentUser = $this->getCurrentUser()->toArray();
+        $user = $this->getCurrentUser();
         $verifiedMobile = '';
-        $hasVerifiedMobile = (isset($currentUser['verifiedMobile']) && (strlen($currentUser['verifiedMobile']) > 0));
+        $hasVerifiedMobile = (isset($user['verifiedMobile']) && (strlen($user['verifiedMobile']) > 0));
 
         if ($hasVerifiedMobile) {
-            $verifiedMobile = $currentUser['verifiedMobile'];
+            $verifiedMobile = $user['verifiedMobile'];
         }
 
         $setMobileResult = 'none';
 
         $scenario = 'sms_bind';
 
-        if ($this->setting('cloud_sms.sms_enabled') != '1' || $this->setting("cloud_sms.{$scenario}") != 'on') {
-            return $this->render('settings/edu-cloud-error.html.twig', array());
+        if ('1' != $this->setting('cloud_sms.sms_enabled') || 'on' != $this->setting("cloud_sms.{$scenario}")) {
+            return $this->render('settings/edu-cloud-error.html.twig', []);
         }
 
-        $user = $this->getCurrentUser();
-
-        if ($user->isLogin() && empty($user['password'])) {
-            $request->getSession()->set('_target_path', $this->generateUrl('settings_bind_mobile'));
-
-            return $this->redirect($this->generateUrl('settings_setup_password'));
+        if ($this->isSocialLogin($user)) {
+            return $this->redirect(
+                $this->generateUrl('settings_setup_password', ['targetPath' => 'settings_bind_mobile'])
+            );
         }
 
-        if ($request->getMethod() === 'POST') {
+        if ('POST' === $request->getMethod()) {
             $password = $request->request->get('password');
 
-            if (!$this->getAuthService()->checkPassword($currentUser['id'], $password)) {
-                $this->setFlashMessage('danger', 'site.incorrect.password');
+            if (!$this->getAuthService()->checkPassword($user['id'], $password)) {
                 SmsToolkit::clearSmsSession($request, $scenario);
 
-                return $this->bindMobileReturn($hasVerifiedMobile, $setMobileResult, $verifiedMobile);
+                return $this->createJsonResponse(['message' => 'site.incorrect.password'], 403);
             }
 
             list($result, $sessionField, $requestField) = SmsToolkit::smsCheck($request, $scenario);
 
             if ($result) {
                 $verifiedMobile = $sessionField['to'];
-                $this->getUserService()->changeMobile($currentUser['id'], $verifiedMobile);
+                $this->getUserService()->changeMobile($user['id'], $verifiedMobile);
 
-                $setMobileResult = 'success';
-                $this->setFlashMessage('success', 'user.settings.security.mobile_bind.success');
+                return $this->createJsonResponse(['message' => 'user.settings.security.mobile_bind.success']);
             } else {
-                $setMobileResult = 'fail';
-                $this->setFlashMessage('danger', 'user.settings.security.mobile_bind.fail');
+                return $this->createJsonResponse(['message' => 'user.settings.security.mobile_bind.fail'], 403);
             }
         }
 
-        return $this->bindMobileReturn($hasVerifiedMobile, $setMobileResult, $verifiedMobile);
+        return $this->render('settings/bind-mobile.html.twig', [
+            'hasVerifiedMobile' => $hasVerifiedMobile,
+            'setMobileResult' => $setMobileResult,
+            'verifiedMobile' => $verifiedMobile,
+        ]);
+    }
+
+    public function mobileBindAction(Request $request)
+    {
+        $user = $this->getCurrentUser();
+
+        $scenario = 'sms_bind';
+
+        if ('1' != $this->setting('cloud_sms.sms_enabled') || 'on' != $this->setting("cloud_sms.{$scenario}")) {
+            return $this->render('settings/edu-cloud-error.html.twig', []);
+        }
+
+        if ($this->isSocialLogin($user)) {
+            return $this->redirect(
+                $this->generateUrl('settings_setup_password', ['targetPath' => 'settings_bind_mobile'])
+            );
+        }
+
+        $targetUrl = $this->getTargetPath($request) ?: $this->generateUrl('homepage');
+        $mobileBindMode = $this->getSettingService()->node('login_bind.mobile_bind_mode', 'constraint');
+        if ('option' === $mobileBindMode && (isset($_COOKIE['is_skip_mobile_bind']) && 1 == $_COOKIE['is_skip_mobile_bind'])) {
+            return $this->redirect($targetUrl);
+        }
+
+        if ('POST' === $request->getMethod()) {
+            list($result, $sessionField, $requestField) = SmsToolkit::smsCheck($request, $scenario);
+
+            if ($result) {
+                $verifiedMobile = $sessionField['to'];
+                $this->getUserService()->changeMobile($user['id'], $verifiedMobile);
+
+                return $this->createJsonResponse(['message' => 'user.settings.security.mobile_bind.success']);
+            } else {
+                return $this->createJsonResponse(['message' => 'user.settings.security.mobile_bind.fail'], 403);
+            }
+        }
+
+        return $this->render('settings/mobile-bind.html.twig', ['targetUrl' => $targetUrl]);
+    }
+
+    /**
+     * if user login in  socail way such as QQ, user has no pasword
+     *
+     * @param  $user
+     *
+     * @return bool
+     */
+    private function isSocialLogin($user)
+    {
+        return $user->isLogin() && empty($user['password']);
     }
 
     public function passwordCheckAction(Request $request)
     {
         $currentUser = $this->getCurrentUser();
         $password = $request->request->get('value');
-        $response = array('success' => true);
+        $response = ['success' => true];
         if (strlen($password) > 0) {
             $passwordRight = $this->getUserService()->verifyPassword($currentUser['id'], $password);
             if (!$passwordRight) {
-                $response = array('success' => false, 'message' => '密码错误');
+                $response = ['success' => false, 'message' => '密码错误'];
             }
         } else {
-            $response = array('success' => false, 'message' => '密码不能为空');
+            $response = ['success' => false, 'message' => '密码不能为空'];
         }
 
         return $this->createJsonResponse($response);
@@ -784,192 +743,221 @@ class SettingsController extends BaseController
     {
         $user = $this->getCurrentUser();
 
-        if (empty($user['setup'])) {
-            return $this->redirect($this->generateUrl('settings_setup'));
-        }
-
-        $form = $this->createFormBuilder()
-            ->add('currentPassword', 'password')
-            ->add('newPassword', 'password')
-            ->add('confirmPassword', 'password')
-            ->getForm();
-
         if ($user->isLogin() && empty($user['password'])) {
-            $request->getSession()->set('_target_path', $this->generateUrl('settings_security'));
-
-            return $this->redirect($this->generateUrl('settings_setup_password'));
+            return $this->redirect(
+                $this->generateUrl('settings_setup_password', ['targetPath' => 'settings_password'])
+            );
         }
 
-        if ($request->getMethod() === 'POST') {
-            $form->bind($request);
+        if ('POST' === $request->getMethod()) {
+            $passwords = $request->request->all();
+            $validatePassed = $this->getAuthService()->checkPassword($user['id'], $passwords['currentPassword']);
 
-            if ($form->isValid()) {
-                $passwords = $form->getData();
+            if (!$validatePassed) {
+                return $this->createJsonResponse(
+                    ['message' => 'user.settings.security.password_modify.incorrect_password'],
+                    403
+                );
+            } else {
+                $this->getUserService()->changePassword($user['id'], $passwords['newPassword']);
 
-                if (!$this->getAuthService()->checkPassword($user['id'], $passwords['currentPassword'])) {
-                    $this->setFlashMessage('danger', 'user.settings.security.password_modify.incorrect_password');
-                } else {
-                    $this->getAuthService()->changePassword($user['id'], $passwords['currentPassword'], $passwords['newPassword']);
-                    $this->setFlashMessage('success', 'site.modify.success');
-                }
-
-                return $this->redirect($this->generateUrl('settings_password'));
+                return $this->createJsonResponse(['message' => 'site.modify.success']);
             }
         }
 
-        return $this->render('settings/password.html.twig', array(
-            'form' => $form->createView(),
-        ));
+        return $this->render('settings/password.html.twig', [
+            'needStrongPassword' => RoleHelper::isStaff($user['roles']),
+        ]);
     }
 
     public function emailAction(Request $request)
     {
         $user = $this->getCurrentUser();
-        $mailer = $this->getSettingService()->get('mailer', array());
-        $cloudEmail = $this->getSettingService()->get('cloud_email_crm', array());
+        $mailer = $this->getSettingService()->get('mailer', []);
+        $cloudEmail = $this->getSettingService()->get('cloud_email_crm', []);
 
-        if (empty($user['setup'])) {
-            return $this->redirect($this->generateUrl('settings_setup'));
+        if ($user->isLogin() && empty($user['password'])) {
+            return $this->redirect($this->generateUrl('settings_setup_password', ['targetPath' => 'settings_email']));
         }
 
-        $form = $this->createFormBuilder()
-            ->add('password', 'password')
-            ->add('email', 'text')
-            ->getForm();
+        if ('POST' === $request->getMethod()) {
+            $data = $request->request->all();
 
-        if ($request->getMethod() === 'POST') {
-            $form->bind($request);
+            //同一IP限制
+            $biz = $this->getBiz();
+            $rateLimiter = $biz['email_rate_limiter'];
+            $rateLimiter->handle($request);
 
-            if ($form->isValid()) {
-                $data = $form->getData();
-                $isPasswordOk = $this->getUserService()->verifyPassword($user['id'], $data['password']);
+            //拖动校验
+            $authSettings = $this->getSettingService()->get('auth', []);
+            $this->dragCaptchaValidator($data, $authSettings);
 
-                if (!$isPasswordOk) {
-                    $this->setFlashMessage('danger', 'site.incorrect.password');
+            $isPasswordOk = $this->getUserService()->verifyPassword($user['id'], $data['password']);
 
-                    return $this->redirect($this->generateUrl('settings_email'));
-                }
+            if (!$isPasswordOk) {
+                return $this->createJsonResponse(['message' => 'site.incorrect.password'], 403);
+            }
 
-                $userOfNewEmail = $this->getUserService()->getUserByEmail($data['email']);
+            $userOfNewEmail = $this->getUserService()->getUserByEmail($data['email']);
 
-                if ($userOfNewEmail && $userOfNewEmail['id'] == $user['id']) {
-                    $this->setFlashMessage('danger', 'user.settings.email.new_email_same_old');
+            if ($userOfNewEmail && $userOfNewEmail['id'] == $user['id']) {
+                return $this->createJsonResponse(['message' => 'user.settings.email.new_email_same_old'], 403);
+            }
 
-                    return $this->redirect($this->generateUrl('settings_email'));
-                }
+            if ($userOfNewEmail && $userOfNewEmail['id'] != $user['id']) {
+                return $this->createJsonResponse(['message' => 'user.settings.email.new_email_not_unique'], 403);
+            }
 
-                if ($userOfNewEmail && $userOfNewEmail['id'] != $user['id']) {
-                    $this->setFlashMessage('danger', 'user.settings.email.new_email_not_unique');
+            $tokenArgs = [
+                'userId' => $user['id'],
+                'duration' => 60 * 60 * 24,
+                'data' => $data['email'],
+            ];
 
-                    return $this->redirect($this->generateUrl('settings_email'));
-                }
+            $token = $this->getTokenService()->makeToken('email-verify', $tokenArgs);
+            $token = $token['token'];
+            try {
+                $site = $this->setting('site', []);
+                $mailOptions = [
+                    'to' => $data['email'],
+                    'template' => 'email_reset_email',
+                    'params' => [
+                        'sitename' => $site['name'],
+                        'siteurl' => $site['url'],
+                        'verifyurl' => $this->getHttpHost().'/auth/email/confirm?token='.$token,
+                        'nickname' => $user['nickname'],
+                    ],
+                ];
+                $mailFactory = $this->getBiz()->offsetGet('mail_factory');
+                $mail = $mailFactory($mailOptions);
+                $mail->send();
 
-                $tokenArgs = array(
-                    'userId' => $user['id'],
-                    'duration' => 60 * 60 * 24,
-                    'data' => $data['email'],
-                );
-
-                $token = $this->getTokenService()->makeToken('email-verify', $tokenArgs);
-                $token = $token['token'];
-                try {
-                    $site = $this->setting('site', array());
-                    $mailOptions = array(
-                        'to' => $data['email'],
-                        'template' => 'email_reset_email',
-                        'params' => array(
-                            'sitename' => $site['name'],
-                            'siteurl' => $site['url'],
-                            'verifyurl' => $this->generateUrl('auth_email_confirm', array('token' => $token), true),
-                            'nickname' => $user['nickname'],
+                return $this->render(
+                    'settings/email-verfiy.html.twig',
+                    [
+                        'message' => $this->get('translator')->trans(
+                            'user.settings.email.send_success',
+                            ['%email%' => $data['email']]
                         ),
-                    );
-                    $mailFactory = $this->getBiz()->offsetGet('mail_factory');
-                    $mail = $mailFactory($mailOptions);
-                    $mail->send();
-                    $this->setFlashMessage('success', $this->get('translator')->trans('user.settings.email.send_success', array('%email%' => $data['email'])));
-                } catch (\Exception $e) {
-                    $this->setFlashMessage('danger', 'user.settings.email.send_error');
-                    $this->getLogService()->error('system', 'setting_email_change', '邮箱变更确认邮件发送失败:'.$e->getMessage());
-                }
+                        'data' => [
+                            'email' => $data['email'],
+                        ],
+                    ]
+                );
+            } catch (\Exception $e) {
+                $this->getLogService()->error('system', 'setting_email_change', '邮箱变更确认邮件发送失败:'.$e->getMessage());
 
-                return $this->redirect($this->generateUrl('settings_email'));
+                return $this->createJsonResponse(['message' => 'user.settings.email.send_error'], 403);
             }
         }
 
-        return $this->render('settings/email.html.twig', array(
-            'form' => $form->createView(),
+        return $this->render('settings/email.html.twig', [
             'mailer' => $mailer,
             'cloudEmail' => $cloudEmail,
-        ));
+        ]);
     }
 
     public function emailVerifyAction()
     {
         $user = $this->getCurrentUser();
         $token = $this->getUserService()->makeToken('email-verify', $user['id'], strtotime('+1 day'), $user['email']);
-        $verifyurl = $this->generateUrl('register_email_verify', array('token' => $token), true);
-        $site = $this->setting('site', array());
+        $verifyurl = $this->getHttpHost().'/register/email/verify/'.$token;
+
+        $site = $this->setting('site', []);
         try {
-            $mailOptions = array(
+            $mailOptions = [
                 'to' => $user['email'],
                 'template' => 'email_verify_email',
-                'params' => array(
+                'params' => [
                     'verifyurl' => $verifyurl,
                     'nickname' => $user['nickname'],
                     'sitename' => $site['name'],
                     'siteurl' => $site['url'],
-                ),
-            );
+                ],
+            ];
             $mailFactory = $this->getBiz()->offsetGet('mail_factory');
             $mail = $mailFactory($mailOptions);
             $mail->send();
-            $this->setFlashMessage('success', $this->get('translator')->trans('user.settings.email.send_success', array('%email%' => $data['email'])));
+
+            return $this->render(
+                'settings/email-verfiy.html.twig',
+                [
+                    'message' => $this->get('translator')->trans(
+                        'user.settings.email.send_success',
+                        ['%email%' => $user['email']]
+                    ),
+                    'data' => [
+                        'email' => $user['email'],
+                    ],
+                ]
+            );
         } catch (\Exception $e) {
             $this->getLogService()->error('system', 'setting_email-verify', '邮箱验证邮件发送失败:'.$e->getMessage());
-            $this->setFlashMessage('danger', 'user.settings.email.send_error');
-        }
 
-        return $this->createJsonResponse(true);
+            return $this->createJsonResponse(['message' => 'user.settings.email.send_error'], 403);
+        }
     }
 
     public function bindsAction(Request $request)
     {
         $user = $this->getCurrentUser();
         $clients = OAuthClientFactory::clients();
-        $userBinds = $this->getUserService()->findBindsByUserId($user->id) ?: array();
+        $userBinds = $this->getUserService()->findBindsByUserId($user->id) ?: [];
 
         foreach ($userBinds as $userBind) {
-            if ($userBind['type'] === 'weixin') {
+            if ('weixin' === $userBind['type']) {
                 $userBind['type'] = 'weixinweb';
             }
 
             $clients[$userBind['type']]['status'] = 'bind';
         }
+        $wechatSetting = $this->getSettingService()->get('wechat', []);
+        $loginQrcode = '';
+        if (!empty($wechatSetting['wechat_notification_enabled'])) {
+            $loginUrl = $this->generateUrl(
+                'login',
+                ['goto' => $wechatSetting['account_code']],
+                UrlGeneratorInterface::ABSOLUTE_URL
+            );
+            $loginQrcode = $this->generateUrl(
+                'common_qrcode',
+                ['text' => $loginUrl],
+                UrlGeneratorInterface::ABSOLUTE_URL
+            );
+        }
 
-        return $this->render('settings/binds.html.twig', array(
+        return $this->render('settings/binds.html.twig', [
             'clients' => $clients,
-        ));
+            'loginQrcode' => $loginQrcode,
+            'user' => $user,
+        ]);
     }
 
     public function unBindAction(Request $request, $type)
     {
         $user = $this->getCurrentUser();
         $this->checkBindsName($type);
-        $userBinds = $this->getUserService()->unBindUserByTypeAndToId($type, $user->id);
+        $this->getUserService()->unBindUserByTypeAndToId($type, $user->id);
 
-        return $this->redirect($this->generateUrl('settings_binds'));
+        return $this->createJsonResponse(['message' => 'user.settings.unbind_success']);
     }
 
     public function bindAction(Request $request, $type)
     {
         $this->checkBindsName($type);
-        $callback = $this->generateUrl('settings_binds_bind_callback', array('type' => $type), true);
+        $state = uniqid('edusoho');
+        $this->get('session')->set('login_bind.credential', $state);
+        $callback = $this->generateUrl(
+            'settings_binds_bind_callback',
+            ['type' => $type],
+            UrlGeneratorInterface::ABSOLUTE_URL
+        );
         $settings = $this->setting('login_bind');
-        $config = array('key' => $settings[$type.'_key'], 'secret' => $settings[$type.'_secret']);
+        $config = ['key' => $settings[$type.'_key'], 'secret' => $settings[$type.'_secret']];
         $client = OAuthClientFactory::create($type, $config);
+        $credential = (string) $this->get('session')->get('login_bind.credential');
 
-        return $this->redirect($client->getAuthorizeUrl($callback));
+        return $this->redirect($client->getAuthorizeUrl($callback, $credential));
     }
 
     public function bindCallbackAction(Request $request, $type)
@@ -985,80 +973,96 @@ class SettingsController extends BaseController
 
         if (!empty($bind)) {
             $this->setFlashMessage('danger', 'user.settings.security.oauth_bind.duplicate_bind');
-            goto response;
+
+            return $this->redirect($this->generateUrl('settings_binds'));
         }
 
         $code = $request->query->get('code');
 
         if (empty($code)) {
             $this->setFlashMessage('danger', 'user.settings.security.oauth_bind.authentication_fail');
-            goto response;
+
+            return $this->redirect($this->generateUrl('settings_binds'));
         }
 
-        $callbackUrl = $this->generateUrl('settings_binds_bind_callback', array('type' => $type), true);
+        //校验参数
+        $oAuthClient = $this->createOAuthClient($type);
+        $result = $oAuthClient->verifyCredential($request, $this->get('session')->get('login_bind.credential'));
+        if (!$result) {
+            $this->setFlashMessage('danger', 'user.settings.security.oauth_bind.state.authentication_fail');
+
+            return $this->redirect($this->generateUrl('settings_binds'));
+        }
+
+        $callbackUrl = $this->generateUrl(
+            'settings_binds_bind_callback',
+            ['type' => $type],
+            UrlGeneratorInterface::ABSOLUTE_URL
+        );
+
         try {
-            $token = $this->createOAuthClient($type)->getAccessToken($code, $callbackUrl);
+            $token = $oAuthClient->getAccessToken($code, $callbackUrl);
         } catch (\Exception $e) {
             $this->setFlashMessage('danger', 'user.settings.security.oauth_bind.authentication_fail');
-            goto response;
+
+            return $this->redirect($this->generateUrl('settings_binds'));
+        }
+
+        if ('weixinweb' == $type) {
+            $this->getWeChatService()->freshOpenAppWeChatUserWhenLogin($this->getCurrentUser(), $token);
         }
 
         $bind = $this->getUserService()->getUserBindByTypeAndFromId($type, $token['userId']);
 
         if (!empty($bind)) {
             $this->setFlashMessage('danger', 'user.settings.security.oauth_bind.exist_account');
-            goto response;
+
+            return $this->redirect($this->generateUrl('settings_binds'));
         }
 
         $this->getUserService()->bindUser($type, $token['userId'], $user['id'], $token);
         $this->setFlashMessage('success', 'user.settings.security.oauth_bind.success');
 
-        response:
         return $this->redirect($this->generateUrl('settings_binds'));
-    }
-
-    public function setupAction(Request $request)
-    {
-        $user = $this->getCurrentUser();
-
-        if ($request->getMethod() === 'POST') {
-            $data = $request->request->all();
-
-            $this->getAuthService()->changeEmail($user['id'], null, $data['email']);
-            $this->getAuthService()->changeNickname($user['id'], $data['nickname']);
-            $user = $this->getUserService()->setupAccount($user['id']);
-            $this->authenticateUser($user);
-
-            return $this->createJsonResponse(true);
-        }
-
-        return $this->render('settings/setup.html.twig');
     }
 
     public function setupPasswordAction(Request $request)
     {
         $user = $this->getCurrentUser();
 
+        $targetPath = $request->query->get('targetPath');
+        $showType = $request->query->get('showType', 'modal');
         $form = $this->createFormBuilder()
-            ->add('newPassword', 'password')
-            ->add('confirmPassword', 'password')
+            ->add('newPassword', PasswordType::class)
+            ->add('confirmPassword', PasswordType::class)
             ->getForm();
 
-        if ($request->getMethod() === 'POST') {
-            $targetPath = $this->getTargetPath($request);
-            $form->bind($request);
-
+        if ('POST' === $request->getMethod()) {
+            if (!empty($user['password'])) {
+                return $this->createJsonResponse([
+                    'message' => 'user.settings.login_password_fail',
+                ], 500);
+            }
+            $form->handleRequest($request);
             if ($form->isValid()) {
                 $passwords = $form->getData();
                 $this->getUserService()->changePassword($user['id'], $passwords['newPassword']);
 
-                return $this->redirect($targetPath);
+                return $this->createJsonResponse([
+                    'message' => 'user.settings.login_password_success',
+                ]);
+            } else {
+                return $this->createJsonResponse([
+                    'message' => 'user.settings.login_password_fail',
+                ], 500);
             }
         }
 
-        return $this->render('settings/setup-password.html.twig', array(
+        return $this->render('settings/setup-password.html.twig', [
+            'targetPath' => $targetPath,
+            'showType' => $showType,
             'form' => $form->createView(),
-        ));
+        ]);
     }
 
     public function setupCheckNicknameAction(Request $request)
@@ -1068,18 +1072,45 @@ class SettingsController extends BaseController
         $nickname = $request->query->get('value');
 
         if ($nickname == $user['nickname']) {
-            $response = array('success' => true);
+            $response = ['success' => true];
         } else {
             list($result, $message) = $this->getAuthService()->checkUsername($nickname);
 
-            if ($result === 'success') {
-                $response = array('success' => true);
+            if ('success' === $result) {
+                $response = ['success' => true];
             } else {
-                $response = array('success' => false, 'message' => $message);
+                $response = ['success' => false, 'message' => $message];
             }
         }
 
         return $this->createJsonResponse($response);
+    }
+
+    protected function generateAssistantQrCode($user)
+    {
+        $url = $this->getSCRMService()->getStaffBindUrl($user);
+        if (empty($url)) {
+            return '';
+        }
+
+        $token = $this->getTokenService()->makeToken(
+            'qrcode',
+            [
+                'userId' => $user['id'],
+                'data' => [
+                    'url' => $url,
+                ],
+                'times' => 1,
+                'duration' => 3600,
+            ]
+        );
+        $url = $this->generateUrl(
+            'common_parse_qrcode',
+            ['token' => $token['token']],
+            UrlGeneratorInterface::ABSOLUTE_URL
+        );
+
+        return $this->generateUrl('common_qrcode', ['text' => $url], UrlGeneratorInterface::ABSOLUTE_URL);
     }
 
     protected function checkBindsName($type)
@@ -1087,13 +1118,13 @@ class SettingsController extends BaseController
         $types = array_keys(OAuthClientFactory::clients());
 
         if (!in_array($type, $types)) {
-            throw new NotFoundException('Type Not Found');
+            $this->createNewException(SettingException::OAUTH_CLIENT_TYPE_INVALID());
         }
     }
 
     public function fetchAvatar($url)
     {
-        return CurlToolkit::request('GET', $url, array(), array('contentType' => 'plain'));
+        return CurlToolkit::request('GET', $url, [], ['contentType' => 'plain']);
     }
 
     protected function createOAuthClient($type)
@@ -1101,7 +1132,7 @@ class SettingsController extends BaseController
         $settings = $this->setting('login_bind');
 
         if (empty($settings)) {
-            throw new \RuntimeException('第三方登录系统参数尚未配置，请先配置。');
+            $this->createNewException(SettingException::NOTFOUND_THIRD_PARTY_AUTH_CONFIG());
         }
 
         if (empty($settings) || !isset($settings[$type.'_enabled']) || empty($settings[$type.'_key']) || empty($settings[$type.'_secret'])) {
@@ -1112,10 +1143,32 @@ class SettingsController extends BaseController
             throw new \RuntimeException('第三方登录('.$type.')未开启');
         }
 
-        $config = array('key' => $settings[$type.'_key'], 'secret' => $settings[$type.'_secret']);
+        $config = ['key' => $settings[$type.'_key'], 'secret' => $settings[$type.'_secret']];
         $client = OAuthClientFactory::create($type, $config);
 
         return $client;
+    }
+
+    protected function dragCaptchaValidator($registration, $authSettings)
+    {
+        if (array_key_exists(
+                'captcha_enabled',
+                $authSettings
+            ) && (1 == $authSettings['captcha_enabled']) && empty($registration['mobile'])) {
+            $biz = $this->getBiz();
+            $bizDragCaptcha = $biz['biz_drag_captcha'];
+
+            $dragcaptchaToken = empty($registration['dragCaptchaToken']) ? '' : $registration['dragCaptchaToken'];
+            $bizDragCaptcha->check($dragcaptchaToken);
+        }
+    }
+
+    /**
+     * @return SCRMService
+     */
+    protected function getSCRMService()
+    {
+        return $this->getBiz()->service('SCRM:SCRMService');
     }
 
     /**
@@ -1174,24 +1227,27 @@ class SettingsController extends BaseController
         return $this->getBiz()->service('System:LogService');
     }
 
-    protected function downloadImg($url)
+    /**
+     * @return AccountService
+     */
+    protected function getAccountService()
     {
-        $currentUser = $this->getCurrentUser();
-//        $filename    = md5($url).'_'.time();
-        $filePath = $this->container->getParameter('topxia.upload.public_directory').'/tmp/'.$currentUser['id'].'_'.time().'.jpg';
+        return $this->getBiz()->service('Pay:AccountService');
+    }
 
-        $fp = fopen($filePath, 'w');
-        $img = fopen($url, 'r');
-        stream_get_meta_data($img);
-        $result = '';
-        while (!feof($img)) {
-            $result .= fgets($img, 1024);
-        }
+    /**
+     * @return WeChatService
+     */
+    protected function getWeChatService()
+    {
+        return $this->getBiz()->service('WeChat:WeChatService');
+    }
 
-        fclose($img);
-        fwrite($fp, $result);
-        fclose($fp);
-
-        return $filePath;
+    /**
+     * @return MultiClassService
+     */
+    protected function getMultiClassService()
+    {
+        return $this->getBiz()->service('MultiClass:MultiClassService');
     }
 }

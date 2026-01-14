@@ -13,16 +13,22 @@ class Members extends BaseResource
     public function get(Application $app, Request $request, $classroomId)
     {
         $conditions = array('classroomId' => $classroomId);
-        $start      = $request->query->get('start', 0);
-        $limit      = $request->query->get('limit', 10);
+        $start = $request->query->get('start', 0);
+        $limit = $request->query->get('limit', 10);
+        $role = $request->query->get('role', '');
 
-        $total   = $this->getClassroomService()->searchMemberCount($conditions);
-        $members = $this->getClassroomService()->searchMembers($conditions, array('createdTime'=> 'DESC'), $start, $limit);
+        if (!empty($role)) {
+            $conditions['role'] = $role;
+        }
+
+        $total = $this->getClassroomService()->searchMemberCount($conditions);
+        $members = $this->getClassroomService()->searchMembers($conditions, array('createdTime' => 'DESC'), $start, $limit);
 
         $users = $this->getUserService()->findUsersByIds(ArrayToolkit::column($members, 'userId'));
 
         foreach ($members as &$member) {
-            $member['user'] = empty($users[$member['userId']]) ? null : $users[$member['userId']];
+            $user = $this->getUserService()->hideUserNickname($users[$member['userId']]);
+            $member['user'] = empty($user) ? null : $user;
         }
 
         return $this->wrap($this->filter($members), $total);

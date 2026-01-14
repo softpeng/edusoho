@@ -1,5 +1,8 @@
 import Emitter from 'component-emitter';
-import swfobject from 'es-swfobject';
+import postal from 'postal';
+import 'postal.federation';
+import 'postal.xframe';
+import screenfull from 'es-screenfull';
 
 class BalloonCloudVideoPlayer extends Emitter {
 
@@ -11,25 +14,19 @@ class BalloonCloudVideoPlayer extends Emitter {
   }
 
   setup() {
-    let element = this.options.element;
-    // todo delete, to move into the cloud player
-    if (!swfobject.hasFlashPlayerVersion('11') && !/(iPhone|iPad|iPod|iOS|Android)/i.test(navigator.userAgent)) {
-      $(element).css({
-        'background-color': '#313131',
-        'position': 'relative'
-      });
-      $(element).html(Translator.trans('site.flash_not_install_hint'));
-      return;
-    }
-
     var self = this;
 
     let extConfig = {};
 
-    //字幕
-    if (self.options.textTrack.length) {
+    if (self.options.resNo) {
       extConfig = Object.assign(extConfig, {
-        textTrack: self.options.textTrack
+        resNo: self.options.resNo
+      });
+    }
+
+    if (self.options.token) {
+      extConfig = Object.assign(extConfig, {
+        token: self.options.token
       });
     }
 
@@ -44,13 +41,18 @@ class BalloonCloudVideoPlayer extends Emitter {
       });
     }
 
-    if (self.options.fingerprint) {
-      extConfig = Object.assign(extConfig, {
-        fingerprint: {
-          html: self.options.fingerprint,
-          duration: self.options.fingerprintTime
-        }
-      })
+    if (this.options.fullWatermark) {
+      extConfig.fingerprint = {
+        isFull: true,
+        html: this.options.fingerprintTxt,
+        color: this.options.fingerprintColor,
+        alpha: this.options.fingerprintAlpha,
+      };
+    } else if (this.options.fingerprint) {
+      extConfig.fingerprint = {
+        html: this.options.fingerprint,
+        duration: this.options.fingerprintTime
+      };
     }
 
     if (self.options.timelimit) {
@@ -60,16 +62,24 @@ class BalloonCloudVideoPlayer extends Emitter {
           text: Translator.trans('activity.video.try_watch_finish_hint'),
           display: true
         }
-      })
+      });
     }
 
-    if (self.options.enablePlaybackRates && self.isBrowserSupportPlaybackRates()) {
+    if (!this.options.disableProgressBar && self.options.enablePlaybackRates) {
       extConfig = Object.assign(extConfig, {
-        playbackRates: {
-          enable: true,
-          source: 'hls',
-          src: self.options.url
-        }
+        playbackRates: ['0.75', '1.0', '1.25', '1.5', '2.0', '3.0']
+      });
+    }
+
+    if (self.options.videoH5) {
+      extConfig = Object.assign(extConfig, {
+        h5: true
+      });
+    }
+
+    if (self.options.playerType) {
+      extConfig = Object.assign(extConfig, {
+        playerType: self.options.playerType
       });
     }
 
@@ -79,57 +89,87 @@ class BalloonCloudVideoPlayer extends Emitter {
       });
     }
 
-    if (self.options.statsInfo) {
-      var statsInfo = self.options.statsInfo;
+    if (self.options.user) {
+      var user = self.options.user;
       extConfig = Object.assign(extConfig, {
-        statsInfo: {
-          accesskey: statsInfo.accesskey,
-          globalId: statsInfo.globalId,
-          userId: statsInfo.userId,
-          userName: statsInfo.userName
+        user: {
+          accesskey: user.accesskey,
+          globalId: user.globalId,
+          id: user.id,
+          name: user.name
         }
       });
     }
 
+    const rememberLastPos = (self.options.customPos && self.options.rememberLastPos) ? true : false;
+
+    const lang = (document.documentElement.lang == 'zh_CN') ? 'zh-CN' : document.documentElement.lang;
+    self.options.customPos = self.options.customPos.toString();
     extConfig = Object.assign(extConfig, {
       id: $(self.options.element).attr('id'),
+      sdkBaseUri: app.cloudSdkBaseUri,
+      disableDataUpload: app.cloudDisableLogReport,
+      disableSentry: app.cloudDisableLogReport,
       disableControlBar: self.options.disableControlBar,
       disableProgressBar: self.options.disableProgressBar,
+      disableFullscreen: self.options.disableFullscreen,
+      disableSeek: self.options.disableProgressBar ? 'forward' : 'none',
       playlist: self.options.url,
-      remeberLastPos: true,
-      videoHeaderLength: self.options.videoHeaderLength,
-      autoplay: self.options.autoplay
-    })
-    var player = new VideoPlayerSDK(extConfig);
-
+      rememberLastPos: rememberLastPos,
+      initPos: self.options.customPos,
+      autoplay: self.options.autoplay,
+      strictMode: !self.options.strictMode,
+      language: lang
+    });
+    console.log(extConfig);
+    var player = new QiQiuYun.Player(extConfig);
     player.on('ready', function(e) {
-      self.emit("ready", e);
+      self.emit('ready', e);
     });
 
-    player.on("timeupdate", function(e) {
+    player.on('timeupdate', function(e) {
       //    player.__events get all the event;
-      self.emit("timechange", e);
+      self.currentTime = e.currentTime;
+      self.duration = e.duration;
+      self.emit('timechange', e);
     });
 
-    player.on("ended", function(e) {
-      self.emit("ended", e);
+    player.on('firstplay', function (e) {
+      player.setCurrentTime(self.options.customPos);
     });
 
-    player.on("playing", function(e) {
-      self.emit("playing", e);
+    player.on('unableConfirm', function (e) {
+      $('.js-back-link', parent.document)[0].click();
     });
 
-    player.on("paused", function(e) {
-      self.emit("paused", e);
+    player.on('ended', function(e) {
+      let message = {
+        'mode' : self.playMode,
+        'currentTime': self.currentTime,
+        'duration': self.duration,
+      };
+      self.emit('ended', message);
     });
 
-    player.on("exam.answered", function(e) {
-      var data = e.data;
+    player.on('playing', function(e) {
+      self.emit('playing', e);
+    });
+
+    player.on('paused', function(e) {
+      self.emit('paused', e);
+    });
+
+    player.on('exam.answered', function(data) {
       data['type'] = self.convertQuestionType(data.type, 'cloud');
-      self.emit("answered", data);
+      self.emit('answered', data);
+    });
+
+    player.on('requestFullscreen', function(data) {
+      self.emit('requestFullscreen', data);
     });
 
     this.player = player;
+    this._registerChannel();
   }
 
   play() {
@@ -172,37 +212,15 @@ class BalloonCloudVideoPlayer extends Emitter {
       var exam = {
         popupExam: {
           config: {
-            "mode": "middle"
+            'mode': 'middle'
           },
           questions: questions
         }
-      }
-
+      };
       this.player.setExams(exam);
     }
 
     return this;
-  }
-
-  isBrowserSupportPlaybackRates() {
-    var nUserAgent = navigator.userAgent.toLowerCase();
-    // IE不支持，低版本(47以下)的chrome不支持
-    var isIE = nUserAgent.indexOf('msie') > 0;
-    var isIE11 = nUserAgent.indexOf('trident') > 0 && nUserAgent.indexOf('rv') > 0;
-    var isChrome = nUserAgent.indexOf('chrome') > 0;
-    var isSafari = nUserAgent.indexOf('safari') > 0 && !isChrome;
-
-    if (isIE11 || isIE || isSafari) {
-      return false;
-    }
-    if (isChrome) {
-      var matched = navigator.userAgent.match(/Chrome\/(\d{0,3})/i);
-      if (matched && matched[1] < 47) {
-        return false;
-      }
-    }
-
-    return true;
   }
 
   convertQuestionType(source, from) {
@@ -235,6 +253,35 @@ class BalloonCloudVideoPlayer extends Emitter {
     }
 
     return source;
+  }
+
+  _registerChannel() {
+    postal.instanceId('task');
+
+    postal.fedx.addFilter([
+      {
+        channel: 'task-events', //接收 activity iframe的事件
+        topic: 'monitoringEvent',
+        direction: 'in'
+      }
+    ]);
+
+    postal.subscribe({
+      channel: 'task-events',
+      topic: 'monitoringEvent',
+      callback: (type) => {
+        if (screenfull.isFullscreen) {
+          screenfull.exit();
+        }
+        if (type === 'pause') {
+          this.pause();
+        } else if (type === 'play') {
+          this.play();
+        }
+      }
+    });
+
+    return this;
   }
 
 }

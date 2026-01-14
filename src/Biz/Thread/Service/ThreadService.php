@@ -2,6 +2,8 @@
 
 namespace Biz\Thread\Service;
 
+use Biz\System\Annotation\Log;
+
 interface ThreadService
 {
     /**
@@ -9,11 +11,32 @@ interface ThreadService
      */
     public function getThread($threadId);
 
+    /**
+     * @param $thread
+     *
+     * @return mixed
+     * @Log(module="thread",action="create")
+     */
     public function createThread($thread);
 
+    /**
+     * @param $id
+     * @param $fields
+     *
+     * @return mixed
+     * @Log(module="thread",action="update",param="id")
+     */
     public function updateThread($id, $fields);
 
+    /**
+     * @param $threadId
+     *
+     * @return mixed
+     * @Log(module="thread",action="delete")
+     */
     public function deleteThread($threadId);
+
+    public function deleteThreadsByUserId($userId);
 
     public function setThreadSticky($threadId);
 
@@ -68,6 +91,12 @@ interface ThreadService
     public function searchMembers($conditions, $orderBy, $start, $limit);
 
     public function searchMemberCount($conditions);
+
+    public function countPartakeThreadsByUserIdAndTargetType($userId, $targetType);
+
+    public function findThreadIds($conditions);
+
+    public function findPostThreadIds($conditions);
 
     /**
      * thread_vote.

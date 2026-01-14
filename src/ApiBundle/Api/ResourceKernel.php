@@ -2,8 +2,6 @@
 
 namespace ApiBundle\Api;
 
-use ApiBundle\Api\Annotation\ApiConf;
-use ApiBundle\Api\Exception\ErrorCode;
 use ApiBundle\Api\Resource\ResourceManager;
 use ApiBundle\Api\Util\ExceptionUtil;
 use ApiBundle\ApiBundle;
@@ -11,7 +9,7 @@ use Codeages\Biz\Framework\Context\Biz;
 use Doctrine\Common\Annotations\CachedReader;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Biz\Common\CommonException;
 
 class ResourceKernel
 {
@@ -76,7 +74,8 @@ class ResourceKernel
     {
         $pathInfo = $request->getPathInfo();
         $pathInfo = str_replace(ApiBundle::API_PREFIX, '', $pathInfo);
-        return $pathInfo == '/batch';
+
+        return '/batch' == $pathInfo;
     }
 
     private function batchRequest(Request $request)
@@ -84,7 +83,7 @@ class ResourceKernel
         $batchArgsRaw = $request->request->get('batch');
 
         if (!$batchArgsRaw) {
-            throw new BadRequestHttpException('缺少参数', null, ErrorCode::INVALID_ARGUMENT);
+            throw CommonException::ERROR_PARAMETER_MISSING();
         }
 
         $jsonRequests = json_decode($batchArgsRaw, true);
@@ -97,16 +96,15 @@ class ResourceKernel
                 $successResponse = $this->handleApiRequest($apiRequest);
                 $result[] = array(
                     'code' => 200,
-                    'body' => $successResponse
+                    'body' => $successResponse,
                 );
             } catch (\Exception $e) {
                 list($error, $httpCode) = ExceptionUtil::getErrorAndHttpCodeFromException($e, $this->isDebug());
                 $result[] = array(
                     'code' => $httpCode,
-                    'body' => array('error' => $error)
+                    'body' => array('error' => $error),
                 );
             }
-
         }
 
         return $result;
@@ -114,30 +112,32 @@ class ResourceKernel
 
     private function isDebug()
     {
-        $env = $this->container->get( 'kernel' )->getEnvironment();
-        return $env == 'dev';
+        $env = $this->container->get('kernel')->getEnvironment();
+
+        return 'dev' == $env;
     }
 
     private function validateJsonRequests($jsonRequests)
     {
         if (!is_array($jsonRequests)) {
-            throw new BadRequestHttpException('batch参数不正确', null, ErrorCode::INVALID_ARGUMENT);
+            throw CommonException::ERROR_PARAMETER();
         }
 
         foreach ($jsonRequests as $jsonRequest) {
             if (empty($jsonRequest['method']) || empty($jsonRequest['relative_url'])) {
-                throw new BadRequestHttpException('batch参数不正确', null, ErrorCode::INVALID_ARGUMENT);
+                throw CommonException::ERROR_PARAMETER();
             }
         }
     }
 
     private function singleRequest(Request $request)
     {
-        $apiRequest = new ApiRequest($request->getPathInfo(), $request->getMethod(), $request->query, $request->request, $request->headers);
+        $apiRequest = new ApiRequest($request->getPathInfo(), $request->getMethod(), $request->query, $request->request, $request->headers, $request);
+
         return $this->handleApiRequest($apiRequest);
     }
 
-    private function handleApiRequest(ApiRequest $apiRequest)
+    public function handleApiRequest(ApiRequest $apiRequest)
     {
         $pathMeta = $this->pathParser->parse($apiRequest);
         $resourceProxy = $this->resManager->create($pathMeta);
@@ -152,16 +152,18 @@ class ResourceKernel
         $resMethod = $pathMeta->getResMethod();
 
         if (!is_callable(array($resource, $resMethod))) {
-            throw new BadRequestHttpException('Method does not exist', null, ErrorCode::BAD_REQUEST);
+            throw CommonException::NOTFOUND_METHOD();
         }
 
         $params = array_merge(array($apiRequest), $pathMeta->getSlugs());
+
         return call_user_func_array(array($resource, $resMethod), $params);
     }
 
     /**
      * @param Request $request
      * @param $jsonRequest
+     *
      * @return ApiRequest
      */
     private function makeApiRequestFromJsonRequest(Request $request, $jsonRequest)

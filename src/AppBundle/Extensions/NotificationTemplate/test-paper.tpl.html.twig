@@ -7,28 +7,34 @@
     <div class="notification-body">
       {% set data = notification.content %}
 
-      {% set who = macro.link(data.userName, path('user_show',{id:data.userId})) %}
+      {% set who = macro.link(data.userName, user_show_path({id:data.userId})) %}
       {% set what = data.name %}
 
       {# do #}
       {% if data.testpaperType|default('testpaper') == 'homework'%}
 
         {% if data.type == 'perusal' %}
-          {% set do = macro.link('notification.test-paper.perusal.do'|trans, path('course_manage_homework_check',{id:data.courseId,resultId:data.id})) %}
+          {% set do = macro.link('notification.test-paper.perusal.do'|trans, path('course_manage_homework_check',{id:data.courseId,answerRecordId:data.id})) %}
         {% elseif data.type == 'read' %}
-          {% set do = macro.link('notification.test-paper.read.do'|trans, path('homework_result_show',{resultId:data.id,action:1})) %}
+          {% if data.taskId|default %}
+            {% set do = macro.link('notification.test-paper.read.do'|trans, path('course_task_show', {courseId: data.courseId, id: data.taskId})) %}
+          {% else %}
+            {% set do = macro.link('notification.test-paper.read.do'|trans, path('homework_result_show', {answerRecordId: data.id, action: 'my'})) %}
+          {% endif %}
         {% endif %}
 
       {% else %}
 
         {% if data.type == 'perusal' %}
           {% if data.courseId|default(0) %}
-            {% set do = macro.link('notification.test-paper.perusal.do'|trans, path('course_manage_testpaper_check',{id:data.courseId,resultId:data.id})) %}
-          {% else %}
-            {% set do = macro.link('notification.test-paper.perusal.do'|trans, path('testpaper_check',{resultId:data.id})) %}
+            {% set do = macro.link('notification.test-paper.perusal.do'|trans, path('course_manage_testpaper_check',{id:data.courseId,answerRecordId:data.id})) %}
           {% endif %}
         {% elseif data.type == 'read' %}
-          {% set do = macro.link('notification.test-paper.read.do'|trans, path('testpaper_result_show',{resultId:data.id,action:1})) %}
+          {% if data.taskId|default %}
+            {% set do = macro.link('notification.test-paper.read.do'|trans, path('course_task_show', {courseId: data.courseId, id: data.taskId})) %}
+          {% else %}
+            {% set do = macro.link('notification.test-paper.read.do'|trans, path('testpaper_result_show', {answerRecordId: data.id, action: 'my'})) %}
+          {% endif %}
         {% endif %}
 
       {% endif %}
@@ -44,7 +50,7 @@
 
     </div>
     <div class="notification-footer">
-     {{ notification.createdTime|date_format }}  
+     {{ notification.createdTime|date('site.date_format_H_i_s'|trans) }}
     </div>
   </div>
 </li>

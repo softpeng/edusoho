@@ -11,43 +11,51 @@ class CourseChapter extends AbstractSychronizer
     public function syncWhenCreate($sourceId)
     {
         $sourceChapter = $this->getCourseChapterDao()->get($sourceId);
-        $copiedCourses = $this->getCourseDao()->findCoursesByParentIdAndLocked($sourceChapter['courseId'], 1);
-
-        $helper = $this->getBatchHelper(self::BATCH_CREATE_HELPER, $this->getCourseChapterDao());
-        foreach ($copiedCourses as $copyCourse) {
-            $copyChapter = $sourceChapter;
-            $copyChapter['courseId'] = $copyCourse['id'];
-            $copyChapter['copyId'] = $sourceChapter['id'];
-            unset($copyChapter['id']);
-            $helper->add($copyChapter);
-            unset($copyChapter);
+        if (empty($sourceChapter)) {
+            return;
         }
 
-        unset($copiedCourses);
+        $copiedCourses = $this->getCourseDao()->findCoursesByParentIdAndLocked($sourceChapter['courseId'], 1);
+        if (empty($copiedCourses)) {
+            return;
+        }
+        $helper = $this->getBatchHelper(self::BATCH_CREATE_HELPER, $this->getCourseChapterDao());
+
+        $syncChapter = $this->filterSyncChapter($sourceChapter);
+        $syncChapter['copyId'] = $sourceChapter['id'];
+        foreach ($copiedCourses as $copyCourse) {
+            $syncChapter['courseId'] = $copyCourse['id'];
+            $helper->add($syncChapter);
+        }
     }
 
     public function syncWhenUpdate($sourceId)
     {
         $sourceChapter = $this->getCourseChapterDao()->get($sourceId);
-        $copiedChapters = $this->getCourseChapterDao()->findByCopyId($sourceId);
-
-        $helper = $this->getBatchHelper(self::BATCH_UPDATE_HELPER, $this->getCourseChapterDao());
-        foreach ($copiedChapters as $copiedChapter) {
-            $newFields = $sourceChapter;
-            unset($newFields['id']);
-            unset($newFields['courseId']);
-            unset($newFields['copyId']);
-            $helper->add('id', $copiedChapter['id'], $newFields);
-
-            unset($newFields);
+        if (empty($sourceChapter)) {
+            return;
         }
-
-        unset($copiedChapters);
+        $syncChapters = $this->getCourseChapterDao()->findByCopyId($sourceId);
+        if (empty($syncChapters)) {
+            return;
+        }
+        $this->getCourseChapterDao()->update(['copyId' => $sourceId], $this->filterSyncChapter($sourceChapter));
     }
 
     public function syncWhenDelete($sourceId)
     {
-        $this->getCourseChapterDao()->batchDelete(array('copyId' => $sourceId));
+        $this->getCourseChapterDao()->batchDelete(['copyId' => $sourceId]);
+    }
+
+    private function filterSyncChapter($sourceChapter)
+    {
+        unset($sourceChapter['id']);
+        unset($sourceChapter['courseId']);
+        unset($sourceChapter['copyId']);
+        unset($sourceChapter['createdTime']);
+        unset($sourceChapter['updatedTime']);
+
+        return $sourceChapter;
     }
 
     /**

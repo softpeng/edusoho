@@ -21,4 +21,8 @@ interface ThemeService
     public function resetConfig();
 
     public function resetCurrentConfig();
+
+    public function cancelConfirmConfigByName($name, $id);
+
+    public function changeTheme($theme);
 }

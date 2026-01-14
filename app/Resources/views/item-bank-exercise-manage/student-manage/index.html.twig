@@ -1,0 +1,22 @@
+{% extends 'item-bank-exercise-manage/exercise-set/layout.html.twig' %}
+
+{% block title %}{{'course.members_manage'|trans}} - {{ exercise.title }} - {{ parent() }}{% endblock %}
+
+{% do script(['vue3/js/item-bank-exercise-manage/students/index.js']) %}
+
+{% set course_side_nav = 'students' %}
+
+{% block main %}
+  <div style="margin-left: 200px; padding: 20px 32px 0 32px;">
+    {{ web_macro.flash_messages() }}
+    <div id="student-list-app"
+         data-exercise-id="{{ exercise.id }}"
+         data-enable-add-and-remove="{{ app.user.isAdmin() or setting('course.teacher_manage_student', 0) }}"
+         data-enable-export="{{ (app.user.isAdmin() or setting('course.teacher_export_student', false)) and canExport }}"
+         data-exercise-status="{{ exercise.status }}"
+    ></div>
+  </div>
+
+  {% include 'export/export-modal.html.twig' %}
+
+{% endblock %}

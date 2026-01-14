@@ -56,7 +56,7 @@ abstract class AdvancedDaoImpl extends GeneralDaoImpl implements AdvancedDaoInte
             foreach ($pageRows as $key => $row) {
                 $marks = str_repeat('?,', count($row) - 1).'?';
 
-                if ($key != 0) {
+                if (0 != $key) {
                     $sql .= ',';
                 }
                 $sql .= "({$marks})";
@@ -77,8 +77,6 @@ abstract class AdvancedDaoImpl extends GeneralDaoImpl implements AdvancedDaoInte
 
         $this->db()->checkFieldNames($updateColumns);
         $this->db()->checkFieldNames(array($identifyColumn));
-
-        array_walk($identifies, 'intval');
 
         $count = count($identifies);
         $pageSize = 500;
@@ -111,8 +109,9 @@ abstract class AdvancedDaoImpl extends GeneralDaoImpl implements AdvancedDaoInte
             $caseWhenSql = "{$updateColumn} = CASE {$identifyColumn} ";
 
             foreach ($identifies as $identifyIndex => $identify) {
+                $caseWhenSql .= ' WHEN ? THEN ? ';
+                $params[] = $identify;
                 $params[] = $updateColumnsList[$identifyIndex][$updateColumn];
-                $caseWhenSql .= " WHEN {$identify} THEN ? ";
                 if ($identifyIndex === count($identifies) - 1) {
                     $caseWhenSql .= " ELSE {$updateColumn} END";
                 }
@@ -123,8 +122,9 @@ abstract class AdvancedDaoImpl extends GeneralDaoImpl implements AdvancedDaoInte
 
         $sql .= implode(',', $updateSql);
 
-        $identifiesStr = implode(',', $identifies);
-        $sql .= " WHERE {$identifyColumn} IN ({$identifiesStr})";
+        $marks = str_repeat('?,', count($identifies) - 1).'?';
+        $sql .= " WHERE {$identifyColumn} IN ({$marks})";
+        $params = array_merge($params, $identifies);
 
         return $this->db()->executeUpdate($sql, $params);
     }

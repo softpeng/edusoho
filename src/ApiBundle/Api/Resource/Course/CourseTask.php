@@ -3,14 +3,15 @@
 namespace ApiBundle\Api\Resource\Course;
 
 use ApiBundle\Api\Annotation\ApiConf;
-use ApiBundle\Api\Annotation\ResponseFilter;
 use ApiBundle\Api\ApiRequest;
-use ApiBundle\Api\Exception\ErrorCode;
 use ApiBundle\Api\Resource\AbstractResource;
 use Biz\Activity\Service\ActivityService;
+use Biz\Activity\Service\HomeworkActivityService;
+use Biz\Course\CourseException;
 use Biz\Task\Service\TaskResultService;
 use Biz\Task\Service\TaskService;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Biz\Task\TaskException;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class CourseTask extends AbstractResource
 {
@@ -22,10 +23,10 @@ class CourseTask extends AbstractResource
         $course = $this->service('Course:CourseService')->getCourse($courseId);
 
         if (!$course) {
-            throw new NotFoundHttpException('教学计划不存在', null, ErrorCode::RESOURCE_NOT_FOUND);
+            throw CourseException::NOTFOUND_COURSE();
         }
 
-        return $this->service('Task:TaskService')->findTasksByCourseId($courseId);
+        return $this->getTaskService()->findTasksByCourseId($courseId);
     }
 
     public function get(ApiRequest $request, $courseId, $taskId)
@@ -33,13 +34,39 @@ class CourseTask extends AbstractResource
         $task = $this->getTaskService()->getTask($taskId);
 
         if (!$task) {
-            throw new NotFoundHttpException('任务不存在', null, ErrorCode::RESOURCE_NOT_FOUND);
+            throw TaskException::NOTFOUND_TASK();
         }
 
-        $task['activity'] = $this->getActivityService()->getActivity($task['activityId'], true);
+        $activity = $this->getActivityService()->getActivity($task['activityId'], true);
+        $task['activity'] = $this->filterActivity($activity);
+        $task['activity']['finishCondition'] = $this->getActivityService()->getActivityFinishCondition($task['activity']);
         $task['result'] = $this->getTaskResultService()->getUserTaskResultByTaskId($taskId);
+        $task['courseUrl'] = $this->generateUrl('my_course_show', ['id' => $courseId], UrlGeneratorInterface::ABSOLUTE_URL);
 
         return $task;
+    }
+
+    protected function filterActivity($activity)
+    {
+        if ('homework' == $activity['mediaType']) {
+            $homeworkActivity = $this->getHomeworkActivityService()->get($activity['mediaId']);
+            $activity['mediaId'] = $homeworkActivity['assessmentId'];
+        }
+
+        return $activity;
+    }
+
+    public function remove(ApiRequest $request, $courseId, $taskId)
+    {
+        $task = $this->getTaskService()->getTask($taskId);
+
+        if (!$task) {
+            throw TaskException::NOTFOUND_TASK();
+        }
+
+        $this->getTaskService()->deleteTask($taskId);
+
+        return ['success' => true];
     }
 
     /**
@@ -66,4 +93,11 @@ class CourseTask extends AbstractResource
         return $this->service('Activity:ActivityService');
     }
 
+    /**
+     * @return HomeworkActivityService
+     */
+    private function getHomeworkActivityService()
+    {
+        return $this->service('Activity:HomeworkActivityService');
+    }
 }

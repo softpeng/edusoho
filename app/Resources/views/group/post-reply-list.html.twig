@@ -1,19 +1,27 @@
 <div class="well">
-  <div class="reply-post-list-{{postMain.id}}">
+  <div class="reply-post-list-{{postMain.id}} main_hover_item">
     <ul class="media-list">
       {% for post in posts %}
-        <li class="media li-reply-{{postMain.id}}" {% if loop.index > 5 %}style="display:none;"{% endif %}>
-          <a href="{{ path('user_show', {id:post.userId}) }}" class="pull-left">
+        {% set isOpenInfo = data('StudentOpenInfo', {'userId': post.userId}) %}
+        <li class="media li-reply-{{postMain.id}} main_hover_item" {% if loop.index > 5 %}style="display:none;"{% endif %}>
+          <a {% if isOpenInfo == 1 %}href="{{ user_show_path({id:post.userId}) }}"{% endif %} class="pull-left">
             <img src="{{ filepath(users[post.userId].smallAvatar, 'avatar.png') }}" class="avatar-md">
           </a>
           <div class="media-body">
             <div class="metas">
               <strong>{{ web_macro.user_link(postReplyMembers[post.userId]) }}</strong>
               <span class="mhm">{{post.createdTime|smart_time}}</span>
+              <span id="{{ 'js-group-thread-reply-after-' ~ post.id }}" style="color: red;"></span>
+              {% if app.user.isLogin()|default(false) and app.user.id != post.userId and is_reported('group_thread_reply', post.id)  %}
+                <span style="color: red;">({{ '已举报'|trans }})</span>
+              {% endif %}
             </div>
             <div class="content">{{post.content|raw}}</div>
             <div class="color-gray text-normal pull-right">
-              <a href="javascript:" class="li-reply" postId="{{postMain.id}}" postName="{{users[post.userId].nickname}}" data-from-user-id= "{{ users[post.userId].id }}"> {{'group.thread.reply_btn'|trans}}</a>
+              {% if app.user.isLogin()|default(false) and app.user.id != post.userId and not is_reported('group_thread_reply', post.id) %}
+                <a class="item-hover" id="{{ 'js-group-thread-reply-modal-'~ post.id }}" href="javascript:" data-toggle="modal" data-target="#modal" data-urL="{{ path('common_report_tags_modal', {targetType: 'group_thread_reply', targetId: post.id, modalTarget: 'js-group-thread-reply-modal-'~ post.id, contentTarget: 'js-group-thread-reply-after-' ~ post.id }) }}">{{'举报'|trans}}</a>
+              {% endif %}
+              <a href="javascript:" class="li-reply" postId="{{postMain.id}}" postName="{% if not users[post.userId].destroyed|default(0) %}{{users[post.userId].nickname}}{% else %}{{ 'user.user_had_destroyed'|trans }}{% endif %}" data-from-user-id= "{{ users[post.userId].id }}"> {{'group.thread.reply_btn'|trans}}</a>
             </div>
           </div>
         </li>
@@ -63,6 +71,7 @@
     <div id="fromUserIdDiv"></div>
     </div>
     <div class="form-group">
+      <input type="hidden" id="dragCaptchaToken-{{post.id}}" name="_dragCaptchaToken" value="">
       <button postId="{{postMain.id}}" class="reply-btn btn btn-xs btn-primary pull-right"  style="margin-top:-10px;"data-submiting-text="{{'form.btn.reply_publish.submiting'|trans}}">{{'form.btn.reply'|trans}}</button>
     </div>
   </form>

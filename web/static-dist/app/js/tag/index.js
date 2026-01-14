@@ -1,1 +1,0 @@
-webpackJsonp(["app/js/tag/index"],[function(i,n){"use strict";echo.init()}]);

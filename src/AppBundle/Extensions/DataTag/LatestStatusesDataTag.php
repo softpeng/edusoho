@@ -2,10 +2,9 @@
 
 namespace AppBundle\Extensions\DataTag;
 
-use Biz\Course\Service\CourseService;
-use Topxia\Service\Common\ServiceKernel;
 use AppBundle\Common\ArrayToolkit;
 use AppBundle\Common\ExtensionManager;
+use Biz\Course\Service\CourseService;
 
 class LatestStatusesDataTag extends BaseDataTag implements DataTag
 {
@@ -24,16 +23,16 @@ class LatestStatusesDataTag extends BaseDataTag implements DataTag
      */
     public function getData(array $arguments)
     {
-        $conditions = array();
-        if (isset($arguments['private'])) {
-            if ($arguments['private'] == 0) {
-                $conditions['private'] = 0;
-            }
+        $conditions = [];
+        if (isset($arguments['private']) && 0 == $arguments['private']) {
+            $conditions['private'] = 0;
         }
+        $orderBys = ['createdTime' => 'DESC'];
+
         if (isset($arguments['objectType']) && isset($arguments['objectId'])) {
-            if ($arguments['objectType'] == 'course') {
-                $conditions['courseIds'] = array($arguments['objectId']);
-            } elseif ($arguments['objectType'] == 'courseSet') {
+            if ('course' == $arguments['objectType']) {
+                $conditions['courseIds'] = [$arguments['objectId']];
+            } elseif ('courseSet' == $arguments['objectType']) {
                 $courses = $this->getCourseService()->findCoursesByCourseSetId($arguments['objectId']);
                 $conditions['courseIds'] = ArrayToolkit::column($courses, 'id');
             } else {
@@ -48,19 +47,32 @@ class LatestStatusesDataTag extends BaseDataTag implements DataTag
             }
         }
 
-        $statuses = $this->getStatusService()->searchStatuses($conditions, array('createdTime' => 'DESC'), 0, $arguments['count']);
+        if (!empty($conditions['courseIds'])) {
+            $orderBys = ['createdTime' => 'DESC', 'courseId' => 'ASC'];
+        }
 
-        if ($statuses) {
-            $userIds = ArrayToolkit::column($statuses, 'userId');
-            $users = $this->getUserService()->findUsersByIds($userIds);
+        $statuses = $this->getStatusService()->searchStatuses($conditions, $orderBys, 0, $arguments['count']);
 
-            $manager = ExtensionManager::instance();
+        if (empty($statuses)) {
+            return [];
+        }
 
-            foreach ($statuses as &$status) {
-                $status['user'] = $users[$status['userId']];
-                $status['message'] = $manager->renderStatus($status, $arguments['mode']);
-                unset($status);
+        $userIds = ArrayToolkit::column($statuses, 'userId');
+        $users = $this->getUserService()->findUsersByIds($userIds);
+
+        $manager = ExtensionManager::instance();
+        $courses = [];
+        if (!empty($conditions['courseIds'])) {
+            $courses = $this->getCourseService()->searchCourses(['ids' => $conditions['courseIds']], [], 0, PHP_INT_MAX);
+            $courses = ArrayToolkit::index($courses, 'id');
+        }
+        foreach ($statuses as &$status) {
+            $status['user'] = $this->getUserService()->hideUserNickname($users[$status['userId']]);
+            $status['message'] = $manager->renderStatus($status, $arguments['mode']);
+            if (!empty($courses) && 0 == $courses[$status['courseId']]['canLearn']) {
+                $status['message'] = str_replace('link-dark', 'link-dark js-handleLearnContentOnMessage', $status['message']);
             }
+            unset($status);
         }
 
         return $statuses;
@@ -68,17 +80,17 @@ class LatestStatusesDataTag extends BaseDataTag implements DataTag
 
     protected function getStatusService()
     {
-        return ServiceKernel::instance()->createService('User:StatusService');
+        return $this->getServiceKernel()->getBiz()->service('User:StatusService');
     }
 
     protected function getUserService()
     {
-        return ServiceKernel::instance()->createService('User:UserService');
+        return $this->getServiceKernel()->getBiz()->service('User:UserService');
     }
 
     private function getClassroomService()
     {
-        return $this->getServiceKernel()->createService('Classroom:ClassroomService');
+        return $this->getServiceKernel()->getBiz()->service('Classroom:ClassroomService');
     }
 
     /**

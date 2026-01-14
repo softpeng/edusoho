@@ -2,7 +2,31 @@
 
 namespace Topxia\MobileBundleV2\Processor;
 
-use Topxia\Service\Common\ServiceKernel;
+use AppBundle\Util\CdnUrl;
+use Biz\Announcement\Service\AnnouncementService;
+use Biz\Article\Service\ArticleService;
+use Biz\CloudPlatform\Service\AppService;
+use Biz\CloudPlatform\Service\EduCloudService;
+use Biz\Content\Service\BlockService;
+use Biz\Content\Service\FileService;
+use Biz\Coupon\Service\CouponService;
+use Biz\Course\Service\CourseService;
+use Biz\Course\Service\MemberService;
+use Biz\File\Service\UploadFileService;
+use Biz\Question\Service\QuestionService;
+use Biz\System\Service\H5SettingService;
+use Biz\System\Service\LogService;
+use Biz\System\Service\SettingService;
+use Biz\Taxonomy\Service\TagService;
+use Biz\User\Service\MessageService;
+use Biz\User\Service\NotificationService;
+use Biz\User\Service\TokenService;
+use Biz\User\Service\UserFieldService;
+use Biz\User\Service\UserService;
+use Biz\Util\Service\MobileDeviceService;
+use Codeages\Biz\Order\Service\OrderService;
+use Codeages\Biz\Pay\Service\AccountService;
+use Symfony\Component\HttpFoundation\Request;
 use Topxia\MobileBundleV2\Controller\MobileBaseController;
 
 class BaseProcessor
@@ -10,7 +34,13 @@ class BaseProcessor
     const API_VERSIN_RANGE = '3.6.0';
 
     public $formData;
+    /**
+     * @var MobileBaseController
+     */
     public $controller;
+    /**
+     * @var Request
+     */
     public $request;
     protected $delegator;
 
@@ -48,8 +78,8 @@ class BaseProcessor
 
         return array_map(function ($user) use ($container) {
             foreach ($user as $key => $value) {
-                if (!in_array($key, array(
-                    'id', 'email', 'smallAvatar', 'mediumAvatar', 'largeAvatar', 'nickname', 'roles', 'locked', 'about', 'title', ))
+                if (!in_array($key, [
+                    'id', 'email', 'smallAvatar', 'mediumAvatar', 'largeAvatar', 'nickname', 'roles', 'locked', 'about', 'title', 'destroyed', ])
                 ) {
                     unset($user[$key]);
                 }
@@ -58,6 +88,7 @@ class BaseProcessor
             $user['smallAvatar'] = $container->get('web.twig.extension')->getFurl($user['smallAvatar'], 'avatar.png');
             $user['mediumAvatar'] = $container->get('web.twig.extension')->getFurl($user['mediumAvatar'], 'avatar.png');
             $user['largeAvatar'] = $container->get('web.twig.extension')->getFurl($user['largeAvatar'], 'avatar-large.png');
+            $user['nickname'] = (1 == $user['destroyed']) ? '帐号已注销' : $user['nickname'];
 
             return $user;
         }, $users);
@@ -102,9 +133,9 @@ class BaseProcessor
 
     protected function filterAnnouncement($announcement)
     {
-        return $this->filterAnnouncements(array(
+        return $this->filterAnnouncements([
             $announcement,
-        ));
+        ]);
     }
 
     protected function setParam($name, $value)
@@ -135,144 +166,214 @@ class BaseProcessor
         return $this->controller->getContainer();
     }
 
-    protected function getCashAccountService()
+    /**
+     * @return AccountService
+     */
+    protected function getAccountService()
     {
-        return ServiceKernel::instance()->createService('Cash:CashAccountService');
+        return $this->controller->getService('Pay:AccountService');
     }
 
+    /**
+     * @return AppService
+     */
     protected function getAppService()
     {
         return $this->controller->getService('CloudPlatform.AppService');
     }
 
-    protected function getCashOrdersService()
-    {
-        return ServiceKernel::instance()->createService('Cash:CashOrdersService');
-    }
-
+    /**
+     * @return BlockService
+     */
     protected function getBlockService()
     {
         return $this->controller->getService('Content.BlockService');
     }
 
+    /**
+     * @return UploadFileService
+     */
     protected function getUploadFileService()
     {
-        return ServiceKernel::instance()->createService('File:UploadFileService');
+        return $this->controller->getService('File:UploadFileService');
     }
 
+    /**
+     * @return UserService
+     */
     protected function getUserService()
     {
-        return ServiceKernel::instance()->createService('User:UserService');
+        return $this->controller->getService('User:UserService');
     }
 
+    /**
+     * @return MessageService
+     */
     protected function getMessageService()
     {
-        return ServiceKernel::instance()->createService('User:MessageService');
+        return $this->controller->getService('User:MessageService');
     }
 
+    /**
+     * @return CouponService
+     */
     protected function getCouponService()
     {
         return $this->controller->getService('Coupon:CouponService');
     }
 
+    /**
+     * @return QuestionService
+     */
     protected function getQuestionService()
     {
         return $this->controller->getService('Question.QuestionService');
     }
 
+    /**
+     * @return NotificationService
+     */
     protected function getNotificationService()
     {
-        return ServiceKernel::instance()->createService('User:NotificationService');
+        return $this->controller->getService('User:NotificationService');
     }
 
+    /**
+     * @return TokenService
+     */
     protected function getTokenService()
     {
-        return ServiceKernel::instance()->createService('User:TokenService');
+        return $this->controller->getService('User:TokenService');
     }
 
-    protected function getCourseOrderService()
-    {
-        return $this->controller->getService('Course:CourseOrderService');
-    }
-
+    /**
+     * @return MobileDeviceService
+     */
     protected function getMobileDeviceService()
     {
         return $this->controller->getService('Util:MobileDeviceService');
     }
 
+    /**
+     * @return ArticleService
+     */
     protected function getArticleService()
     {
-        return ServiceKernel::instance()->createService('Article:ArticleService');
+        return $this->controller->getService('Article:ArticleService');
     }
 
+    /**
+     * @return OrderService
+     */
     protected function getOrderService()
     {
         return $this->controller->getService('Order:OrderService');
     }
 
+    /**
+     * @return TagService
+     */
     protected function getTagService()
     {
         return $this->controller->getService('Taxonomy:TagService');
     }
 
+    /**
+     * @return FileService
+     */
     protected function getFileService()
     {
         return $this->controller->getService('Content:FileService');
     }
 
+    /**
+     * @return SettingService
+     */
     protected function getSettingService()
     {
-        return ServiceKernel::instance()->createService('System:SettingService');
+        return $this->controller->getService('System:SettingService');
     }
 
+    /**
+     * @return CourseService
+     */
     protected function getCourseService()
     {
         return $this->controller->getService('Course:CourseService');
     }
 
+    /**
+     * @return MemberService
+     */
     protected function getCourseMemberService()
     {
         return $this->controller->getService('Course:MemberService');
     }
 
+    /**
+     * @todo 不存在的service,检查一下调用方，没用的就删除掉
+     */
     protected function getPayCenterService()
     {
         return $this->controller->getService('PayCenter:PayCenterService');
     }
 
+    /**
+     * @return TestpaperService
+     */
     protected function getTestpaperService()
     {
         return $this->controller->getService('Testpaper:TestpaperService');
     }
 
+    /**
+     * @return AnnouncementService
+     */
     protected function getAnnouncementService()
     {
-        return ServiceKernel::instance()->createService('Announcement:AnnouncementService');
+        return $this->controller->getService('Announcement:AnnouncementService');
     }
 
+    /**
+     * @return EduCloudService
+     */
     public function getEduCloudService()
     {
         return $this->controller->getService('EduCloud:EduCloudService');
     }
 
+    /**
+     * @return LogService
+     */
     protected function getLogService()
     {
-        return ServiceKernel::instance()->createService('System:LogService');
+        return $this->controller->getService('System:LogService');
     }
 
+    /**
+     * @return UserFieldService
+     */
     protected function getUserFieldService()
     {
-        return ServiceKernel::instance()->createService('User:UserFieldService');
+        return $this->controller->getService('User:UserFieldService');
+    }
+
+    /**
+     * @return H5SettingService
+     */
+    protected function getH5SettingService()
+    {
+        return $this->controller->getService('System:H5SettingService');
     }
 
     public function createErrorResponse($name, $message)
     {
-        $error = array(
-            'error' => array(
+        $error = [
+            'error' => [
                 'name' => $name,
                 'message' => $message,
-            ),
-        );
+            ],
+        ];
 
         return $error;
     }
@@ -297,7 +398,7 @@ class BaseProcessor
 
     public function array2Map($learnCourses)
     {
-        $mapCourses = array();
+        $mapCourses = [];
 
         if (empty($learnCourses)) {
             return $mapCourses;
@@ -312,41 +413,42 @@ class BaseProcessor
 
     protected function getSiteInfo($request, $version)
     {
-        $site = $this->controller->getSettingService()->get('site', array());
-        $mobile = $this->controller->getSettingService()->get('mobile', array());
+        $site = $this->controller->getSettingService()->get('site', []);
+        $mobile = $this->controller->getSettingService()->get('mobile', []);
 
         if (!empty($mobile['logo'])) {
-            $logo = $request->getSchemeAndHttpHost().'/'.$mobile['logo'];
+            $logo = $this->getBaseUrl().'/'.$mobile['logo'];
         } else {
             $logo = '';
         }
 
-        $splashs = array();
+        $splashs = [];
 
         for ($i = 1; $i < 6; ++$i) {
             if (!empty($mobile['splash'.$i])) {
-                $splashs[] = $request->getSchemeAndHttpHost().'/'.$mobile['splash'.$i];
+                $splashs[] = $this->getBaseUrl().'/'.$mobile['splash'.$i];
             }
         }
 
-        return array(
+        return [
             'name' => $site['name'],
             'url' => $request->getSchemeAndHttpHost().'/mapi_v'.$version,
             'host' => $request->getSchemeAndHttpHost(),
             'logo' => $logo,
             'splashs' => $splashs,
-            'apiVersionRange' => array(
+            'appDiscoveryVersion' => $this->getH5SettingService()->getAppDiscoveryVersion(),
+            'apiVersionRange' => [
                 'min' => '1.0.0',
                 'max' => self::API_VERSIN_RANGE,
-            ),
-        );
+            ],
+        ];
     }
 
     protected function guessDeviceFromUserAgent($userAgent)
     {
         $userAgent = strtolower($userAgent);
 
-        $ios = array('iphone', 'ipad', 'ipod');
+        $ios = ['iphone', 'ipad', 'ipod'];
         foreach ($ios as $keyword) {
             if (strpos($userAgent, $keyword) > -1) {
                 return 'ios';
@@ -360,7 +462,7 @@ class BaseProcessor
         return 'unknown';
     }
 
-    protected function curlRequest($method, $url, $params = array())
+    protected function curlRequest($method, $url, $params = [])
     {
         $curl = curl_init();
 
@@ -371,7 +473,7 @@ class BaseProcessor
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($curl, CURLOPT_HEADER, 0);
 
-        if (strtoupper($method) == 'POST') {
+        if ('POST' == strtoupper($method)) {
             curl_setopt($curl, CURLOPT_POST, 1);
             $params = http_build_query($params);
             curl_setopt($curl, CURLOPT_POSTFIELDS, $params);
@@ -387,6 +489,34 @@ class BaseProcessor
         curl_close($curl);
 
         return $response;
+    }
+
+    protected function getBaseUrl($type = 'default')
+    {
+        $cdnUrl = $this->getCdn($type);
+
+        if (!empty($cdnUrl)) {
+            return $this->request->getScheme().':'.$cdnUrl;
+        }
+
+        return $this->request->getSchemeAndHttpHost();
+    }
+
+    protected function getCdn($type = 'default')
+    {
+        $cdn = new CdnUrl();
+
+        return $cdn->get($type);
+    }
+
+    protected function getScheme()
+    {
+        return $this->request->getScheme();
+    }
+
+    protected function isAbsoluteUrl($url)
+    {
+        return false !== strpos($url, '://') || '//' === substr($url, 0, 2);
     }
 
     /**

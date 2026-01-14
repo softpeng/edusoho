@@ -2,6 +2,9 @@
 
 namespace Codeages\Biz\Framework\Util;
 
+/**
+ * @deprecated 2.0
+ */
 class ArrayToolkit
 {
     public static function get(array $array, $key, $default)
@@ -34,6 +37,16 @@ class ArrayToolkit
         return $column;
     }
 
+    public static function unique(array $array)
+    {
+        return array_values(array_unique($array));
+    }
+
+    public static function uniqueColumn(array $array, $columnName)
+    {
+        return self::unique(array_column($array, $columnName));
+    }
+
     public static function parts(array $array, array $keys)
     {
         foreach (array_keys($array) as $key) {
@@ -51,7 +64,7 @@ class ArrayToolkit
             if (!array_key_exists($key, $array)) {
                 return false;
             }
-            if ($strictMode && (is_null($array[$key]) || $array[$key] === '' || $array[$key] === 0)) {
+            if ($strictMode && (is_null($array[$key]) || '' === $array[$key] || 0 === $array[$key])) {
                 return false;
             }
         }
@@ -92,6 +105,16 @@ class ArrayToolkit
         return $grouped;
     }
 
+    public static function sort(array $array, $key, $sort = SORT_DESC) {
+        $keysValue = [];
+        foreach ($array as $k => $v) {
+            $keysValue[$k] = $v[$key];
+        }
+        array_multisort($keysValue, $sort, $array);
+
+        return $array;
+    }
+
     public static function index(array $array, $name)
     {
         $indexedArray = array();
@@ -108,6 +131,20 @@ class ArrayToolkit
         }
 
         return $indexedArray;
+    }
+
+    public static function groupIndex(array $array, $key, $index)
+    {
+        $grouped = [];
+
+        foreach ($array as $item) {
+            if (empty($grouped[$item[$key]])) {
+                $grouped[$item[$key]] = [];
+            }
+            $grouped[$item[$key]][$item[$index]] = $item;
+        }
+
+        return $grouped;
     }
 
     public static function rename(array $array, array $map)

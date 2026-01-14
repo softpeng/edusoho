@@ -1,16 +1,301 @@
+import SmsSender from 'app/common/widget/sms-sender';
+import Drag from 'app/common/drag';
+import Coordinate from 'app/common/coordinate';
+import Api from 'common/api';
+
 export default class Register {
   constructor() {
-    this.initDate();
+    this.drag = $('#drag-btn').length
+      ? new Drag($('#drag-btn'), $('.js-jigsaw'), {
+          limitType: 'web_register'
+        })
+      : null;
+    this.setValidateRule();
+    this.dragEvent();
+    this.initPasswordEyeClickEvent();
     this.initValidator();
-    this.inEventMobile();
-    this.initCaptchaCode();
-    this.initRegisterTypeRule();
-    this.initInviteCodeRule();
-    this.intiUserTermsRule();
+    this.initCodeValidateEvent();
+    this.initEmailOrMobileEvent();
+    this.initCodeSendBtn();
+    this.initFieldVisitId();
+    this.submitFrom();
+    this.initRegisterModeSwitch()
+    this.initEmailMobileMsg();
+  }
+
+  dragEvent() {
+    let self = this;
+    if (this.drag) {
+      this.drag.on('success', function(token) {
+        self._codeBtnEnable();
+      });
+    }
+  }
+
+  initPasswordEyeClickEvent() {
+    $('.open-eye').on('click', function () {
+      $('#register_password').attr('type', 'password');
+      $('.open-eye').hide();
+      $('.close-eye').show();
+    });
+
+    $('.close-eye').on('click', function () {
+      $('#register_password').attr('type', 'text');
+      $('.close-eye').hide();
+      $('.open-eye').show();
+    });
+  }
+
+  resetDragCaptchaAndCodeBtn() {
+    this._codeBtnDisable();
+    this.drag.initDragCaptcha();
+    $('input[name="dragCaptchaToken"]').val('')
+  }
+
+  initRegisterModeSwitch() {
+    if ($('#register_mode_switch').length === 0) return;
+
+    $('#register_mode_switch').text(Translator.trans("auth.register.register_by_email")).attr('mode', 'mobile')
+    $('#register_emailOrMobile-label').text(Translator.trans("auth.register.mobile"));
+    $('#register_emailOrMobile-input').attr('placeholder', Translator.trans("auth.register.input_mobile"));
+    $('#register_emailOrMobile-label').attr('for', 'verifiedMobile')
+    $('#register_emailOrMobile-input').attr('name', 'verifiedMobile')
+    this._codeBtnDisable();
+
+    $('#register_mode_switch').on('click', () => {
+      this.resetValidation();
+      this.resetDragCaptchaAndCodeBtn()
+      $('#register_emailOrMobile-input').val('');
+      if ($('#register_mode_switch').attr('mode') === 'email') {
+        $('#register_mode_switch').text(Translator.trans("auth.register.register_by_email")).attr('mode', 'mobile')
+        $('#register_emailOrMobile-label').text(Translator.trans("auth.register.mobile"));
+        $('#register_emailOrMobile-input').attr('placeholder', Translator.trans("auth.register.input_mobile"));
+        $('#register_emailOrMobile-label').attr('for', 'verifiedMobile')
+        $('#register_emailOrMobile-input').attr('name', 'verifiedMobile')
+        $('#register_emailOrMobile-input').attr('type', 'tel')
+      } else if ($('#register_mode_switch').attr('mode') === 'mobile') {
+        $('#register_mode_switch').text(Translator.trans("auth.register.register_by_mobile")).attr('mode', 'email')
+        $('#register_emailOrMobile-label').text(Translator.trans("auth.register.email"));
+        $('#register_emailOrMobile-input').attr('placeholder', Translator.trans("auth.register.input_email"));
+        $('#register_emailOrMobile-label').attr('for', 'email')
+        $('#register_emailOrMobile-input').attr('name', 'email')
+        $('#register_emailOrMobile-input').attr('type', 'email')
+      }
+      this.initEmailMobileMsg();
+    })
+  }
+
+  resetValidation() {
+    const $form = $('#register-form');
+    const validator = $form.validate();
+    validator.resetForm();
+    $('.error').removeClass('error');
+    $('.error-message').remove();
+    this._codeBtnDisable();
+  }
+
+  initEmailMobileMsg() {
+    const register_mode = $('input[name="register_mode"]').val();
+
+    $('.email_mobile_msg').removeClass('hidden')
+    $('.js-email_mobile_msg-input').removeClass('hidden')
+    if (register_mode === 'email') {
+      if ($('input[name="email_enabled"]').val() === 'opened') {
+        $('.js-email_mobile_msg-input').attr('placeholder', Translator.trans("auth.register.input_email_verification_code"))
+        $('.js-email_mobile_msg-input').attr('name', 'email_code')
+        $('.js-email_mobile_msg-input').attr('id', 'email_code')
+
+        $('.js-email_mobile_msg-label').text(Translator.trans("auth.register.email_verification_code"))
+        $('.js-email_mobile_msg-label').attr('for', 'email_code')
+      } else {
+        $('.email_mobile_msg').addClass('hidden')
+      }
+    } else if (register_mode === 'mobile') {
+      $('.js-email_mobile_msg-input').attr('placeholder', Translator.trans("auth.register.input_mobile_verification_code"))
+      $('.js-email_mobile_msg-input').attr('name', 'sms_code')
+      $('.js-email_mobile_msg-input').attr('id', 'sms_code')
+
+      $('.js-email_mobile_msg-label').text(Translator.trans("auth.register.mobile_verification_code"))
+      $('.js-email_mobile_msg-label').attr('for', 'sms_code')
+    } else {
+      if ($('#register_mode_switch').attr('mode') === 'email' && $('input[name="email_enabled"]').val() === 'opened') {
+        $('.js-email_mobile_msg-input').attr('placeholder', Translator.trans("auth.register.input_email_verification_code"))
+        $('.js-email_mobile_msg-input').attr('name', 'email_code')
+        $('.js-email_mobile_msg-input').attr('id', 'email_code')
+
+        $('.js-email_mobile_msg-label').text(Translator.trans("auth.register.email_verification_code"))
+        $('.js-email_mobile_msg-label').attr('for', 'email_code')
+      } else if ($('#register_mode_switch').attr('mode') === 'email' && $('input[name="email_enabled"]').val() === 'closed') {
+        $('.email_mobile_msg').addClass('hidden')
+      } else if ($('#register_mode_switch').attr('mode') === 'mobile') {
+        $('.js-email_mobile_msg-input').attr('placeholder', Translator.trans("auth.register.input_mobile_verification_code"))
+        $('.js-email_mobile_msg-input').attr('name', 'sms_code')
+        $('.js-email_mobile_msg-input').attr('id', 'sms_code')
+
+        $('.js-email_mobile_msg-label').text(Translator.trans("auth.register.mobile_verification_code"))
+        $('.js-email_mobile_msg-label').attr('for', 'sms_code')
+
+      }
+    }
+  }
+
+  setValidateRule() {
+    $.validator.addMethod(
+      'spaceNoSupport',
+      function(value, element) {
+        return value.indexOf(' ') < 0;
+      },
+      $.validator.format(Translator.trans('validate.have_spaces'))
+    );
   }
 
   initValidator() {
-    let validator = $('#register-form').validate({
+    $('#register-form').validate({
+      ...this._validateRules(),
+    });
+  }
+
+  initCodeValidateEvent() {
+    $('#register_mobile').blur(() => {
+      let mobile = $('#register_mobile').val();
+      this.smsCodeValidate(mobile);
+    });
+    $('#register_email').blur(() => {
+      let email = $('#register_email').val();
+      this.emailCodeValidate(email);
+    });
+  }
+
+  initEmailOrMobileEvent() {
+    $('#register_emailOrMobile-input').blur(() => {
+      $('input[name="emailOrMobile"]').val($('#register_emailOrMobile-input').val());
+    });
+  }
+
+  initDragCaptchaCodeRule() {
+    if ($('.js-drag-img').length) {
+      $('[name="dragCaptchaToken"]').rules('add', {
+        required: true,
+        messages: {
+          required: Translator.trans('auth.register.drag_captcha_tips')
+        }
+      });
+    }
+  }
+
+  _codeBtnDisable() {
+    $('.js-code-send-btn')
+      .addClass('disabled')
+      .attr('disabled', true);
+  }
+
+  _codeBtnEnable() {
+    $('.js-code-send-btn')
+      .removeClass('disabled')
+      .attr('disabled', false);
+  }
+
+  initSmsCodeRule() {
+    $('[name="sms_code"]').rules('add', {
+      required: true,
+      unsigned_integer: true,
+      rangelength: [6, 6],
+      messages: {
+        rangelength: Translator.trans('validate.sms_code.message')
+      }
+    });
+  }
+
+  initEmailCodeRule() {
+    $('[name="email_code"]').rules('add', {
+      required: true,
+      unsigned_integer: true,
+      rangelength: [6, 6],
+      messages: {
+        rangelength: Translator.trans('validate.sms_code.message')
+      }
+    });
+  }
+
+  startCountdown($button, seconds) {
+    let remaining = seconds;
+    let originalText = $button.text();
+    this._codeBtnDisable();
+    $button.text(remaining + '秒后重新获取');
+    let countdown = setInterval(() => {
+      remaining--;
+      if (remaining <= 0) {
+        clearInterval(countdown);
+        this._codeBtnEnable();
+        $button.text(originalText);
+      } else {
+        $button.text(remaining + '秒后重新获取');
+      }
+    }, 1000);
+  }
+
+  initCodeSendBtn() {
+    let $codeSendBtn = $('.js-code-send-btn');
+    let self = this;
+    const register_mode = $('input[name="register_mode"]').val();
+    $codeSendBtn.click(function(event) {
+      if(!$('input[name="dragCaptchaToken"]').val() || (!$('input[name="verifiedMobile"]').val() && !$('input[name="email"]').val())) return;
+      self._codeBtnDisable();
+      if (register_mode === 'mobile' || $('#register_mode_switch').length > 0 && $('#register_mode_switch').attr('mode') === 'mobile') {
+        let coordinate = new Coordinate();
+        const encryptedPoint = coordinate.getCoordinate(
+          event,
+          $('meta[name=csrf-token]').attr('content')
+        );
+        let fieldName = $('[name="verifiedMobile"]').length
+          ? 'verifiedMobile'
+          : 'emailOrMobile';
+        new SmsSender({
+          element: $codeSendBtn,
+          url: $(this).data('smsUrl'),
+          smsType: 'sms_registration',
+          dataTo: fieldName,
+          captcha: true,
+          captchaValidated: true,
+          captchaNum: 'dragCaptchaToken',
+          encryptedPoint: encryptedPoint,
+          preSmsSend: function() {
+            return true;
+          },
+          error: function(error) {
+            self.drag.initDragCaptcha();
+          },
+          additionalAction: function(ackResponse) {
+            if (ackResponse === 'captchaRequired') {
+              $codeSendBtn.attr('disabled', true);
+              $('.js-drag-jigsaw').removeClass('hidden');
+              self.captchEnable = true;
+              if (self.drag) {
+                self.drag.initDragCaptcha();
+              }
+              return true;
+            }
+            return false;
+          }
+        });
+      } else if (register_mode === 'email' || $('#register_mode_switch').length > 0 && $('#register_mode_switch').attr('mode') === 'email') {
+        let params = {
+          email: register_mode === 'email' ? $('#register_email').val() : $('#register_emailOrMobile-input').val(),
+          dragCaptchaToken: $('[name="dragCaptchaToken"]').val()
+        }
+        Api.user.sendEmailCode({
+          data: params
+        }).then((res) => {
+          $('[name="emailToken"]').val(res.emailToken);
+          self.startCountdown($codeSendBtn, 120);
+        });
+      }
+    });
+  }
+
+  _validateRules() {
+    let self = this;
+    return {
       rules: {
         nickname: {
           required: true,
@@ -19,187 +304,135 @@ export default class Register {
           nickname: true,
           chinese_alphanumeric: true,
           es_remote: {
-            type: 'get',
+            type: 'get'
           }
         },
         password: {
-          minlength: 5,
-          maxlength: 20,
-        }
-      },
-    });
-
-    $.validator.addMethod("email_or_mobile_check", function (value, element, params) {
-      let reg_email = /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/;
-      var reg_mobile = /^1\d{10}$/;
-      var result = false;
-      var isEmail = reg_email.test(value);
-      var isMobile = reg_mobile.test(value);
-      if (isMobile) {
-        $(".email_mobile_msg").removeClass('hidden');
-        $('.js-captcha').addClass('hidden');
-      } else {
-        $(".email_mobile_msg").addClass('hidden');
-        $('.js-captcha').removeClass('hidden');
-      }
-      if (isEmail || isMobile) {
-        result = true;
-      }
-      $.validator.messages.email_or_mobile_check = Translator.trans('请输入正确的手机／邮箱');
-      return this.optional(element) || result;
-    }, Translator.trans('validate.email_or_mobile_check.message'));
-  }
-
-  inEventMobile() {
-    $("#register_emailOrMobile").blur(() => {
-      let emailOrMobile = $("#register_emailOrMobile").val();
-      this.emSmsCodeValidate(emailOrMobile);
-    });
-
-    $("#register_mobile").blur(() => {
-      let mobile = $("#register_mobile").val();
-      this.emSmsCodeValidate(mobile);
-    });
-  }
-
-  initDate() {
-    $(".date").datetimepicker({
-      autoclose: true,
-      format: 'yyyy-mm-dd',
-      minView: 'month',
-      language: document.documentElement.lang
-    });
-  }
-
-  initCaptchaCode() {
-    let $getCodeNum = $('#getcode_num');
-    if ($getCodeNum.length > 0) {
-      $getCodeNum.click(function () {
-        $(this).attr("src", $getCodeNum.data("url") + "?" + Math.random());
-      });
-      this.initCaptchaCodeRule();
-    }
-  }
-
-  initRegisterTypeRule() {
-    let $email = $('input[name="email"]');
-    if ($email.length > 0) {
-      $email.rules('add', {
-        required: true,
-        email: true,
-        es_remote: {
-          type: 'get'
+          spaceNoSupport: true,
+          password_normal: true,
         },
-        messages: {
-          required: Translator.trans('validate.valid_email_input.message'),
-        }
-      })
-    }
-
-    let $emailOrMobile = $('input[name="emailOrMobile"]');
-    if ($emailOrMobile.length > 0) {
-      $emailOrMobile.rules('add', {
-        required: true,
-        email_or_mobile_check: true,
-        es_remote: {
-          type: 'get',
-          callback: function (bool) {
-            if (bool) {
-              $('.js-sms-send').removeClass('disabled');
-            } else {
-              $('.js-sms-send').addClass('disabled');
+        invitedCode: {
+          required: false,
+          reg_inviteCode: true,
+          es_remote: {
+            type: 'get'
+          }
+        },
+        email: {
+          required: true,
+          email: true,
+          es_remote: {
+            type: 'get',
+            callback: function(bool) {
+              if (bool) {
+                self._codeBtnEnable();
+              } else {
+                self._codeBtnDisable();
+              }
             }
           }
         },
-        messages: {
-          required: Translator.trans('validate.phone_and_email_input.message')
-        },
-      });
-    }
-
-    let $verifiedMobile = $('input[name="verifiedMobile"]');
-    if ($verifiedMobile.length > 0) {
-      $('.email_mobile_msg').removeClass('hidden');
-      $verifiedMobile.rules('add', {
-        required: true,
-        phone: true,
-        es_remote: {
-          type: 'get',
-          callback: function (bool) {
-            if (bool) {
-              $('.js-sms-send').removeClass('disabled');
-            } else {
-              $('.js-sms-send').addClass('disabled');
+        verifiedMobile: {
+          required: true,
+          phone: true,
+          es_remote: {
+            type: 'get',
+            callback: function(bool) {
+              if (bool) {
+                self._codeBtnEnable();
+              } else {
+                self._codeBtnDisable();
+              }
             }
           }
         },
-        messages: {
-          required: Translator.trans('validate.phone.message')
-        },
-      })
-    }
-  }
-
-  initInviteCodeRule() {
-    let $invitecode = $('.invitecode');
-    if ($invitecode.length > 0) {
-      $invitecode.rules('add', {
-        required: false,
-        reg_inviteCode: true,
-        es_remote: {
-          type: 'get'
+        dragCaptchaToken: {
+          required: true
         }
-      })
-    }
-  }
-
-  intiUserTermsRule() {
-    if ($('#user_terms').length) {
-      $('#user_terms').rules('add', {
-        required: true,
-        messages: {
-          required: Translator.trans('validate.user_terms.message')
-        }
-      })
-    }
-  }
-  initCaptchaCodeRule() {
-    $('[name="captcha_code"]').rules('add', {
-      required: true,
-      alphanumeric: true,
-      es_remote: {
-        type: 'get',
-        callback: function (bool) {
-          if (!bool) {
-            $('#getcode_num').attr("src", $('#getcode_num').data("url") + "?" + Math.random());
-          }
-        }
-      },
-    })
-  }
-  initSmsCodeRule() {
-    $('[name="sms_code"]').rules('add', {
-      required: true,
-      rangelength: [6, 6],
-      es_remote: {
-        type: 'get',
       },
       messages: {
-        rangelength: Translator.trans('validate.sms_code.message')
-      }
-    })
+        nickname: {
+          required: Translator.trans(
+            'auth.register.nickname_required_error_hit'
+          )
+        },
+        verifiedMobile: {
+          required: Translator.trans('validate.phone.message')
+        },
+        email: {
+          required: Translator.trans('validate.valid_email_input.message'),
+        },
+        dragCaptchaToken: {
+          required: Translator.trans('auth.register.drag_captcha_tips')
+        },
+        password: {
+          required: Translator.trans('password.hint.normal'),
+        }
+      },
+    };
   }
 
-  emSmsCodeValidate(mobile) {
+  smsCodeValidate(mobile) {
     let reg_mobile = /^1\d{10}$/;
     let isMobile = reg_mobile.test(mobile);
     if (isMobile) {
       this.initSmsCodeRule();
-      $('[name="captcha_code"]').rules('remove');
+      $('[name="dragCaptchaToken"]').rules('remove');
     } else {
-      this.initCaptchaCodeRule();
+      this.initDragCaptchaCodeRule();
       $('[name="sms_code"]').rules('remove');
     }
   }
 
+  emailCodeValidate(email) {
+    let reg_email = /^([a-zA-Z0-9_.\-+])+@(([a-zA-Z0-9-])+\.)+([a-zA-Z0-9]{2,4})+$/;
+    let isEmail = reg_email.test(email);
+    if (isEmail) {
+      this.initEmailCodeRule();
+      $('[name="dragCaptchaToken"]').rules('remove');
+    } else {
+      this.initDragCaptchaCodeRule();
+      $('[name="email_code"]').rules('remove');
+    }
+  }
+
+  initFieldVisitId() {
+    $(document).ready(() => {
+      if ('undefined' !== window._VISITOR_ID) {
+        $('[name="registerVisitId"]').val(window._VISITOR_ID);
+      }
+    });
+  }
+
+  submitFrom() {
+    const $registerFrom = $('#register-form');
+    const $modal = $('#modal');
+
+    $('#register-btn').on('click', () => {
+      const validator = $registerFrom.validate();
+      const inputCheckbox = $('input[name="agree_policy"]').prop('checked');
+
+      if (!validator.form()) return;
+
+      if (inputCheckbox || inputCheckbox == undefined) {
+        $registerFrom.submit();
+
+        return;
+      }
+
+      // $('#modal').modal({backdrop:'static'}); // 点击遮罩关闭弹框
+      $modal.load('/register/agreement');
+      $modal.modal('show');
+
+      $modal.on('click', '.js-agree-register', () => {
+        $('input[name="agree_policy"]').prop('checked', true);
+        $modal.modal('hide');
+        $registerFrom.submit();
+      });
+
+      $modal.on('click', '.js-close-modal', () => {
+        $modal.modal('hide');
+      });
+    });
+  }
 }

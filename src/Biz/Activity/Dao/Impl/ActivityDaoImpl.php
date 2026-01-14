@@ -3,9 +3,9 @@
 namespace Biz\Activity\Dao\Impl;
 
 use Biz\Activity\Dao\ActivityDao;
-use Codeages\Biz\Framework\Dao\GeneralDaoImpl;
+use Codeages\Biz\Framework\Dao\AdvancedDaoImpl;
 
-class ActivityDaoImpl extends GeneralDaoImpl implements ActivityDao
+class ActivityDaoImpl extends AdvancedDaoImpl implements ActivityDao
 {
     protected $table = 'activity';
 
@@ -13,7 +13,7 @@ class ActivityDaoImpl extends GeneralDaoImpl implements ActivityDao
     {
         $sql = "SELECT * FROM {$this->table()} WHERE fromCourseId = ?";
 
-        return $this->db()->fetchAll($sql, array($courseId)) ?: array();
+        return $this->db()->fetchAll($sql, [$courseId]) ?: [];
     }
 
     public function findByIds($ids)
@@ -23,41 +23,182 @@ class ActivityDaoImpl extends GeneralDaoImpl implements ActivityDao
 
     public function getByCopyIdAndCourseSetId($copyId, $courseSetId)
     {
-        return $this->getByFields(array('copyId' => $copyId, 'fromCourseSetId' => $courseSetId));
+        return $this->getByFields(['copyId' => $copyId, 'fromCourseSetId' => $courseSetId]);
+    }
+
+    public function findByCopyIdAndCourseIds($copyId, $courseIds)
+    {
+        if (empty($courseIds)) {
+            return [];
+        }
+
+        $marks = str_repeat('?,', count($courseIds) - 1).'?';
+
+        $params = array_merge([$copyId], $courseIds);
+
+        $sql = "SELECT * FROM {$this->table()} WHERE copyId= ? AND fromCourseId IN ({$marks})";
+
+        return $this->db()->fetchAll($sql, $params) ?: [];
+    }
+
+    public function findByCopyIdsAndCourseIds($copyIds, $courseIds)
+    {
+        if (empty($copyIds) || empty($courseIds)) {
+            return [];
+        }
+
+        $copyIdMarks = str_repeat('?,', count($copyIds) - 1).'?';
+        $courseIdMarks = str_repeat('?,', count($courseIds) - 1).'?';
+
+        $parameters = array_merge($copyIds, $courseIds);
+
+        $sql = "SELECT * FROM {$this->table()} WHERE copyId IN ({$copyIdMarks}) AND fromCourseId IN ({$courseIdMarks})";
+
+        return $this->db()->fetchAll($sql, $parameters) ?: [];
     }
 
     public function findSelfVideoActivityByCourseIds($courseIds)
     {
         if (empty($courseIds)) {
-            return array();
+            return [];
         }
         $sql = "select  a.*,  c.mediaId as fileId  from activity a left join activity_video c on a.mediaId = c.id where a.mediaType='video' and c.mediaSource='self' and a.fromCourseId in (".implode(',', $courseIds).')';
 
-        return $this->db()->fetchAll($sql, array());
+        return $this->db()->fetchAll($sql, []);
+    }
+
+    public function findActivitiesByMediaIdsAndMediaType($mediaIds, $mediaType)
+    {
+        $marks = str_repeat('?,', count($mediaIds) - 1).'?';
+        $sql = "SELECT * FROM {$this->table} WHERE mediaId IN({$marks}) AND mediaType = ?;";
+
+        return $this->db()->fetchAll($sql, array_merge($mediaIds, [$mediaType]));
+    }
+
+    public function findActivitiesByCourseIdAndType($courseId, $mediaType)
+    {
+        return $this->findByFields(['fromCourseId' => $courseId, 'mediaType' => $mediaType]);
+    }
+
+    public function findActivitiesByCourseSetIdAndType($courseSetId, $mediaType)
+    {
+        return $this->findByFields(['fromCourseSetId' => $courseSetId, 'mediaType' => $mediaType]);
+    }
+
+    public function findActivitiesByCourseSetIdsAndType($courseSetIds, $mediaType)
+    {
+        $marks = str_repeat('?,', count($courseSetIds) - 1).'?';
+        $sql = "SELECT * FROM {$this->table} WHERE fromCourseSetId IN({$marks}) AND mediaType = ?;";
+
+        return $this->db()->fetchAll($sql, array_merge($courseSetIds, [$mediaType]));
+    }
+
+    public function findActivitiesByCourseSetIdsAndTypes($courseSetIds, $mediaTypes)
+    {
+        $marks = str_repeat('?,', count($courseSetIds) - 1).'?';
+        $marks1 = str_repeat('?,', count($mediaTypes) - 1).'?';
+        $sql = "SELECT * FROM {$this->table} WHERE fromCourseSetId IN({$marks}) AND mediaType IN ({$marks1});";
+
+        return $this->db()->fetchAll($sql, array_merge($courseSetIds, $mediaTypes));
+    }
+
+    public function findActivitiesByCourseIdsAndType($courseIds, $mediaType)
+    {
+        $marks = str_repeat('?,', count($courseIds) - 1).'?';
+        $sql = "SELECT * FROM {$this->table} WHERE fromCourseId IN({$marks}) AND mediaType = ?;";
+
+        return $this->db()->fetchAll($sql, array_merge($courseIds, [$mediaType]));
+    }
+
+    public function findActivitiesByCourseIdsAndTypes($courseIds, $mediaTypes)
+    {
+        if (empty($courseIds) || empty($mediaTypes)) {
+            return [];
+        }
+
+        $marks = str_repeat('?,', count($courseIds) - 1).'?';
+        $marks1 = str_repeat('?,', count($mediaTypes) - 1).'?';
+        $sql = "SELECT * FROM {$this->table} WHERE fromCourseId IN({$marks}) AND mediaType IN ({$marks1});";
+
+        return $this->db()->fetchAll($sql, array_merge($courseIds, $mediaTypes));
+    }
+
+    public function findActivitiesByTypeAndCreatedTimeAndUpdatedTimeFinishType($type, $createdTime, $updatedTime, $finishType)
+    {
+        $sql = "SELECT * FROM {$this->table} WHERE mediaType = ? AND createdTime <= ? AND finishType = ? AND updatedTime <= ?;";
+
+        return $this->db()->fetchAll($sql, [$type, $createdTime, $finishType, $updatedTime]);
     }
 
     public function declares()
     {
-        $declares['conditions'] = array(
-            'fromCourseId = :fromCourseId',
-            'mediaType = :mediaType',
-            'fromCourseId IN (:courseIds)',
-            'mediaType IN (:mediaTypes)',
-            'mediaId = :mediaId',
-        );
-
-        return $declares;
+        return [
+            'timestamps' => ['createdTime', 'updatedTime'],
+            'orderbys' => ['endTime', 'startTime', 'createdTime'],
+            'conditions' => [
+                'id IN (:ids)',
+                'id NOT IN (:excludeIds)',
+                'fromCourseId = :fromCourseId',
+                'mediaType = :mediaType',
+                'fromCourseId IN (:courseIds)',
+                'title like :title',
+                'mediaType <> :excludeMediaType',
+                'fromCourseId NOT IN (:excludeCourseIds)',
+                'mediaType IN (:mediaTypes)',
+                'mediaId IN (:mediaIds)',
+                'mediaId = :mediaId',
+                'fromCourseSetId = :fromCourseSetId',
+                'fromCourseSetId IN (:courseSetIds)',
+                'startTime >= :startTime_GT',
+                'startTime <= :startTime_LT',
+                'endTime <= :endTime_LT',
+                'endTime > :endTime_GT',
+                'createdTime = :createdTime',
+                'updatedTime = :updatedTime',
+                'copyId = :copyId',
+                'copyId IN (:copyIds)',
+                'finishType = :finishType',
+                'finishData = :finishData',
+            ],
+        ];
     }
 
     public function findOverlapTimeActivitiesByCourseId($courseId, $newStartTime, $newEndTime, $excludeId = null)
     {
-        $sql = "SELECT * FROM {$this->table} WHERE fromCourseId = ? AND (( startTime >= ? AND startTime <= ? ) OR ( startTime <= ? AND endTime >= ? ) OR ( endTime >= ? AND endTime <= ? ))";
+        $sql = "SELECT * FROM {$this->table} WHERE fromCourseId = ? AND mediaType = 'live' AND (( startTime >= ? AND startTime <= ? ) OR ( startTime <= ? AND endTime >= ? ) OR ( endTime >= ? AND endTime <= ? ))";
 
         if ($excludeId) {
             $excludeId = intval($excludeId);
             $sql .= " AND id <> {$excludeId}";
         }
 
-        return $this->db()->fetchAll($sql, array($courseId, $newStartTime, $newEndTime, $newStartTime, $newEndTime, $newStartTime, $newEndTime));
+        return $this->db()->fetchAll($sql, [$courseId, $newStartTime, $newEndTime, $newStartTime, $newEndTime, $newStartTime, $newEndTime]);
+    }
+
+    public function getByMediaIdAndMediaTypeAndCopyId($mediaId, $mediaType, $copyId)
+    {
+        return $this->getByFields(['mediaId' => $mediaId, 'mediaType' => $mediaType, 'copyId' => $copyId]);
+    }
+
+    public function getByMediaIdAndMediaTypeAndCourseId($mediaId, $mediaType, $courseId)
+    {
+        return $this->getByFields(['mediaId' => $mediaId, 'mediaType' => $mediaType, 'fromCourseId' => $courseId]);
+    }
+
+    public function getByMediaIdAndMediaType($mediaId, $mediaType)
+    {
+        return $this->getByFields(['mediaId' => $mediaId, 'mediaType' => $mediaType]);
+    }
+
+    public function findVideoActivityLevelsByCourseId($courseId)
+    {
+        $sql = "SELECT uf.convertMaxLevel FROM {$this->table} a, `activity_video` av, `upload_files` uf WHERE a.fromCourseId = ? AND a.mediaType = 'video' AND a.mediaId = av.id AND av.mediaId = uf.id;";
+
+        return $this->db()->fetchAll($sql, [$courseId]);
+    }
+
+    public function findByCopyId($copyId)
+    {
+        return $this->findByFields(['copyId' => $copyId]);
     }
 }

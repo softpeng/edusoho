@@ -1,0 +1,101 @@
+<?php
+
+namespace ApiBundle\Api\Resource\ItemBankExercise;
+
+use ApiBundle\Api\ApiRequest;
+use ApiBundle\Api\Resource\AbstractResource;
+use ApiBundle\Api\Resource\Assessment\AssessmentException;
+use ApiBundle\Api\Resource\Assessment\AssessmentFilter;
+use Biz\ItemBankExercise\Service\ExerciseService;
+use Biz\Testpaper\ExerciseException;
+
+class ItemBankExerciseAssessmentExerciseRecord extends AbstractResource
+{
+    public function add(ApiRequest $request, $exerciseId)
+    {
+        $user = $this->getCurrentUser();
+        $exercise = $this->getExerciseService()->get($exerciseId);
+        if ('closed' == $exercise['status']) {
+            throw ExerciseException::CLOSED_EXERCISE();
+        }
+        $assessmentId = $request->request->get('assessmentId', '');
+        $assessment = $this->getAssessmentService()->getAssessment($assessmentId);
+        if ($assessment['status'] == 'closed') {
+            throw AssessmentException::ASSESSMENT_CLOSED();
+        }
+        if ('0' != $assessment['parent_id']) {
+            $assessmentParent = $this->getAssessmentService()->getAssessment($assessment['parent_id']);
+            if ('closed' == $assessmentParent['status']) {
+                throw AssessmentException::ASSESSMENT_CLOSED();
+            }
+        }
+        if ('aiPersonality' == $assessment['type'] && 0 != $assessment['parent_id']) {
+            $assessmentId = $assessment['parent_id'];
+        }
+        $assessmentExerciseRecord = $this->getItemBankAssessmentExerciseService()->startAnswer(
+            $request->request->get('moduleId', ''),
+            $assessmentId,
+            $user['id']
+        );
+        $answerRecord = $this->getAnswerRecordService()->get($assessmentExerciseRecord['answerRecordId']);
+
+        $assessment = $this->getAssessmentService()->showAssessment($answerRecord['assessment_id']);
+        $assessmentFilter = new AssessmentFilter();
+        $assessmentFilter->filter($assessment);
+
+        return [
+            'assessment' => $assessment,
+            'assessment_response' => $this->getAnswerService()->getAssessmentResponseByAnswerRecordId($answerRecord['id']),
+            'answer_scene' => $this->getAnswerSceneService()->get($answerRecord['answer_scene_id']),
+            'answer_record' => $answerRecord,
+        ];
+    }
+
+    /**
+     * @return \Biz\ItemBankExercise\Service\AssessmentExerciseService
+     */
+    protected function getItemBankAssessmentExerciseService()
+    {
+        return $this->service('ItemBankExercise:AssessmentExerciseService');
+    }
+
+    /**
+     * @return \Codeages\Biz\ItemBank\Answer\Service\AnswerSceneService;
+     */
+    protected function getAnswerSceneService()
+    {
+        return $this->service('ItemBank:Answer:AnswerSceneService');
+    }
+
+    /**
+     * @return \Codeages\Biz\ItemBank\Answer\Service\AnswerService;
+     */
+    protected function getAnswerService()
+    {
+        return $this->service('ItemBank:Answer:AnswerService');
+    }
+
+    /**
+     * @return \Codeages\Biz\ItemBank\Answer\Service\AnswerRecordService
+     */
+    protected function getAnswerRecordService()
+    {
+        return $this->service('ItemBank:Answer:AnswerRecordService');
+    }
+
+    /**
+     * @return \Codeages\Biz\ItemBank\Assessment\Service\AssessmentService;
+     */
+    protected function getAssessmentService()
+    {
+        return $this->service('ItemBank:Assessment:AssessmentService');
+    }
+
+    /**
+     * @return ExerciseService
+     */
+    protected function getExerciseService()
+    {
+        return $this->service('ItemBankExercise:ExerciseService');
+    }
+}

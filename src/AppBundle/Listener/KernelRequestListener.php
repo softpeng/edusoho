@@ -3,7 +3,6 @@
 namespace AppBundle\Listener;
 
 use ApiBundle\ApiBundle;
-use Topxia\Service\Common\ServiceKernel;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 use Symfony\Component\HttpKernel\Event\GetResponseEvent;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -47,7 +46,7 @@ class KernelRequestListener
             }
         }
 
-        if ($request->getMethod() === 'POST') {
+        if ($request->getMethod() === 'POST' && !$request->isXmlHttpRequest()) {
             if (stripos($request->getPathInfo(), ApiBundle::API_PREFIX) === 0) {
                 return;
             }
@@ -63,43 +62,29 @@ class KernelRequestListener
                 return;
             }
 
-            if (stripos($request->getPathInfo(), '/callback') === 0) {
-                return;
-            }
-
             $whiteList = $this->container->hasParameter('route_white_list') ? $this->container->getParameter('route_white_list') : array();
 
             if (in_array($request->getPathInfo(), $whiteList)) {
                 return;
             }
 
-            if ($request->isXmlHttpRequest()) {
-                $token = $request->headers->get('X-CSRF-Token');
-            } else {
-                $token = $request->request->get('_csrf_token', '');
-            }
+            $token = $request->request->get('_csrf_token', '');
 
             $request->request->remove('_csrf_token');
 
             $expectedToken = $this->container->get('security.csrf.token_manager')->getToken('site');
             if ($token != $expectedToken) {
-                // @todo 需要区分ajax的response
-                if ($request->getPathInfo() == '/admin') {
-                    $token = $request->request->get('token');
-                    $result = ServiceKernel::instance()->createService('CloudPlatform:AppService')->repairProblem($token);
-
-                    $this->container->set('Topxia.RepairProblem', $result);
-                } else {
-                    $response = $this->container->get('templating')->renderResponse('default/message.html.twig', array(
-                        'type' => 'error',
-                        'message' => $this->getServiceKernel()->trans('页面已过期，请重新提交数据！'),
-                        'goto' => '',
-                        'duration' => 0,
-                    ));
-                    $response->setStatusCode(403);
-                    $event->setResponse($response);
-                }
+                $response = $this->container->get('templating')->renderResponse('default/message.html.twig', array(
+                    'type' => 'error',
+                    'message' => $this->trans('exception.form.expire'),
+                    'goto' => '',
+                    'duration' => 0,
+                ));
+                $response->setStatusCode(403);
+                $event->setResponse($response);
             }
+        }else {
+            $request->request->remove('_csrf_token');
         }
     }
 
@@ -120,6 +105,7 @@ class KernelRequestListener
 
         if (strlen($ipConfigEntry) > 0) {
             $regex = str_replace('.', "\.", $ipConfigEntry);
+            $regex = str_replace('/', "\/", $regex);
             $regex = str_replace('*', "\d{1,3}", $regex);
             $regex = '/^'.$regex.'/';
 
@@ -129,13 +115,23 @@ class KernelRequestListener
         }
     }
 
-    protected function getServiceKernel()
+    protected function getBiz()
     {
-        return ServiceKernel::instance();
+        return $this->container->get('biz');
+    }
+
+    protected function getAppService()
+    {
+        return $this->getBiz()->service('CloudPlatform:AppService');
     }
 
     protected function getSettingService()
     {
-        return ServiceKernel::instance()->createService('System:SettingService');
+        return $this->getBiz()->service('System:SettingService');
+    }
+
+    protected function trans($id, array $parameters = array())
+    {
+        return $this->container->get('translator')->trans($id, $parameters);
     }
 }

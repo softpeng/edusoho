@@ -1,1 +1,0 @@
-webpackJsonp(["app/css/header-blue"],[function(e,p){}]);

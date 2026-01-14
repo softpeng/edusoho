@@ -2,6 +2,7 @@
 
 namespace AppBundle\Extensions\DataTag;
 
+use AppBundle\Common\TimeMachine;
 use Biz\Announcement\Service\AnnouncementService;
 
 /**
@@ -25,16 +26,17 @@ class CourseAnnouncementsDataTag extends BaseDataTag implements DataTag
     {
         $this->checkCount($arguments);
 
-        $conditions = array(
+        $conditions = [
             'targetType' => 'course',
-            'endTime' => time(),
-        );
+            'endTime_GTE' => TimeMachine::time(),
+            'startTime_LTE' => TimeMachine::time(),
+        ];
 
         if (!empty($arguments['courseId'])) {
             $conditions['targetId'] = $arguments['courseId'];
         }
 
-        $announcements = $this->getAnnouncementService()->searchAnnouncements($conditions, array('createdTime' => 'DESC'), 0, $arguments['count']);
+        $announcements = $this->getAnnouncementService()->searchAnnouncements($conditions, ['createdTime' => 'DESC'], 0, $arguments['count']);
 
         return $announcements;
     }
@@ -44,12 +46,7 @@ class CourseAnnouncementsDataTag extends BaseDataTag implements DataTag
      */
     protected function getAnnouncementService()
     {
-        return $this->getServiceKernel()->createService('Announcement:AnnouncementService');
-    }
-
-    protected function getCourseService()
-    {
-        return $this->getServiceKernel()->getBiz()->service('Course:CourseService');
+        return $this->getServiceKernel()->getBiz()->service('Announcement:AnnouncementService');
     }
 
     protected function checkCount(array $arguments)

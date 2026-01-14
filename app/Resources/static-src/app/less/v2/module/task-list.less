@@ -1,0 +1,242 @@
+.task-manage-list {
+  margin-left: 6px;
+  margin-right: 0;
+  padding: 0;
+  list-style: none;
+  border-left: 2px solid #f1f1f1;
+  .item-content {
+    float: left;
+    padding: 20px 24px;
+    width: 100%;
+    background: @cd-bg-light;
+    .cd-border-radius;
+    color: @cd-dark-major;
+    overflow: hidden;
+  }
+  .task-manage-chapter {
+    position: relative;
+    margin-left: -8px;
+    .item-content {
+      font-size: 14px;
+      color: @cd-dark-minor;
+    }
+    .item-actions {
+      top: 0;
+      right: 24px;
+    }
+    .one-level-item-actions {
+      margin-right:130px;
+    }
+  }
+  .task-manage-unit {
+    margin-left: 16px;
+    .item-line {
+      margin-left: -16px;
+      width: 16px;
+    }
+    .item-actions {
+      right: 56px;
+    }
+    .two-level-item-actions {
+      margin-right: 98px;
+    }
+  }
+  .task-manage-lesson {
+    margin-left: 40px;
+    .cd-box-shadow-z(3px);
+    .cd-border-radius;
+    .item-line {
+      margin-left: -40px;
+      width: 40px;
+    }
+    .item-content {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+    .three-level-item-actions {
+      margin-right: 98px;
+    }
+  }
+  .task-manage-lesson-tasks {
+    padding: 16px 0 20px;
+    list-style-type: none;
+    background-color: #fff;
+    .task-manage-item {
+      margin-bottom: 4px;
+      &:hover {
+        cursor: move;
+      }
+      opacity: 1 !important;
+      &.dragged {
+        .cd-box-shadow-z(3px);
+        .transform(rotate(1deg));
+      }
+    }
+    .item-content {
+      padding-left: 24px;
+      padding-right: 24px;
+      height: 28px;
+      line-height: 28px;
+      color: @cd-dark-minor;
+      background-color: #fff;
+      i {
+        color: @cd-dark-assist;
+      }
+    }
+    .item-actions {
+      height: 28px;
+      line-height: 28px;
+      .task-manage-item__dropdown {
+        top: 16px;
+      }
+    }
+  }
+  .task-manage-item {
+    position: relative;
+    margin-bottom: 15px;
+    border: none;
+  }
+  .chapter-operation {
+    bottom: 11px;
+  }
+  .task-manage-item__dropdown {
+    top: 31px;
+    text-align: center;
+  }
+  .item-actions {
+    position: absolute;
+    right: 56px;
+    padding-right: 0;
+    height: 56px;
+    line-height: 56px;
+    font-size: 16px;
+    a {
+      color: @cd-dark-assist;
+      i {
+        font-size: 16px;
+      }
+    }
+  }
+  .item-line {
+    float: left;
+    border-bottom: 2px solid #f1f1f1;
+    margin-top: 8px;
+    vertical-align: top;
+    display: inline-block;
+    height: 21px;
+  }
+  
+  .item-publish-btn {
+    position: absolute;
+    right: 24px;
+    padding-right: 0;
+    height: 56px;
+    line-height: 56px;
+    font-size: 16px;
+    color: @brand-primary;
+  }
+
+  .chapter-status-published {
+    display: inline-block;
+    margin: 0 10px;
+    padding: 1px 8px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #fff;
+    border-radius: 6px;
+    background: @brand-primary;
+  }
+
+  .chapter-status-unpublished {
+    display: inline-block;
+    margin: 0 10px;
+    padding: 1px 8px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #fff;
+    border-radius: 6px;
+    background: #D2D3D4;
+  }
+}
+
+.task-list-header {
+  position: relative;
+  margin-bottom: 24px;
+  padding: 0 6px 0 24px;
+  height: 56px;
+  line-height: 56px;
+  .cd-box-shadow-z(2px);
+  color: @cd-dark-minor;
+  font-size: 14px;
+}
+
+.task-list-header__switch {
+  position: absolute;
+  top: 18px;
+}
+
+.task-list-header__dropdown {
+  top: 43px !important;
+  width: 90px;
+  text-align: center !important;
+}
+
+.task-manage-chapter,
+.task-manage-unit,
+.task-manage-lesson {
+  &.dragged {
+    opacity: 1 !important;
+    .cd-box-shadow-z(3px);
+    .transform(rotate(2deg));
+  }
+  &:hover {
+    cursor: move;
+  }
+}
+
+.task-manage-batch-operate {
+  height: 56px;
+  padding: 0 24px;
+  line-height: 56px;
+  background-color: #fff;
+  box-shadow: 0 2px 4px 0 rgba(0,0,0,0.10);
+  &.fixed {
+    position: fixed;
+    bottom: 0px;
+    width: 915px;
+    z-index: 1000;
+  }
+  .batch-choose {
+    font-size: 14px;
+    color: @gray-darker;
+    cursor: pointer;
+    &:hover,
+    &.active {
+      color: @brand-primary;
+    }
+  }
+}
+
+.task-manage-batch-operate-slot {
+  height: 56px;
+  padding: 0 24px;
+  line-height: 56px;
+}
+
+.task-manage-batch-delete {
+  button[data-toggle="cd-confirm-ok"] {
+    color: @brand-danger;
+  }
+}
+
+.task-manage-footer-option {
+  .chapter-operation {
+    margin-bottom: 12px;
+  }
+  .task-manage-num-clear {
+    display: inline-block;
+    margin: 0 10px 0 8px;
+    color: @brand-primary;
+    cursor: pointer;
+  }
+}

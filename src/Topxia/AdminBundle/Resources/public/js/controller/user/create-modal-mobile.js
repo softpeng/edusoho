@@ -1,53 +1,89 @@
-define(function(require, exports, module) {
-    var Validator = require('bootstrap.validator');
-    var Notify = require('common/bootstrap-notify');
-    require('common/validator-rules').inject(Validator);
+define(function (require, exports, module) {
+  let Validator = require('bootstrap.validator');
+  let Notify = require('common/bootstrap-notify');
+  require('common/validator-rules').inject(Validator);
 
-    exports.run = function() {
-        var $modal = $('#user-create-form').parents('.modal');
+  exports.run = function () {
+    console.log('run');
+    let $modal = $('#user-create-form').parents('.modal');
 
-        var validator = new Validator({
-            element: '#user-create-form',
-            autoSubmit: false,
-            onFormValidated: function(error, results, $form) {
-                if (error) {
-                    return false;
-                }
+    let validator = new Validator({
+      element: '#user-create-form',
+      autoSubmit: false,
+      onFormValidated: function (error, results, $form) {
+        if (error) {
+          return false;
+        }
 
-                $('#user-create-btn').button('submiting').addClass('disabled');
+        $('#user-create-btn').button('submiting').addClass('disabled');
 
-                $.post($form.attr('action'), $form.serialize(), function(html) {
-                    $modal.modal('hide');
-                    Notify.success(Translator.trans('新用户添加成功'));
-                    window.location.reload();
-                }).error(function(){
-                    Notify.danger(Translator.trans('新用户添加失败'));
-                });
-
-            }
-        });
-        validator.addItem({
-            element: '[name="emailOrMobile"]',
-            required: true,
-            rule: 'email_or_mobile email_or_mobile_remote'
+        $.post($form.attr('action'), $form.serialize(), function (html) {
+          $modal.modal('hide');
+          Notify.success(Translator.trans('admin.user.create_new_user_success_hint'));
+          window.location.reload();
+        }).error(function (response) {
+          if (response.responseJSON){
+            Notify.danger(response.responseJSON.error.message);
+          }else {
+            Notify.danger(Translator.trans('admin.user.create_new_user_fail_hint'));
+          }
+          $('#user-create-btn').button('reset').removeClass('disabled');
         });
 
-        validator.addItem({
-            element: '[name="nickname"]',
-            rule: 'chinese_alphanumeric byte_minlength{min:4} byte_maxlength{max:18} remote'
-        });
+      }
+    });
 
-        validator.addItem({
-            element: '[name="password"]',
-            required: true,
-            rule: 'minlength{min:5} maxlength{max:20}'
-        });
+    Validator.addRule('spaceNoSupport', function (options) {
+      let value = $(options.element).val();
+      return value.indexOf(' ') < 0;
+    }, Translator.trans('validate.have_spaces'));
 
-        validator.addItem({
-            element: '[name="confirmPassword"]',
-            required: true,
-            rule: 'confirmation{target:#password}'
-        });
-    };
+    validator.addItem({
+      element: '[name="emailOrMobile"]',
+      required: true,
+      rule: 'email_or_mobile email_or_mobile_remote'
+    });
 
+    validator.addItem({
+      element: '[name="nickname"]',
+      rule: 'chinese_alphanumeric byte_minlength{min:4} byte_maxlength{max:36} remote'
+    });
+
+    validator.addItem({
+      element: '[name="password"]',
+      required: true,
+      rule: 'password_normal spaceNoSupport',
+      errormessageRequired: '请设置8-32位字符，包含字母、数字、符号任意两种及以上组合成的密码'
+    });
+
+    validator.addItem({
+      element: '[name="confirmPassword"]',
+      required: true,
+      rule: 'confirmation{target:#password}'
+    });
+
+    $('.js-password-open-eye').on('click', function () {
+      $('#password').attr('type', 'password');
+      $('.js-password-open-eye').hide();
+      $('.js-password-close-eye').show();
+    });
+
+    $('.js-password-close-eye').on('click', function () {
+      $('#password').attr('type', 'text');
+      $('.js-password-close-eye').hide();
+      $('.js-password-open-eye').show();
+    });
+
+    $('.js-confirm-password-open-eye').on('click', function () {
+      $('#confirmPassword').attr('type', 'password');
+      $('.js-confirm-password-open-eye').hide();
+      $('.js-confirm-password-close-eye').show();
+    });
+
+    $('.js-confirm-password-close-eye').on('click', function () {
+      $('#confirmPassword').attr('type', 'text');
+      $('.js-confirm-password-close-eye').hide();
+      $('.js-confirm-password-open-eye').show();
+    });
+  };
 });

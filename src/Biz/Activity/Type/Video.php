@@ -3,44 +3,52 @@
 namespace Biz\Activity\Type;
 
 use AppBundle\Common\ArrayToolkit;
+use AppBundle\Component\MediaParser\ParserProxy;
+use Biz\Activity\ActivityException;
 use Biz\Activity\Config\Activity;
 use Biz\Activity\Dao\VideoActivityDao;
-use Biz\File\Service\UploadFileService;
 use Biz\Activity\Service\ActivityService;
 use Biz\CloudPlatform\Client\CloudAPIIOException;
+use Biz\Common\CommonException;
+use Biz\Course\Service\CourseService;
+use Biz\File\Service\UploadFileService;
 
 class Video extends Activity
 {
     protected function registerListeners()
     {
-        return array('watching' => 'Biz\Activity\Listener\VideoActivityWatchListener');
+        return [];
     }
 
+    /**
+     * @param $fields
+     *
+     * @return array|mixed
+     *
+     * @throws CommonException
+     */
     public function create($fields)
     {
-        if (empty($fields['ext'])) {
-            throw $this->createInvalidArgumentException('参数不正确');
+        if (empty($fields['media'])) {
+            throw CommonException::ERROR_PARAMETER();
         }
 
-        $videoActivity = $fields['ext'];
-        if (empty($videoActivity['mediaId'])) {
-            $videoActivity['mediaId'] = 0;
-        }
+        $videoActivity = $this->handleFields($fields);
         $videoActivity = $this->getVideoActivityDao()->create($videoActivity);
 
         return $videoActivity;
     }
 
-    public function copy($activity, $config = array())
+    public function copy($activity, $config = [])
     {
         $video = $this->getVideoActivityDao()->get($activity['mediaId']);
-        $newVideo = array(
+        $newVideo = [
             'mediaSource' => $video['mediaSource'],
             'mediaId' => $video['mediaId'],
             'mediaUri' => $video['mediaUri'],
             'finishType' => $video['finishType'],
             'finishDetail' => $video['finishDetail'],
-        );
+        ];
 
         return $this->getVideoActivityDao()->create($newVideo);
     }
@@ -58,41 +66,38 @@ class Video extends Activity
         return $this->getVideoActivityDao()->update($video['id'], $video);
     }
 
+    /**
+     * @param int   $activityId
+     * @param array $fields
+     * @param array $activity
+     *
+     * @return mixed
+     *
+     * @throws ActivityException
+     * @throws CommonException
+     */
     public function update($activityId, &$fields, $activity)
     {
-        $video = $fields['ext'];
-        if ($video['finishType'] == 'time') {
-            if (empty($video['finishDetail'])) {
-                throw $this->createAccessDeniedException('finish time can not be emtpy');
-            }
+        if (empty($fields['media'])) {
+            throw CommonException::ERROR_PARAMETER();
         }
+
+        $video = $this->handleFields($fields);
         $videoActivity = $this->getVideoActivityDao()->get($activity['mediaId']);
         if (empty($videoActivity)) {
-            throw new \Exception('教学活动不存在');
+            throw ActivityException::NOTFOUND_ACTIVITY();
         }
         $videoActivity = $this->getVideoActivityDao()->update($activity['mediaId'], $video);
 
         return $videoActivity;
     }
 
-    public function isFinished($activityId)
+    public function updateByIds($ids, $fields)
     {
-        $activity = $this->getActivityService()->getActivity($activityId);
-        $video = $this->getVideoActivityDao()->get($activity['mediaId']);
-        if ($video['finishType'] === 'time') {
-            $result = $this->getTaskResultService()->getMyLearnedTimeByActivityId($activityId);
-            $result /= 60;
-
-            return !empty($result) && $result >= $video['finishDetail'];
+        if (empty($ids)) {
+            return;
         }
-
-        if ($video['finishType'] === 'end') {
-            $log = $this->getActivityLearnLogService()->getMyRecentFinishLogByActivityId($activityId);
-
-            return !empty($log);
-        }
-
-        return false;
+        $this->getVideoActivityDao()->update(['ids' => $ids], $fields);
     }
 
     public function get($id)
@@ -100,7 +105,9 @@ class Video extends Activity
         $videoActivity = $this->getVideoActivityDao()->get($id);
         // Todo 临时容错处理
         try {
-            $videoActivity['file'] = $this->getUploadFileService()->getFullFile($videoActivity['mediaId']);
+            if ($videoActivity) {
+                $videoActivity['file'] = $this->getUploadFileService()->getFullFile($videoActivity['mediaId']);
+            }
         } catch (CloudAPIIOException $e) {
             return $videoActivity;
         }
@@ -108,17 +115,19 @@ class Video extends Activity
         return $videoActivity;
     }
 
-    public function find($ids)
+    public function find($ids, $showCloud = 1)
     {
         $videoActivities = $this->getVideoActivityDao()->findByIds($ids);
         $mediaIds = ArrayToolkit::column($videoActivities, 'mediaId');
+        $groupMediaIds = array_chunk($mediaIds, 50);
+        $files = [];
         try {
-            $files = $this->getUploadFileService()->findFilesByIds(
-                $mediaIds,
-                $showCloud = 1
-            );
+            foreach ($groupMediaIds as $mediaIds) {
+                $chuckFiles = $this->getUploadFileService()->findFilesByIds($mediaIds, $showCloud);
+                $files = array_merge($files, $chuckFiles);
+            }
         } catch (CloudAPIIOException $e) {
-            $files = array();
+            $files = [];
         }
 
         if (empty($files)) {
@@ -135,14 +144,77 @@ class Video extends Activity
         return $videoActivities;
     }
 
+    /**
+     * get the information if the video can be watch.
+     *
+     * @param $activity
+     *
+     * @return array
+     */
+    public function getWatchStatus($activity)
+    {
+        $user = $this->getCurrentUser();
+        $watchTime = $this->getTaskResultService()->getWatchTimeByActivityIdAndUserId($activity['id'], $user['id']);
+
+        $course = $this->getCourseService()->getCourse($activity['fromCourseId']);
+        $watchStatus = ['status' => 'ok'];
+        if ($course['watchLimit'] > 0 && $this->setting('magic.lesson_watch_limit')) {
+            //只有视频课程才限制观看时长
+            if (empty($course['watchLimit']) || 'video' !== $activity['mediaType']) {
+                return ['status' => 'ignore'];
+            }
+
+            $watchLimitTime = $activity['length'] * $course['watchLimit'];
+            if (empty($watchTime)) {
+                return ['status' => 'ok', 'watchedTime' => 0, 'watchLimitTime' => $watchLimitTime];
+            }
+            if ($watchTime < $watchLimitTime) {
+                return ['status' => 'ok', 'watchedTime' => $watchTime, 'watchLimitTime' => $watchLimitTime];
+            }
+
+            return ['status' => 'error', 'watchedTime' => $watchTime, 'watchLimitTime' => $watchLimitTime];
+        }
+
+        return $watchStatus;
+    }
+
+    public function prepareMediaUri($video)
+    {
+        $proxy = new ParserProxy();
+
+        return $proxy->prepareMediaUri($video);
+    }
+
+    public function findWithoutCloudFiles($targetIds)
+    {
+        return $this->getVideoActivityDao()->findByIds($targetIds);
+    }
+
     public function delete($id)
     {
+        $video = $this->getVideoActivityDao()->get($id);
+        $this->getUploadFileService()->updateUsedCount($video['mediaId']);
+
         return $this->getVideoActivityDao()->delete($id);
     }
 
     public function materialSupported()
     {
         return true;
+    }
+
+    private function handleFields($fields)
+    {
+        $result = json_decode($fields['media'], true);
+        $result['mediaId'] = empty($result['id']) ? 0 : $result['id'];
+        $result['mediaSource'] = empty($result['source']) ? '' : $result['source'];
+        $result['mediaUri'] = empty($result['uri']) ? '' : $result['uri'];
+
+        $finishInfo = ArrayToolkit::parts($fields, ['finishType', 'finishDetail']);
+        $result = array_merge($result, $finishInfo);
+        $result = ArrayToolkit::parts($result, ['mediaId', 'mediaUri', 'mediaSource', 'finishType', 'finishDetail']);
+
+        return $result;
     }
 
     /**
@@ -167,5 +239,13 @@ class Video extends Activity
     protected function getActivityService()
     {
         return $this->getBiz()->service('Activity:ActivityService');
+    }
+
+    /**
+     * @return CourseService
+     */
+    protected function getCourseService()
+    {
+        return $this->getBiz()->service('Course:CourseService');
     }
 }

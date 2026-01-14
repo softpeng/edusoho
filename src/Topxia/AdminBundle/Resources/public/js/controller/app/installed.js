@@ -3,15 +3,15 @@ define(function(require, exports, module) {
     exports.run = function() {
 
         $(".uninstall-btn").click(function() {
-            if (!confirm(Translator.trans('真的要卸载此应用？'))) {
+            if (!confirm(Translator.trans('admin.app.uninstall_hint'))) {
                 return ;
             }
             $.post($(this).data('url'), function(response) {
                 window.location.reload();
             }, 'json');
         });
-
-        $.post('/admin/app/upgrades_count', function(count){
+        let $url = $('.js-table').data('url');
+        $.post($url, function(count){
 
             if (count > 0) {
 

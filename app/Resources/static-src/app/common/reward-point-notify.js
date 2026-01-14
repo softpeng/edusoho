@@ -1,11 +1,9 @@
-import notify from "common/notify";
+import notify from 'common/notify';
 
 export default class RewardPointNotify {
-
-  STORAGE_NAME = 'reward-point-notify-queue';
-
   constructor() {
     this.storage = window.localStorage;
+    this.STORAGE_NAME = 'reward-point-notify-queue';
     this.init();
   }
 
@@ -24,8 +22,6 @@ export default class RewardPointNotify {
       let msg = this.stack.pop();
       notify('success', decodeURIComponent(msg));
       this.store();
-    } else {
-      console.log('Nothing to display');
     }
   }
 

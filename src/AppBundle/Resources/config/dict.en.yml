@@ -1,13 +1,20 @@
 searchResultType:
     course: Course
+    classroom: Classroom
+    itemBankExercise: Exercise of question bank
     teacher: Teacher
     thread: Topic
     article: Article
 
 courseStatus:
-    draft: Unpublished
+    draft: draft
+    unpublished: Unpublished
     published: Published
     closed: Closed
+goodsStatus:
+    created: Created
+    published: Published
+    unpublished: Unpublished
 
 courseType:
     live: Living course
@@ -15,8 +22,17 @@ courseType:
     liveOpen: Living open course
     normal: Course
 
+nonOpenCourseCateogry:
+    live: Living course
+    normal: Course
+
+openCourseCategory:
+    liveOpen: Living open course
+    open: Open course
+
 classroomStatus:
     draft: Unpublished
+    unpublished: Unpublished
     published: Published
     closed: Closed
 
@@ -26,6 +42,7 @@ couponType:
 
 couponStatus:
     used: Used
+    using: Using
     unused: Unused
     receive: Received
 
@@ -37,33 +54,78 @@ fileType:
     ppt: PPT
     flash: Flash
     other: Other
-    
+
 orderStatus:
     created: Unpaid
+    paying: Paying
     paid: Paid
     refunding: Refunding
     refunded: Refunded
-    cancelled: Cancelled
+    success: Success
+    fail: Fail
+    finished: Finished
+    closed: Closed
+
+orderItemType:
+    course: course
+    classroom: classroom
+    vip: VIP
+    item_bank_exercise: item_bank_exercise
+
+refundItemType:
+    course: course
+    classroom: classroom
+
+orderDisplayStatus:
+    notPaid: notPaid
+    paid: paid
+    closed: closed
+    finished: finished
+    refunded: refunded
 
 refundStatus:
-    created: Applied
-    success: Success
-    failed: Failed
-    cancelled: Cancelled
+    auditing: Applied
+    refunding: Refunding
+    refunded: Success
+    refused: Failed
+    cancel: Cancelled
+
+refundDisplayStatus:
+    auditing: Applied
+    refunded: Success
+    refused: Failed
+    cancel: Cancelled
 
 payment:
-    none: --
     alipay: Alipay
-    wxpay: Wxpay
-    heepay: Heepay
-    quickpay: Quickpay
-    iosiap: iOSiap
-    outside: Outside
+    wechat: wechat
+    heepay: Heepay（HuiFuBao）
+    quickpay: QuickPay（HuiFuBao）
+    iap: iOSiap
+    lianlianpay: LLPay
     coin: Coin
-    llpay: LLpay
-    marketing: marketing
-   
-    
+    wechat_app: MiniProgram
+    none: Others
+
+paymentSelect:
+    alipay: Alipay
+    wechat: wechat
+    iap: iOSiap
+    lianlianpay: LLPay
+    coin: Coin
+    wechat_app: MiniProgram
+    none: Others
+
+orderSource:
+    self: Self
+    marketing: Marketing
+    outside: Outside
+
+source:
+    self: Self
+    outside: Outside
+    marketing: Marketing
+    scrm: SCRM
 
 moneyRecordType:
     income: Income
@@ -143,19 +205,23 @@ memberLevel:
 duration_unit:
     month: Month
     year: Year
+    day: day
 
 boughtType:
     new: Purchase
     renew: Renew
     upgrade: Upgrade
-    edit: Edit
+    admin: Add
     cancel: Cancel
+    edit: Edit
 
 userKeyWordType:
     nickname: Nickname
+    wechatNickname: Wechat Nickname
     verifiedMobile: Mobile
     email: Email
     loginIp: Login Ip
+    idcard: IdCard
 
 jobCycle:
     once: Once
@@ -204,19 +270,39 @@ userType:
     renren: Renren connected
     qq: QQ connected
     weixin: Wechat connected
+    apple: Apple connected
+    marketing: 微营销
+    distributor: 分销
+
+userStatus:
+  all: All
+  locked: Locked
+  unlock: Unlock
 
 userKeyWordTypes:
     nickname: Nickname
     email: Email
 
+userStatisticsTypes:
+    nickname: Nickname
+    mobile: Mobile
+
 questionType:
     single_choice: Single choice
     choice: Multiple choice
     uncertain_choice: Indefinite choice
-    fill: Gap filling 
+    fill: Gap filling
     determine: True or False
     essay: Q&A
     material: Material
+
+itemQuestionType:
+    single_choice: Single choice
+    choice: Multiple choice
+    uncertain_choice: Indefinite choice
+    text: Gap filling
+    true_false: True or False
+    rich_text: Q&A
 
 difficulty:
     simple: Simple
@@ -257,7 +343,7 @@ coinOrderType:
 discountType:
     discount: Limited time discount
     free: Limited time free
-    global: Site discount 
+    global: Site discount
 
 discountStatus:
     unstart: Not start
@@ -302,6 +388,10 @@ searchCourseType:
     free: Free Course
     live: Live Course
 
+searchClassroomType:
+    all: All
+    free: Free Classroom
+
 userInfoFields:
     email: Email
     truename: Real name
@@ -315,6 +405,7 @@ userInfoFields:
     weixin: Wechat
 
 passedStatus:
+    none: Unqualified
     excellent: Excellent
     good: Good
     passed: Passed
@@ -324,6 +415,7 @@ processStatus:
     none: Not Start
     waiting: Waiting
     processing: Processing
+    doing: Doing
     ok: Success
     error: Error
 
@@ -333,6 +425,13 @@ convertStatus:
     doing: Transcoding
     success: Success
     error: Error
+
+audioConvertStatus:
+    none: Audio transcoding not start
+    waiting: Audio transcoding
+    doing: Audio transcoding
+    success: Audio transcoding success
+    error: Audio transcoding error
 
 state:
     banned: Disable
@@ -352,10 +451,22 @@ courseSerializeMode:
     finished: Completed
 
 refund_reason:
-    select_reason: --Reason to quit--
     bad_content: Course quality is not quite good
     bad_teacher_attitude: Service is not quite good
     other: Other
+
+exit_reason:
+    refund: 退款成功
+    remove: 移除
+    exit: 主动退出
+
+join_reason:
+    vip_join: 会员加入
+    free_join: 免费加入
+    buy_join: 购买加入
+    import_join: 导入用户
+    assistant_join: 助教加入
+    auditor_join: 旁听加入
 
 exchangeType:
     nickName: nickName
@@ -370,3 +481,149 @@ exchangeStatus:
 rewardPointUserType:
     nickname: Nickname
     truename: Truename
+
+waveType:
+    plus: Plus
+    minus: Minus
+
+#选项
+questionOption:
+    0: A
+    1: B
+    2: C
+    3: D
+    4: E
+    5: F
+    6: G
+    7: H
+    8: I
+    9: J
+
+weChatFansType:
+    all: All
+    user: User
+    notUser: NotUser
+
+weChatFansKeywordType:
+    nickname: Nickname
+    wechatNickname: WechatNickname
+
+weekDays:
+    Mon: Monday
+    Tue: Tuesday
+    Wed: Wednesday
+    Thu: Thursday
+    Fri: Friday
+    Sat: Saturday
+    Sun: Sunday
+
+adminCourseTypes:
+    normal: Course
+    classroom: Classroom course
+
+adminPlumberStatus:
+    executing: Excuting
+    stopped: Stopped
+
+s2b2cSettlementOrderStatus:
+    paid: To be paid
+    success: Paid
+    finished: Transaction complete
+    refunded: Refunded
+
+certificateTypes:
+    course: course
+    classroom: classroom
+
+certificateStatus:
+    valid: valid
+    expired: expired
+    cancelled: cancelled
+
+certificateSearchTypes:
+    truename: truename
+    nickname: nickname
+    verifiedMobile: mobile
+    email: email
+    batch: batch
+    code: code
+
+WechatNotificationType:
+  serviceFollow: service follow
+  messageSubscribe: Message subscribe
+
+userAuditTargetType:
+  1: Course Review
+  2: Classroom Review
+  3: Exercise Review
+  4: Open Course Review
+  5: Article Review
+  6: Course Note
+  7: Classromm Note
+  8: Course Thread
+  9: Classroom Thread
+  10: Group Thread
+  11: Course Question
+  12: Classromm Question
+
+userAuditStatus:
+  sysPass: Syetem pass
+  none: Not pass
+  pass: Pass
+  illegal: Illegal
+
+sensitiveWordsFilter:
+  1: Contain Sensitive Words
+  2: Not Contain Sensitive Words
+
+#用户举报原因标签
+reportTags:
+    1: Invalid advertisement information
+    2: Politically sensitive information
+    3: Pornographic and vulgar information
+    4: Illegal information
+    5: Abusive, personal attacks and other unfriendly behavior
+
+#用户举报目标类型标签
+reportTargetType:
+    1: Course Review
+    2: Classroom Review
+    3: Question Bank Exervise Review
+    4: Open Course Review
+    5: Article Review
+    6: Course Note
+    7: Classroom Note
+    8: Course Thread
+    9: Classroom Thread
+    10: Group Thread
+    11: Course QA
+    12: Classroom QA
+
+reportModule:
+  1: Course Review
+  2: Classroom Review
+  3: Question Bank Exervise Review
+  4: Open Course Review
+  5: Article Review
+  6: Course Note
+  7: Course Thread
+  8: Classroom Thread
+  9: Group Thread
+  10: Course QA
+  11: Classroom QA
+
+#用户举报内容审核状态
+reportAuditStatus:
+    none: None
+    pass: Pass
+    illegal: Illegal
+
+multiClassStatus:
+    not_start: Not Start
+    live: live
+    end: End
+
+replayKeyWordType:
+    activityTitle: live Title
+    anchor: teacher
+    courseTitle: course Title

@@ -4,9 +4,13 @@ namespace ApiBundle\EventListener;
 
 use ApiBundle\Api\Util\ExceptionUtil;
 use ApiBundle\ApiBundle;
-use Symfony\Component\HttpFoundation\JsonResponse;
+use Monolog\Handler\StreamHandler;
+use Monolog\Logger;
+use Ramsey\Uuid\Uuid;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent;
+use Topxia\Service\Common\ServiceKernel;
 
 class ExceptionListener
 {
@@ -22,21 +26,45 @@ class ExceptionListener
 
             list($error, $httpCode) = ExceptionUtil::getErrorAndHttpCodeFromException($exception, $this->isDebug());
 
-            $response = $this->container->get('api_response_viewer')->view(array('error' => $error), $httpCode);
+            $error['message'] = $this->container->get('translator')->trans($error['message']);
+            $traceId = Uuid::uuid1()->getHex();
+            $error['traceId'] = $traceId;
+            $this->getLogger()->error("traceId:{$traceId}>>>".$error['message'], [$this->getRequestParameters($event->getRequest()), $exception->getMessage(), $exception->getTraceAsString()]);
+            if (Response::HTTP_INTERNAL_SERVER_ERROR == $httpCode) {
+                $error['message'] .= "#{$error['traceId']}";
+            }
+            $response = $this->container->get('api_response_viewer')->view(['error' => $error], $httpCode);
             $event->setResponse($response);
             $event->stopPropagation();
         }
+    }
 
+    private function getRequestParameters($request)
+    {
+        return [
+            'body' => $request->request->all(),
+            'query' => $request->query->all(),
+            'header' => $request->headers->all(),
+        ];
     }
 
     private function isApiPath($request)
     {
-        return strpos($request->getPathInfo(), ApiBundle::API_PREFIX) !== false;
+        return false !== strpos($request->getPathInfo(), ApiBundle::API_PREFIX);
     }
 
     private function isDebug()
     {
-        $env = $this->container->get( 'kernel' )->getEnvironment();
-        return $env == 'dev' || $env == 'test';
+        $env = $this->container->get('kernel')->getEnvironment();
+
+        return 'dev' == $env || 'test' == $env;
+    }
+
+    private function getLogger()
+    {
+        $logger = new Logger('APIError');
+        $logger->pushHandler(new StreamHandler(ServiceKernel::instance()->getParameter('kernel.logs_dir').'/api-error.log', Logger::DEBUG));
+
+        return $logger;
     }
 }

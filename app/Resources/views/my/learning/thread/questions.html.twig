@@ -5,13 +5,13 @@
 {% set side_nav = 'my-questions' %}
 
 {% block main %}
-
+  <link href="{{ asset('static-dist/app/css/main-ant.css') }}" rel="stylesheet"/>
 
 <div class="panel panel-default panel-col">
   <div class="panel-heading">{{'my.learning.question'|trans}}
   </div>
   <div class="panel-body">
-
+    {% include 'my/learning/thread/tab.html.twig' with {type: 'question'} %}
     {% if threads %}
 	    {% include 'my/learning/thread/thread-list.html.twig'  with {type: 'question'} %}
     {% else %}

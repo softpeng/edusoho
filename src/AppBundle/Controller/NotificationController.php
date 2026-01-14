@@ -6,6 +6,7 @@ use Biz\Course\Service\CourseService;
 use Biz\User\Service\BatchNotificationService;
 use Biz\User\Service\NotificationService;
 use AppBundle\Common\Paginator;
+use Biz\User\UserException;
 use Symfony\Component\HttpFoundation\Request;
 
 class NotificationController extends BaseController
@@ -13,9 +14,8 @@ class NotificationController extends BaseController
     public function indexAction(Request $request)
     {
         $user = $this->getCurrentUser();
-
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException();
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         $paginator = new Paginator(
@@ -29,6 +29,10 @@ class NotificationController extends BaseController
             $paginator->getOffsetCount(),
             $paginator->getPerPageCount()
         );
+        $id = $request->query->get('id');
+        if (!empty($id)) {
+            $notifications = $this->getNotificationService()->isSelectNotification($notifications, $id);
+        }
         $this->getNotificationService()->clearUserNewNotificationCounter($user->id);
         $user->clearNotifacationNum();
 

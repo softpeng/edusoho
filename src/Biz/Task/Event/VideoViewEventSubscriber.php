@@ -3,6 +3,7 @@
 namespace Biz\Task\Event;
 
 use Biz\Activity\Service\ActivityService;
+use Biz\File\Service\UploadFileService;
 use Biz\Task\Service\ViewLogService;
 use Codeages\Biz\Framework\Event\Event;
 use Codeages\PluginBundle\Event\EventSubscriber;
@@ -12,25 +13,25 @@ class VideoViewEventSubscriber extends EventSubscriber implements EventSubscribe
 {
     public static function getSubscribedEvents()
     {
-        return array(
+        return [
             'activity.start' => 'onVideoView',
-        );
+        ];
     }
 
     public function onVideoView(Event $event)
     {
-        $activity = $event->getSubject();
         $task = $event->getArgument('task');
-
+        $activity = $this->getActivityService()->getActivity($task['activityId'], true);
         $user = $this->getBiz()->offsetGet('user');
-        if ($activity['mediaType'] !== 'video') {
+        if ('video' !== $activity['mediaType']) {
             return false;
         }
-        $activityExt = $this->getActivityService()->getActivityConfig($activity['mediaType'])->get($activity['mediaId']);
 
-        $file = $activityExt['file'];
+        if ('self' == $task['mediaSource']) {
+            $file = $this->getUploadFileService()->getFile($activity['ext']['mediaId']);
+        }
 
-        $taskViewLog = array(
+        $taskViewLog = [
             'courseSetId' => $activity['fromCourseSetId'],
             'courseId' => $activity['fromCourseId'],
             'taskId' => $task['id'],
@@ -38,8 +39,8 @@ class VideoViewEventSubscriber extends EventSubscriber implements EventSubscribe
             'fileId' => !empty($file['id']) ? $file['id'] : 0,
             'fileType' => !empty($file['type']) ? $file['type'] : 'video',
             'fileStorage' => !empty($file['storage']) ? $file['storage'] : 'net',
-            'fileSource' => $activityExt['mediaSource'],
-        );
+            'fileSource' => $task['mediaSource'],
+        ];
 
         $this->getTaskViewLogService()->createViewLog($taskViewLog);
     }
@@ -58,5 +59,13 @@ class VideoViewEventSubscriber extends EventSubscriber implements EventSubscribe
     protected function getTaskViewLogService()
     {
         return $this->getBiz()->service('Task:ViewLogService');
+    }
+
+    /**
+     * @return UploadFileService
+     */
+    protected function getUploadFileService()
+    {
+        return $this->getBiz()->service('File:UploadFileService');
     }
 }

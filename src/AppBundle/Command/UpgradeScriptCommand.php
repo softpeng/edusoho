@@ -3,11 +3,11 @@
 namespace AppBundle\Command;
 
 use Biz\Util\PluginUtil;
-use Topxia\Service\Common\ServiceKernel;
-use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Filesystem\Filesystem;
+use Topxia\Service\Common\ServiceKernel;
 
 class UpgradeScriptCommand extends BaseCommand
 {
@@ -15,6 +15,7 @@ class UpgradeScriptCommand extends BaseCommand
     {
         $this->setName('util:upgrade-script')
             ->addArgument('version', InputArgument::REQUIRED, '要升级的版本号')
+            ->addArgument('index', InputArgument::OPTIONAL, '执行的序号')
             ->setDescription('用于命令行中执行指定版本的升级脚本');
     }
 
@@ -24,22 +25,31 @@ class UpgradeScriptCommand extends BaseCommand
 
         $code = 'MAIN';
         $version = $input->getArgument('version');
+        $index = 0;
+        if ($input->hasArgument('index')) {
+            $index = $input->getArgument('index');
+        }
 
-        $this->executeScript($code, $version);
+        try {
+            $this->executeScript($output, $code, $version, $index);
+        } catch (\Exception $e) {
+            $output->writeln('<error>执行脚本失败：'.$e->getMessage().'</error>');
+            $output->writeln('<error> '. $e->getTraceAsString() .'</error>');
+        }
         $output->writeln('<info>执行脚本</info>');
 
-        $this->removeCache();
-        $output->writeln('<info>删除缓存</info>');
+        PluginUtil::refresh();
 
         $this->updateApp($code, $version);
         $output->writeln('<info>元数据更新</info>');
     }
 
-    protected function executeScript($code, $version, $index = 0)
+    protected function executeScript($output, $code, $version, $index = 0)
     {
-        $scriptFile = $this->getServiceKernel()->getParameter('kernel.root_dir')."/../scripts/upgrade-{$version}.php";
+        $scriptFile = $this->getServiceKernel()->getParameter('kernel.root_dir')."/../upgrade-scripts/upgrade-{$version}.php";
 
         if (!file_exists($scriptFile)) {
+            $output->writeln("<info>脚本文件{$scriptFile}不存在！</info>");
             return;
         }
 
@@ -50,7 +60,7 @@ class UpgradeScriptCommand extends BaseCommand
             $info = $upgrade->update($index);
 
             if (isset($info) && !empty($info['index'])) {
-                $this->executeScript($code, $version, $info['index']);
+                $this->executeScript($output, $code, $version, $info['index']);
             }
         }
     }
@@ -61,22 +71,18 @@ class UpgradeScriptCommand extends BaseCommand
             )->getEnvironment();
         $filesystem = new Filesystem();
         $filesystem->remove($cachePath);
-
-        if (empty($errors)) {
-            PluginUtil::refresh();
-        }
     }
 
     protected function updateApp($code, $version)
     {
         $app = $this->getAppService()->getAppByCode($code);
 
-        $newApp = array(
+        $newApp = [
             'code' => $code,
             'version' => $version,
             'fromVersion' => $app['version'],
             'updatedTime' => time(),
-        );
+        ];
 
         $this->getLogService()->info('system', 'update_app_version', "命令行更新应用「{$app['name']}」版本为「{$version}」");
 

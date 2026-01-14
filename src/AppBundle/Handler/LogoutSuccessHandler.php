@@ -2,9 +2,9 @@
 
 namespace AppBundle\Handler;
 
-use Topxia\Service\Common\ServiceKernel;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Security\Http\Logout\DefaultLogoutSuccessHandler;
+use Topxia\Service\Common\ServiceKernel;
 
 class LogoutSuccessHandler extends DefaultLogoutSuccessHandler
 {
@@ -22,20 +22,11 @@ class LogoutSuccessHandler extends DefaultLogoutSuccessHandler
 
         $this->targetUrl = $this->httpUtils->generateUri($request, $goto);
 
-        if ($this->getAuthService()->hasPartnerAuth()) {
-            $user = ServiceKernel::instance()->getCurrentUser();
-            setcookie('REMEMBERME');
-
-            if (!$user->isLogin()) {
-                return parent::onLogoutSuccess($request);
-            }
-
-            $url = $this->httpUtils->generateUri($request, 'partner_logout');
-            $queries = array('userId' => $user['id'], 'goto' => $this->targetUrl);
-            $url = $url.'?'.http_build_query($queries);
-
-            return $this->httpUtils->createRedirectResponse($request, $url);
+        if ($this->checkWebsite($request, $this->targetUrl)) {
+            $this->targetUrl = $this->httpUtils->generateUri($request, 'homepage');
         }
+
+        setcookie('is_skip_mobile_bind', 0, -1);
 
         setcookie('_last_logout_locale', $request->getSession()->get('_locale'), -1);
         // setcookie("U_LOGIN_TOKEN", '', -1);
@@ -49,6 +40,16 @@ class LogoutSuccessHandler extends DefaultLogoutSuccessHandler
         return isset($setting['enabled']) && isset($setting['weixinmob_enabled']) && $setting['enabled'] && $setting['weixinmob_enabled'];
     }
 
+    protected function checkWebsite($request, $targetUrl)
+    {
+        $hostUrl = $request->getUriForPath('');
+        if (0 === strpos($targetUrl, $hostUrl)) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+
     private function getAuthService()
     {
         return ServiceKernel::instance()->createService('User:AuthService');
@@ -56,7 +57,7 @@ class LogoutSuccessHandler extends DefaultLogoutSuccessHandler
 
     public function isMicroMessenger($request)
     {
-        return strpos($request->headers->get('User-Agent'), 'MicroMessenger') !== false;
+        return false !== strpos($request->headers->get('User-Agent'), 'MicroMessenger');
     }
 
     protected function getSettingService()

@@ -4,11 +4,11 @@ namespace ApiBundle\Api\Resource\CourseSet;
 
 use ApiBundle\Api\Annotation\ApiConf;
 use ApiBundle\Api\ApiRequest;
-use ApiBundle\Api\Exception\ErrorCode;
 use ApiBundle\Api\Resource\AbstractResource;
+use AppBundle\Common\ArrayToolkit;
+use Biz\Course\CourseSetException;
 use Biz\Course\Service\CourseService;
 use Biz\Course\Service\CourseSetService;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class CourseSetCourse extends AbstractResource
 {
@@ -20,12 +20,14 @@ class CourseSetCourse extends AbstractResource
         $courseSet = $this->getCourseSetService()->getCourseSet($courseSetId);
 
         if (!$courseSet) {
-            throw new NotFoundHttpException('课程不存在', null, ErrorCode::RESOURCE_NOT_FOUND);
+            throw CourseSetException::NOTFOUND_COURSESET();
         }
 
         $courses = $this->getCourseService()->findPublishedCoursesByCourseSetId($courseSetId);
-        $this->getOCUtil()->multiple($courses, array('creator', 'teacherIds'));
-        $this->getOCUtil()->multiple($courses, array('courseSetId'), 'courseSet');
+        $courses = ArrayToolkit::sortPerArrayValue($courses, 'seq');
+
+        $this->getOCUtil()->multiple($courses, ['creator', 'teacherIds']);
+        $this->getOCUtil()->multiple($courses, ['courseSetId'], 'courseSet');
 
         $this->addAccessAttr($courses);
 
@@ -34,8 +36,13 @@ class CourseSetCourse extends AbstractResource
 
     private function addAccessAttr(&$courses)
     {
+        $courses = $this->getCourseService()->appendHasCertificate($courses);
         foreach ($courses as &$course) {
             $course['access'] = $this->getCourseService()->canJoinCourse($course['id']);
+
+            $enableAudioStatus = $this->getCourseService()->isSupportEnableAudio($course['enableAudio']);
+            $course['isAudioOn'] = $enableAudioStatus ? '1' : '0';
+            unset($course['enableAudio']);
         }
     }
 
@@ -46,6 +53,7 @@ class CourseSetCourse extends AbstractResource
     {
         return $this->service('Course:CourseSetService');
     }
+
     /**
      * @return CourseService
      */

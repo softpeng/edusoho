@@ -4,6 +4,10 @@ namespace Biz\CloudPlatform\Service;
 
 interface AppService
 {
+    const CORE_TYPE = 'core';
+    const THEME_TYPE = 'theme';
+    const PLUGIN_TYPE = 'plugin';
+
     public function getAppByCode($code);
 
     public function findApps($start, $limit);
@@ -12,7 +16,11 @@ interface AppService
 
     public function findAppsByCodes(array $codes);
 
+    public function findAppsByTypes(array $types);
+
     public function getMainVersion();
+
+    public function getAgreement($code);
 
     public function registerApp($app);
 
@@ -70,13 +78,11 @@ interface AppService
      */
     public function beginPackageUpdate($packageId, $type);
 
-    public function repairProblem($token);
-
     public function uninstallApp($code);
 
     public function findInstallApp($code);
 
-    public function getTokenLoginUrl($routingName, $params);
+    public function getTokenLoginUrl($routingName, $params, $isSecure = false);
 
     public function getAppStatusByCode($code);
 }

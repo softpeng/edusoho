@@ -2,8 +2,6 @@
 
 namespace AppBundle\Extensions\DataTag;
 
-use Topxia\Service\Common\ServiceKernel;
-
 class RecommendClassroomsDataTag extends CourseBaseDataTag implements DataTag
 {
     /**
@@ -20,15 +18,15 @@ class RecommendClassroomsDataTag extends CourseBaseDataTag implements DataTag
     {
         $this->checkCount($arguments);
 
-        $conditions = array(
+        $conditions = [
             'status' => 'published',
             'showable' => 1,
             'recommended' => 1,
-        );
+        ];
 
         $classrooms = $this->getClassroomService()->searchClassrooms(
             $conditions,
-            array('recommendedSeq' => 'ASC'),
+            ['recommendedSeq' => 'ASC'],
             0,
             $arguments['count']
         );
@@ -39,7 +37,7 @@ class RecommendClassroomsDataTag extends CourseBaseDataTag implements DataTag
 
             $classroomTemp = $this->getClassroomService()->searchClassrooms(
                 $conditions,
-                array('createdTime' => 'DESC'),
+                ['createdTime' => 'DESC'],
                 0,
                 $arguments['count'] - $classroomCount
             );
@@ -52,21 +50,16 @@ class RecommendClassroomsDataTag extends CourseBaseDataTag implements DataTag
             $classroom['users'] = $teachers;
         }
 
-        return $classrooms;
+        return $this->getWebExtension()->filterClassroomsVipRight($classrooms);
     }
 
     protected function getClassroomService()
     {
-        return $this->getServiceKernel()->createService('Classroom:ClassroomService');
+        return $this->getServiceKernel()->getBiz()->service('Classroom:ClassroomService');
     }
 
     protected function getUserService()
     {
-        return ServiceKernel::instance()->createService('User:UserService');
-    }
-
-    protected function getCourseService()
-    {
-        return $this->getServiceKernel()->createService('Course:CourseService');
+        return $this->getServiceKernel()->getBiz()->service('User:UserService');
     }
 }

@@ -2,41 +2,62 @@
 
 namespace AppBundle\Controller\Export;
 
-use Symfony\Component\HttpFoundation\Request;
+use AppBundle\Common\FileToolkit;
+use AppBundle\Common\SmsToolkit;
 use AppBundle\Controller\BaseController;
+use Biz\User\UserException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Request;
 
 class ExportController extends BaseController
 {
     public function tryExportAction(Request $request, $name, $limit)
     {
         $conditions = $request->query->all();
+        $settingValue = $this->getSettingService()->node('cloud_sms.sms_secondary_verification_export', 'on');
+        if ($settingValue === 'on' && 'order' == $name) {
+            $request->request->set('sms_code', $request->query->get('sms_code'));
+            $request->request->set('mobile', $request->query->get('mobile'));
+            list($result, $sessionField, $requestField) = SmsToolkit::smsCheck($request, 'sms_secondary_verification');
+            if (!$result) {
+                $response = ['success' => 0, 'message' => 'export.not_allowed'];
+            }
+            if (!$this->getCurrentUser()->hasPermission('custom_export_permission')) {
+                $response = ['success' => 0, 'message' => 'export.not_allowed'];
+            }
+        }
 
-        $export = $this->container->get('export_factory')->create($name, $conditions);
-        $response = array('success' => 1);
+        $names = $request->query->get('names', [$name]);
 
-        $count = $export->getCount();
+        try {
+            $batchExporter = $this->container->get('batch_exporter');
+        } catch (\Exception $e) {
+            return $this->createJsonResponse(['message' => $e->getMessage()]);
+        }
 
-        if (!$export->canExport()) {
-            $response = array('success' => 0, 'message' => 'export.not_allowed');
+        $batchExporter->findExporter($names, $conditions);
+        if (!$batchExporter->canExport()) {
+            $response = ['success' => 0, 'message' => 'export.not_allowed'];
+        }
+
+        $counts = $batchExporter->getCount();
+        if (0 == count($counts)) {
+            $response = ['success' => 0, 'message' => 'export.empty'];
         }
 
         $magic = $this->getSettingService()->get('magic');
-
-        if (0 == $count) {
-            $response = array('success' => 0, 'message' => 'export.empty');
-        }
-
         if (empty($magic['export_allow_count'])) {
             $magic['export_allow_count'] = 10000;
         }
 
-        if ($count > $magic['export_allow_count'] && !empty($limit)) {
-            $response = array(
+        if (max($counts) > $magic['export_allow_count'] && !empty($limit)) {
+            $response = [
                 'success' => 0,
                 'message' => 'export.over.limit',
-                'parameters' => array('exportAllowCount' => $magic['export_allow_count'], 'count' => $count),
-            );
+                'parameters' => ['exportAllowCount' => $magic['export_allow_count'], 'count' => max($counts)],
+            ];
         }
+        $response = $response ?? ['success' => 1, 'counts' => $counts];
 
         return $this->createJsonResponse($response);
     }
@@ -44,33 +65,41 @@ class ExportController extends BaseController
     public function preExportAction(Request $request, $name)
     {
         $conditions = $request->query->all();
-        try {
-            $exporter = $this->container->get('export_factory')->create($name, $conditions);
+        $names = $request->query->get('names', [$name]);
+        $currentName = $request->query->get('name', $name);
 
-            $result = $exporter->export($name);
-        } catch (\Exception $e) {
-            return $this->createJsonResponse(array('error' => $e->getMessage()));
-        }
+        $batchExporter = $this->container->get('batch_exporter');
+        $batchExporter->findExporter($names, $conditions);
+        $result = $batchExporter->export($currentName);
 
         return $this->createJsonResponse($result);
     }
 
     public function exportAction(Request $request, $name, $type)
     {
-        $biz = $this->getBiz();
-        $fileName = $request->query->get('fileName');
+        if (!$this->getCurrentUser()->isAdmin() && !$this->getCurrentUser()->isTeacher()) {
+            $this->createNewException(UserException::PERMISSION_DENIED());
+        }
+        $fileNames = $request->query->get('fileNames');
+        $customFileName = $request->query->get('customFileName');
+        $batchExporter = $this->container->get('batch_exporter');
+        $batchExporter->findExporter([$name], []);
+        list($path, $name) = $batchExporter->exportFile($name, $fileNames, $customFileName);
 
-        $exportPath = $biz['topxia.upload.private_directory'].'/'.basename($fileName);
-        if (!file_exists($exportPath)) {
-            return  $this->createJsonResponse(array('success' => 0, 'message' => 'empty file'));
+        if (!file_exists($path)) {
+            return $this->createJsonResponse(['success' => 0, 'message' => 'empty file']);
         }
 
-        $officeHelpMap = array(
-            'csv' => 'AppBundle\Component\Office\CsvHelper',
-        );
-        $officeHelp = new $officeHelpMap[$type]();
+        $filenameParts = explode('.', $name);
+        $ext = array_pop($filenameParts);
 
-        return $officeHelp->write($name, $exportPath);
+        $headers = [
+            'Content-Type' => FileToolkit::getMimeTypeByExtension($ext),
+            'Content-Disposition' => 'attachment; filename='.$name,
+        ];
+        $batchExporter->postExport();
+
+        return new BinaryFileResponse($path, 200, $headers);
     }
 
     protected function getSettingService()

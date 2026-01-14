@@ -26,9 +26,11 @@ class RoleDaoImpl extends GeneralDaoImpl implements RoleDao
 
     public function declares()
     {
+        $declares['timestamps'] = ['createdTime', 'updatedTime'];
         $declares['conditions'] = array(
             'name = :name',
             'code = :code',
+            'code NOT IN (:excludeCodes)',
             'code LIKE :codeLike',
             'name LIKE :nameLike',
             'createdUserId = :createdUserId',
@@ -36,6 +38,7 @@ class RoleDaoImpl extends GeneralDaoImpl implements RoleDao
 
         $declares['serializes'] = array(
             'data' => 'json',
+            'data_v2' => 'json',
         );
 
         $declares['orderbys'] = array(

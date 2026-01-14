@@ -1,0 +1,26 @@
+{% extends 'layout.html.twig' %}
+
+{% block title %}{{ assessment.name }} - {{ parent() }}{% endblock %}
+
+{% if app.request.query.get('action') is not empty %}
+  {% set showHeader = 1 %}
+{% else %}
+  {% set showHeader = 0 %}
+{% endif %}
+
+{% block stylesheets %}
+  {{ parent() }}
+  {% include 'item-bank-css-loader.html.twig' %}
+{% endblock %}
+
+{% block body %}
+  {% block header %}
+    {% if showHeader %}{{ parent() }}{% endif %}
+  {% endblock %}
+
+  {{ render(controller('AppBundle:AnswerEngine/AnswerEngine:report', {answerRecordId: answerRecordId, restartUrl:restartUrl})) }}
+
+  {% block footer %}
+    {% if showHeader|default(1) %}{{ parent() }}{% endif %}
+  {% endblock %}
+{% endblock %}

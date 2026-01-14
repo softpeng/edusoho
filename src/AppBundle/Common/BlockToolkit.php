@@ -4,6 +4,7 @@ namespace AppBundle\Common;
 
 use Symfony\Component\HttpFoundation\Request;
 use Topxia\Service\Common\ServiceKernel;
+use AppBundle\Common\Exception\InvalidArgumentException;
 
 class BlockToolkit
 {
@@ -12,11 +13,11 @@ class BlockToolkit
         if (file_exists($jsonFile)) {
             $blockMeta = json_decode(file_get_contents($jsonFile), true);
             if (empty($blockMeta)) {
-                throw new \RuntimeException(ServiceKernel::instance()->trans('插件元信息文件%blockMeta%格式不符合JSON规范，解析失败，请检查元信息文件格式',
+                throw new InvalidArgumentException(ServiceKernel::instance()->trans('插件元信息文件%blockMeta%格式不符合JSON规范，解析失败，请检查元信息文件格式',
                     array('%blockMeta%' => $blockMeta)));
             }
 
-            $blockService = ServiceKernel::instance()->createService('Content:BlockService');
+            $blockService = ServiceKernel::instance()->getBiz()->service('Content:BlockService');
 
             foreach ($blockMeta as $key => $meta) {
                 $blockTemplate = $blockService->getBlockTemplateByCode($key);
@@ -33,6 +34,7 @@ class BlockToolkit
                     'templateName' => $meta['templateName'],
                     'title' => $meta['title'],
                 );
+
                 if (empty($blockTemplate)) {
                     $blockTemplate = $blockService->createBlockTemplate($blockTemplateFields);
                 } else {
@@ -51,7 +53,7 @@ class BlockToolkit
                     $blockTemplate = $blockService->updateTemplateContent($blockTemplate['id'], $content);
                 }
 
-                if (empty($blockTemplate['content']) && $container) {
+                if (!empty($blockTemplate['id']) && empty($blockTemplate['content']) && $container) {
                     $content = self::render($blockTemplate, $container);
                     $blockService->updateTemplateContent($blockTemplate['id'], $content);
                 }
@@ -61,10 +63,13 @@ class BlockToolkit
 
     public static function render($block, $container)
     {
-        if (!$container->isScopeActive('request')) {
-            $container->enterScope('request');
-            $container->set('request', new Request(), 'request');
-        }
+        /*
+         * @deprecated isScopeActive deprecated
+         */
+//        if (!$container->isScopeActive('request')) {
+//            $container->enterScope('request');
+//            $container->set('request', new Request(), 'request');
+//        }
 
         if (empty($block['templateName']) || empty($block['data'])) {
             return '';
@@ -73,12 +78,12 @@ class BlockToolkit
         return $container->get('templating')->render($block['templateName'], $block['data']);
     }
 
-    public static function generateBlcokContent($metaFilePath, $dist, $container)
+    public static function generateBlockContent($metaFilePath, $dist, $container)
     {
         $metas = file_get_contents($metaFilePath);
         $metas = json_decode($metas, true);
         if (empty($metas)) {
-            throw new \RuntimeException(ServiceKernel::instance()->trans('插件元信息文件%metaFilePath%格式不符合JSON规范，解析失败，请检查元信息文件格式', array('%metaFilePath%' => $metaFilePath)));
+            throw new InvalidArgumentException(ServiceKernel::instance()->trans('插件元信息文件%metaFilePath%格式不符合JSON规范，解析失败，请检查元信息文件格式', array('%metaFilePath%' => $metaFilePath)));
         }
 
         foreach ($metas as $code => $meta) {
@@ -102,7 +107,7 @@ class BlockToolkit
 
     public static function updateCarousel($code)
     {
-        $blockService = ServiceKernel::instance()->createService('Content:BlockService');
+        $blockService = ServiceKernel::instance()->getBiz()->service('Content:BlockService');
         $blockTemplate = $blockService->getBlockTemplateByCode($code);
         $data = $blockTemplate['data'];
         $content = $blockTemplate['content'];
@@ -144,7 +149,7 @@ class BlockToolkit
 
     public static function updateLinks($code)
     {
-        $blockService = ServiceKernel::instance()->createService('Content:BlockService');
+        $blockService = ServiceKernel::instance()->getBiz()->service('Content:BlockService');
         $block = $blockService->getBlockTemplateByCode($code);
         $data = $block['data'];
         $content = $block['content'];

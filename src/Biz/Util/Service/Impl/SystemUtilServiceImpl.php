@@ -4,35 +4,12 @@ namespace Biz\Util\Service\Impl;
 
 use Biz\BaseService;
 use Biz\Util\Service\SystemUtilService;
-use Topxia\Service\Common\ServiceKernel;
 
 class SystemUtilServiceImpl extends BaseService implements SystemUtilService
 {
-    //TODO 删除之前检查该文件是否被其他课程使用
-    public function removeUnusedUploadFiles()
-    {
-        $targets = $this->getSystemUtilDao()->getCourseIdsWhereCourseHasDeleted();
-        if (empty($targets)) {
-            return 0;
-        }
-        $targets = $this->plainTargetId($targets);
-        $conditions = array(
-            'targetType' => 'courselesson',
-            'targets' => $targets,
-        );
-        $uploadFiles = $this->getUploadFileService()->searchFiles(
-            $conditions,
-            array('createdTime' => 'DESC'),
-            0,
-            500
-        );
-
-        return $this->removeUploadFiles($uploadFiles);
-    }
-
     protected function plainTargetId($targets)
     {
-        $result = array();
+        $result = [];
         foreach ($targets as $target) {
             $result[] = $target['targetId'];
         }
@@ -58,6 +35,6 @@ class SystemUtilServiceImpl extends BaseService implements SystemUtilService
 
     protected function getUploadFileService()
     {
-        return ServiceKernel::instance()->createService('File:UploadFileService');
+        return $this->createService('File:UploadFileService');
     }
 }

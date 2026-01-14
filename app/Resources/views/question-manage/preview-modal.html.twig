@@ -1,16 +1,31 @@
 {% extends 'bootstrap-modal-layout.html.twig' %}
 
-{% block title %}{{'course.question_manage.preview'|trans}}{% endblock %}
+{% do script(['libs/vue.js', 'app/js/question-manage/preview/index.js']) %}
 
+{% block title %}{{'course.question_manage.preview'|trans}}{% endblock %}
+{% set currentTheme = current_theme() %}
+{% set themeConfig = app.request.get('themeEditing')|default(false) ? currentTheme.config  : currentTheme.confirmConfig %}
+{% set maincolor = themeConfig.maincolor|default('default') %}
 {% set modal_class = 'modal-lg' %}
+
+{% if maincolor != 'default' and setting('theme.code', 'jianmo') == 'jianmo' %}
+  {% do css(['app/css/item-bank-' ~ maincolor ~ '.css']) %}
+  {% do css(['app/css/item-bank-antdv-' ~ maincolor ~ '.css']) %}
+{% else %}
+  {% do css(['app/css/item-bank.css']) %}
+  {% do css(['app/css/item-bank-antdv.css']) %}
+{% endif %}
 
 {% block body %}
 
-  {% set questionTemplate = getQuestionTypeTemplate(question.type,'do') %}
-  {% if questionTemplate %}
-    {% include questionTemplate with {analysisCssHide:0} %}
-  {% endif %}
+  {% verbatim %}
+    <div id="app">
+    </div>
+  {% endverbatim %}
 
+  <input type="hidden" name="item" value="{{ item|json_encode }}">
+  <input type="hidden" name="question_bank_attachment_setting" value="{{ setting('question_bank_attachment_setting')|json_encode }}">
+  {% include 'attachment-upload/upload-data.html.twig'  %}
 {% endblock %}
 
 {% block footer %}

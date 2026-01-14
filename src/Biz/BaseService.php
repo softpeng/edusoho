@@ -2,15 +2,13 @@
 
 namespace Biz;
 
-use Monolog\Logger;
+use AppBundle\Common\Exception\AbstractException;
+use Biz\Org\OrgException;
 use Biz\User\CurrentUser;
 use Codeages\Biz\Framework\Event\Event;
-use Topxia\Service\Common\ServiceKernel;
-use Codeages\Biz\Framework\Service\Exception\ServiceException;
-use Codeages\Biz\Framework\Service\Exception\NotFoundException;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Codeages\Biz\Framework\Service\Exception\AccessDeniedException;
-use Codeages\Biz\Framework\Service\Exception\InvalidArgumentException;
+use Monolog\Logger;
+use Topxia\Service\Common\ServiceKernel;
 
 class BaseService extends \Codeages\Biz\Framework\Service\BaseService
 {
@@ -35,43 +33,14 @@ class BaseService extends \Codeages\Biz\Framework\Service\BaseService
     }
 
     /**
-     * @return EventDispatcherInterface
-     */
-    private function getDispatcher()
-    {
-        return $this->biz['dispatcher'];
-    }
-
-    /**
      * @param string      $eventName
      * @param Event|mixed $subject
      *
      * @return Event
      */
-    protected function dispatchEvent($eventName, $subject, $arguments = array())
+    protected function dispatchEvent($eventName, $subject, $arguments = [])
     {
-        if ($subject instanceof Event) {
-            $event = $subject;
-        } else {
-            $event = new Event($subject, $arguments);
-        }
-
-        return $this->getDispatcher()->dispatch($eventName, $event);
-    }
-
-    protected function beginTransaction()
-    {
-        $this->biz['db']->beginTransaction();
-    }
-
-    protected function commit()
-    {
-        $this->biz['db']->commit();
-    }
-
-    protected function rollback()
-    {
-        $this->biz['db']->rollback();
+        return $this->dispatch($eventName, $subject, $arguments);
     }
 
     /**
@@ -89,37 +58,16 @@ class BaseService extends \Codeages\Biz\Framework\Service\BaseService
      */
     protected function createAccessDeniedException($message = 'Access Denied')
     {
-        return new AccessDeniedException($message);
+        return parent::createAccessDeniedException($message);
     }
 
-    /**
-     * @param string $message
-     *
-     * @return InvalidArgumentException
-     */
-    protected function createInvalidArgumentException($message = '')
+    protected function createNewException($e)
     {
-        return new InvalidArgumentException($message);
-    }
+        if ($e instanceof AbstractException) {
+            throw $e;
+        }
 
-    /**
-     * @param string $message
-     *
-     * @return NotFoundException
-     */
-    protected function createNotFoundException($message = '')
-    {
-        return new NotFoundException($message);
-    }
-
-    /**
-     * @param string $message
-     *
-     * @return ServiceException
-     */
-    protected function createServiceException($message = '', $code = 0)
-    {
-        return new ServiceException($message, $code);
+        throw new \Exception();
     }
 
     protected function fillOrgId($fields)
@@ -127,9 +75,9 @@ class BaseService extends \Codeages\Biz\Framework\Service\BaseService
         $magic = $this->biz->service('System:SettingService')->get('magic');
         if (isset($magic['enable_org']) && $magic['enable_org']) {
             if (!empty($fields['orgCode'])) {
-                $org = ServiceKernel::instance()->createService('Org:OrgService')->getOrgByOrgCode($fields['orgCode']);
+                $org = $this->createService('Org:OrgService')->getOrgByOrgCode($fields['orgCode']);
                 if (empty($org)) {
-                    throw $this->createNotFoundException('组织机构不存在,更新失败');
+                    $this->createNewException(OrgException::NOTFOUND_ORG());
                 }
                 $fields['orgId'] = $org['id'];
                 $fields['orgCode'] = $org['orgCode'];
@@ -145,9 +93,7 @@ class BaseService extends \Codeages\Biz\Framework\Service\BaseService
 
     protected function purifyHtml($html, $trusted = false)
     {
-        $htmlHelper = $this->biz['html_helper'];
-
-        return $htmlHelper->purify($html, $trusted);
+        return $this->biz['html_helper']->purify($html, $trusted);
     }
 
     protected function getLock()
@@ -159,8 +105,34 @@ class BaseService extends \Codeages\Biz\Framework\Service\BaseService
         return $this->lock;
     }
 
-    protected function trans($message, $arguments = array(), $domain = null, $locale = null)
+    protected function trans($message, $arguments = [], $domain = null, $locale = null)
     {
         return ServiceKernel::instance()->trans($message, $arguments, $domain, $locale);
+    }
+
+    /**
+     * @param $code
+     *
+     * @return array
+     *               根据给定的权限，获取匹配的新|老后台的权限
+     */
+    protected function getMarriedPermissions($code)
+    {
+        $rolePermissionsYml = $this->biz['role.get_permissions_yml'];
+        $allPermissions = array_merge($rolePermissionsYml['adminV2'], $rolePermissionsYml['admin']);
+
+        return !empty($allPermissions[$code]) ? $allPermissions[$code] : [];
+    }
+
+    /**
+     * @param $pluginCode
+     *
+     * @return bool
+     */
+    protected function isPluginInstalled($pluginCode)
+    {
+        global $kernel;
+
+        return $kernel->getPluginConfigurationManager()->isPluginInstalled($pluginCode);
     }
 }

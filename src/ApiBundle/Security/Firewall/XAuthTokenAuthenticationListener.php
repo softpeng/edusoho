@@ -2,9 +2,10 @@
 
 namespace ApiBundle\Security\Firewall;
 
-use ApiBundle\Api\Exception\ErrorCode;
+use Biz\User\Support\PasswordValidator;
+use Biz\User\Support\RoleHelper;
+use Biz\User\UserException;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 
 class XAuthTokenAuthenticationListener extends BaseAuthenticationListener
 {
@@ -21,10 +22,14 @@ class XAuthTokenAuthenticationListener extends BaseAuthenticationListener
         }
 
         if (null === $rawToken = $this->getUserService()->getToken('mobile_login', $tokenInHeader)) {
-            throw new UnauthorizedHttpException('X-Auth-Token', 'Token is not exist or token is expired', null, ErrorCode::EXPIRED_CREDENTIAL);
+            throw UserException::NOTFOUND_TOKEN();
+        }
+        $user = $this->getUserService()->getUser($rawToken['userId']);
+        if (RoleHelper::isStaff($user['roles']) && !PasswordValidator::isStrongLevel($user['passwordUpgraded'])) {
+            throw UserException::NOTFOUND_TOKEN();
         }
 
-        $token = $this->createTokenFromRequest($request, $rawToken['userId']);
+        $token = $this->createTokenFromRequest($request, $rawToken['userId'], $rawToken['token']);
 
         $this->getTokenStorage()->setToken($token);
     }

@@ -1,0 +1,30 @@
+<span class="select-content">
+  <form class="js-task-detail" id="overview-task-list">
+    <span class="select-content bottom-border">
+        <select name="orderBy" class="select-time-select">
+          <option value="">{{ 'classroom.manage.data_statistics.course_detail_list.select_all'|trans }}</option>
+          <option value="CompletionRateDesc">{{ 'classroom.manage.data_statistics.student_detail_list.select_finish_rate'|trans }} ↓</option>
+          <option value="CompletionRateAsc">{{ 'classroom.manage.data_statistics.student_detail_list.select_finish_rate'|trans }} ↑</option>
+        </select>
+    </span>
+    <input class="select-time-input" type="text" name="titleLike" placeholder="{{ '课程名称'|trans }}">
+    <i class="es-icon es-icon-search cursor-pointer js-task-detail-search"></i>
+    <input type="hidden" name="classroomId" value="{{ classroom.id }}">
+  </form>
+</span>
+{% set smsSetting = setting('cloud_sms.sms_secondary_verification_export')|default('on') %}
+    {% if (smsSetting == 'on' or smsSetting == 1) %}
+      <button class=" cd-btn  mhs cd-btn-sm pull-right cd-btn-primary classroom-course-chart-js-export-btn"
+              type="button" id="student-add-btn"><i
+                class="es-icon es-icon-filedownload cd-text-sm"></i> {{ 'form.btn.export'|trans }}</button>
+    {% else %}
+      {% include 'export/export-btn.html.twig' with
+        {'exportFileName': 'classroom-statistics-course-learn',
+          'exportWebpack': true,
+          'targetFormId': 'overview-task-list'} %}
+    {% endif %}
+<div id="task-data-chart"
+     data-url="{{ path('classroom_data_statistics_course_detail', {id: classroom.id}) }}"
+     data-form=".js-task-detail"
+     class="mtl detail-chart-container chart-container text-sm">
+</div>

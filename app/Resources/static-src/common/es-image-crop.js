@@ -1,5 +1,4 @@
 import 'es-jcrop/js/Jcrop.js';
-import '!style-loader?insertAt=top!css-loader!nodeModulesDir/es-jcrop/css/Jcrop.min.css';
 
 class EsImageCrop {
   constructor(config) {
@@ -21,22 +20,21 @@ class EsImageCrop {
       selectWidth = (cropedWidth) * (naturalWidth / scaledWidth),
       selectHeight = (cropedHeight) * (naturalHeight / scaledHeight);
 
-      $picture.Jcrop({
-          trueSize: [naturalWidth, naturalHeight],
-          setSelect: [0, 0, selectWidth, selectHeight],
-          aspectRatio: ratio,
-          keySupport: false,
-          allowSelect: false,
-          onSelect(c) {
-              self.onSelect(c);
-          }
-      });
+    $picture.Jcrop({
+      trueSize: [naturalWidth, naturalHeight],
+      setSelect: [0, 0, selectWidth, selectHeight],
+      aspectRatio: ratio,
+      keySupport: false,
+      allowSelect: false,
+      onSelect(c) {
+        self.onSelect(c);
+      }
+    });
 
     // $picture.css('height', scaledHeight);
   }
 
   crop(postData = {}) {
-    console.log('crop');
     let self = this;
     let cropImgUrl = app.imgCropUrl;
     let newPostData = $.extend(self.element.data('Jcrop').ui.selection.last, postData, {
@@ -48,16 +46,21 @@ class EsImageCrop {
     //由于小数精度问题，jcrop计算出的x、y初始坐标可能小于0，比如-2.842170943040401e-14, 应当修正此类非法数据
     newPostData.x = newPostData.x > 0 ? newPostData.x : 0;
     newPostData.y = newPostData.y > 0 ? newPostData.y : 0;
-    $.post(cropImgUrl, newPostData, function(response) {
-      self.afterCrop(response);
-    });
+    if (postData.post === false) {
+      self.afterCrop(newPostData);
+    } else {
+      $.post(cropImgUrl, newPostData, function(response) {
+        self.afterCrop(response);
+      });
+    }
+
   }
 
-  onSelect(c) {
+  onSelect() {
     //override it
   }
 
-  afterCrop(response) {
+  afterCrop() {
     //override it
   }
 }

@@ -1,0 +1,7 @@
+{% if cloudStatus() %}
+  {% include 'question-manage/import-questions-modal/import-modal.html.twig' %}
+{% elseif has_permission('admin_v2_cloud_center') %}
+  {% include 'question-manage/import-questions-modal/administrator-have-not-opened.html.twig' %}
+{% else %}
+  {% include 'question-manage/import-questions-modal/non-administrator-perspective-modal.html.twig' %}
+{% endif %}

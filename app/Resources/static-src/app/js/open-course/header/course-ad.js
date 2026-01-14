@@ -11,11 +11,11 @@ class CourseAd {
     $.get(this.courseUrl).then((data) => {
       console.log(data);
       data.map((item) => {
-        html =  html + this.template(item.id, item.cover, item.title)
-      })
+        html =  html + this.template(item.id, item.cover, item.title);
+      });
 
       this.$element.find('.modal-body').html(html);
-    })
+    });
   }
 
   isWxAndroidBrowser() {
@@ -29,10 +29,10 @@ class CourseAd {
 
   template(id, cover, title) {
     return `<div class="modal-img">
-        <a href="/course_set/${id}">
+        <a href="/goods/show/${id}">
           <img class="img-responsive" src="${cover.middle}" alt="">
         </a>
-        <div class="title"><a class="link-dark" href="/course_set/${id}">${title}</a></div>
+        <div class="title"><a class="link-dark" href="/goods/show/${id}">${title}</a></div>
       </div>`;
   }
 
@@ -42,10 +42,10 @@ class CourseAd {
     }
 
     if (this.isWxAndroidBrowser()) {
-      document.getElementById('viewerIframe').contentWindow.document.getElementById('lesson-player').style.display = "none";
+      document.getElementById('viewerIframe').contentWindow.document.getElementById('lesson-player').style.display = 'none';
 
       this.$element.on('hide.bs.modal', () => {
-        document.getElementById('viewerIframe').contentWindow.document.getElementById('lesson-player').style.display = "block";
+        document.getElementById('viewerIframe').contentWindow.document.getElementById('lesson-player').style.display = 'block';
       });
     }
 

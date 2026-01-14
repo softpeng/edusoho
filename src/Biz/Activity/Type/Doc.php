@@ -5,19 +5,20 @@ namespace Biz\Activity\Type;
 use AppBundle\Common\ArrayToolkit;
 use Biz\Activity\Config\Activity;
 use Biz\Activity\Dao\DocActivityDao;
-use Biz\CloudPlatform\Client\CloudAPIIOException;
-use Biz\File\Service\UploadFileService;
 use Biz\Activity\Service\ActivityService;
+use Biz\CloudPlatform\Client\CloudAPIIOException;
+use Biz\Common\CommonException;
+use Biz\File\Service\UploadFileService;
 
 class Doc extends Activity
 {
     public function registerActions()
     {
-        return array(
+        return [
             'create' => 'AppBundle:Doc:create',
             'edit' => 'AppBundle:Doc:edit',
             'show' => 'AppBundle:Doc:show',
-        );
+        ];
     }
 
     protected function registerListeners()
@@ -27,19 +28,29 @@ class Doc extends Activity
 
     public function create($fields)
     {
-        $default = array(
+        if (empty($fields['media'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $media = json_decode($fields['media'], true);
+
+        if (empty($media['id'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $fields['mediaId'] = $media['id'];
+
+        $default = [
             'finishDetail' => 1,
-        );
+        ];
         $fields = array_merge($default, $fields);
 
-        $doc = ArrayToolkit::parts($fields, array(
+        $doc = ArrayToolkit::parts($fields, [
             'mediaId',
             'finishType',
             'finishDetail',
-        ));
+        ]);
 
-        $biz = $this->getBiz();
-        $doc['createdUserId'] = $biz['user']['id'];
+        $user = $this->getCurrentUser();
+        $doc['createdUserId'] = $user['id'];
         $doc['createdTime'] = time();
 
         $doc = $this->getDocActivityDao()->create($doc);
@@ -47,16 +58,16 @@ class Doc extends Activity
         return $doc;
     }
 
-    public function copy($activity, $config = array())
+    public function copy($activity, $config = [])
     {
-        $biz = $this->getBiz();
+        $user = $this->getCurrentUser();
         $doc = $this->getDocActivityDao()->get($activity['mediaId']);
-        $newDoc = array(
+        $newDoc = [
             'mediaId' => $doc['mediaId'],
             'finishType' => $doc['finishType'],
             'finishDetail' => $doc['finishDetail'],
-            'createdUserId' => $biz['user']['id'],
-        );
+            'createdUserId' => $user['id'],
+        ];
 
         return $this->getDocActivityDao()->create($newDoc);
     }
@@ -72,32 +83,41 @@ class Doc extends Activity
         return $this->getDocActivityDao()->update($doc['id'], $doc);
     }
 
-    public function isFinished($activityId)
-    {
-        $activity = $this->getActivityService()->getActivity($activityId);
-        $doc = $this->getDocActivityDao()->get($activity['mediaId']);
-
-        $result = $this->getTaskResultService()->getMyLearnedTimeByActivityId($activityId);
-        $result /= 60;
-
-        return !empty($result) && $result >= $doc['finishDetail'];
-    }
-
     public function update($targetId, &$fields, $activity)
     {
-        $updateFields = ArrayToolkit::parts($fields, array(
+        if (empty($fields['media'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $media = json_decode($fields['media'], true);
+
+        if (empty($media['id'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $fields['mediaId'] = $media['id'];
+        $updateFields = ArrayToolkit::parts($fields, [
             'mediaId',
             'finishType',
             'finishDetail',
-        ));
+        ]);
 
         $updateFields['updatedTime'] = time();
 
         return $this->getDocActivityDao()->update($targetId, $updateFields);
     }
 
+    public function updateByIds($ids, $fields)
+    {
+        if (empty($fields)) {
+            return;
+        }
+        $this->getDocActivityDao()->update(['ids' => $ids], $fields);
+    }
+
     public function delete($targetId)
     {
+        $doc = $this->getDocActivityDao()->get($targetId);
+        $this->getUploadFileService()->updateUsedCount($doc['mediaId']);
+
         return $this->getDocActivityDao()->delete($targetId);
     }
 
@@ -105,22 +125,24 @@ class Doc extends Activity
     {
         $activity = $this->getDocActivityDao()->get($targetId);
 
-        $activity['file'] = $this->getUploadFileService()->getFullFile($activity['mediaId']);
+        if ($activity) {
+            $activity['file'] = $this->getUploadFileService()->getFullFile($activity['mediaId']);
+        }
 
         return $activity;
     }
 
-    public function find($targetIds)
+    public function find($targetIds, $showCloud = 1)
     {
         $docActivities = $this->getDocActivityDao()->findByIds($targetIds);
         $mediaIds = ArrayToolkit::column($docActivities, 'mediaId');
         try {
             $files = $this->getUploadFileService()->findFilesByIds(
                 $mediaIds,
-                $showCloud = 1
+                $showCloud
             );
         } catch (CloudAPIIOException $e) {
-            $files = array();
+            $files = [];
         }
 
         if (empty($files)) {
@@ -135,6 +157,11 @@ class Doc extends Activity
         );
 
         return $docActivities;
+    }
+
+    public function findWithoutCloudFiles($targetIds)
+    {
+        return $this->getDocActivityDao()->findByIds($targetIds);
     }
 
     public function materialSupported()

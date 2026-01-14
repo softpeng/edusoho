@@ -2,7 +2,7 @@ import MaterialLibChoose from './base/materiallib-choose';
 import VideoImport from './base/import-video';
 import CourseFileChoose from './base/coursefile-choose';
 import UploadChooser from './base/upload-chooser';
-import Emitter from "component-emitter";
+import Emitter from 'component-emitter';
 
 class FileChooser extends Emitter{
   constructor(options) {
@@ -16,12 +16,12 @@ class FileChooser extends Emitter{
   }
 
   initTab() {
-    $("#material a").click(function (e) {
+    $('#material a').click(function (e) {
       e.preventDefault();
       let $this = $(this);
       $this.find('[type="radio"]').prop('checked', 'checked');
       $this.closest('li').siblings('li').find('[type="radio"]').prop('checked', false);
-      $this.tab('show')
+      $this.tab('show');
     });
 
     if($('.js-import-video').data('link')){
@@ -30,14 +30,16 @@ class FileChooser extends Emitter{
   }
 
   initFileChooser() {
-    const materialLibChoose = new MaterialLibChoose($('#chooser-material-panel'));
-    const courseFileChoose = new CourseFileChoose($('#chooser-course-panel'));
-    const videoImport = new VideoImport($('#import-video-panel'));
-    const uploader = new UploadChooser($('#chooser-upload-panel'));
-    materialLibChoose.on('select', file => this.fileSelect(file));
-    courseFileChoose.on('select', file => this.fileSelect(file));
-    videoImport.on('file.select', file => this.fileSelect(file));
-    uploader.on('select', file => this.fileSelect(file));
+    this.materialLibChoose = new MaterialLibChoose($('#chooser-material-panel'));
+    this.courseFileChoose = new CourseFileChoose($('#chooser-course-panel'));
+    this.videoImport = new VideoImport($('#import-video-panel'));
+    this.uploader = new UploadChooser($('#chooser-upload-panel'));
+
+    this.materialLibChoose.on('select', file => this.fileSelect(file));
+    this.courseFileChoose.on('select', file => this.fileSelect(file));
+    this.videoImport.on('file.select', file => this.fileSelect(file));
+    this.uploader.on('select', file => this.fileSelect(file));
+    this.uploader.on('start', file => this.emit('start', file));
   }
 
   fileSelect(file) {
@@ -45,11 +47,10 @@ class FileChooser extends Emitter{
     this.emit('select', file);
   }
 
-  fillTitle(file){
-    let $title = $("#title");
-    if ($title.length > 0 && $title.val()=='') {
-      let title = file.name.substring(0,file.name.lastIndexOf('.'));
-      $title.val(title);
+  fillTitle(file) {
+    const $title = $('#title');
+    if ($title.length > 0 && $title.val() === '') {
+      $title.val(file.name.replace(`.${file.ext}`, ''));
     }
   }
 

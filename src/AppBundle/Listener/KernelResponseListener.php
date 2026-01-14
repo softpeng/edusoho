@@ -2,12 +2,11 @@
 
 namespace AppBundle\Listener;
 
-use Biz\User\Service\UserActiveService;
-use Symfony\Component\HttpFoundation\Request;
-use Topxia\Service\Common\ServiceKernel;
-use Symfony\Component\HttpKernel\HttpKernelInterface;
+use AppBundle\Controller\OAuth2\OAuthUser;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpKernel\Event\FilterResponseEvent;
+use Symfony\Component\HttpKernel\HttpKernelInterface;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class KernelResponseListener extends AbstractSecurityDisabledListener
 {
@@ -20,7 +19,7 @@ class KernelResponseListener extends AbstractSecurityDisabledListener
 
     public function onKernelResponse(FilterResponseEvent $event)
     {
-        if ($event->getRequestType() != HttpKernelInterface::MASTER_REQUEST) {
+        if (HttpKernelInterface::MASTER_REQUEST != $event->getRequestType()) {
             return;
         }
 
@@ -32,8 +31,6 @@ class KernelResponseListener extends AbstractSecurityDisabledListener
 
         $currentUser = $this->getUserService()->getCurrentUser();
 
-        $this->generateUserActiveLog($request);
-
         $auth = $this->getSettingService()->get('auth');
 
         if ($currentUser->isLogin() && !in_array('ROLE_SUPER_ADMIN', $currentUser['roles'])
@@ -43,14 +40,15 @@ class KernelResponseListener extends AbstractSecurityDisabledListener
 
             if (in_array($request->getPathInfo(), $whiteList) || strstr($request->getPathInfo(), '/admin')
                 || strstr($request->getPathInfo(), '/register/submited') || strstr($request->getPathInfo(), '/mapi_v2')
+                || strstr($request->getPathInfo(), '/drag_captcha')
             ) {
                 return;
             }
 
             $isFillUserInfo = $this->checkUserinfoFieldsFill($currentUser);
-
-            if (!$isFillUserInfo) {
-                $url = $this->container->get('router')->generate('login_after_fill_userinfo', array('goto' => $this->getTargetPath($request)));
+            //TODO 因为移动端的第三方注册做到了web端，所以增加一个 skip 判断，如果以后移动端端这块业务剥离，这个判断要去掉
+            if (!$isFillUserInfo && !$request->getSession()->get(OAuthUser::SESSION_SKIP_KEY)) {
+                $url = $this->container->get('router')->generate('login_after_fill_userinfo', ['goto' => $this->getTargetPath($request)]);
 
                 $response = new RedirectResponse($url);
                 $event->setResponse($response);
@@ -60,30 +58,9 @@ class KernelResponseListener extends AbstractSecurityDisabledListener
         }
     }
 
-    private function generateUserActiveLog(Request $request)
-    {
-        $session = $request->getSession();
-
-        if (empty($session)) {
-            return;
-        }
-
-        $activeUserTime = $session->get('active_user_time', 0);
-
-        //当天登录激活
-        if ($activeUserTime != strtotime('today')) {
-            $currentUser = $this->getUserService()->getCurrentUser();
-            $isActiveUser = $this->getUserActiveLogService()->isActiveUser($currentUser->getId());
-            if (!$isActiveUser) {
-                $this->getUserActiveLogService()->createActiveUser($currentUser->getId());
-            }
-            $request->getSession()->set('active_user_time', strtotime('today'));
-        }
-    }
-
     protected function getRouteWhiteList()
     {
-        return array(
+        return [
             '/fill/userinfo', '/login', '/logout', '/login_check', '/register/mobile/check',
             '/register/email/check', '/login/bind/weixinmob/newset',
             '/login/bind/weixinmob/existbind', '/login/bind/weixinweb/newset',
@@ -93,14 +70,16 @@ class KernelResponseListener extends AbstractSecurityDisabledListener
             '/login/bind/weixinmob/choose', '/login/bind/weixinmob/changetoexist',
             '/login/bind/qq/new', '/login/bind/weibo/new', '/login/bind/renren/new',
             '/login/bind/weixinmob/new', '/login/bind/weixinweb/new',
-            '/partner/discuz/api/notify', '/partner/phpwind/api/notify', '/partner/login', '/partner/logout',
             '/login/weixinmob', '/login/bind/weixinmob/existbind',
             '/captcha_num', '/register/captcha/check', '/edu_cloud/sms_send',
-            '/edu_cloud/sms_check/sms_bind',
-        );
+            '/edu_cloud/sms_check/sms_bind', '/settings/check_login_password',
+            '/register/email_or_mobile/check', '/settings/bind_mobile', '/scrm/buy/goods/callback',
+            '/settings/mobile_bind', '/edu_cloud/sms_send_check_captcha', '/file/upload', '/file/img/crop', '/online/sample',
+            '/settings/setup_password',
+        ];
     }
 
-    protected function generateUrl($router, $params = array(), $withHost = false)
+    protected function generateUrl($router, $params = [], $withHost = UrlGeneratorInterface::ABSOLUTE_PATH)
     {
         return $this->container->get('router')->generate($router, $params, $withHost);
     }
@@ -115,30 +94,14 @@ class KernelResponseListener extends AbstractSecurityDisabledListener
             $targetPath = $request->headers->get('Referer');
         }
 
-        if ($targetPath == $this->generateUrl('login', array(), true)) {
+        if ($targetPath == $this->generateUrl('login', [], UrlGeneratorInterface::ABSOLUTE_URL)) {
             return $this->generateUrl('homepage');
         }
 
         $url = explode('?', $targetPath);
 
-        if ($url[0] == $this->generateUrl('partner_logout', array(), true)) {
-            return $this->generateUrl('homepage');
-        }
-
-        if ($url[0] == $this->generateUrl('password_reset_update', array(), true)) {
-            $targetPath = $this->generateUrl('homepage', array(), true);
-        }
-
-        if ($url[0] == $this->generateUrl('login_bind_callback', array('type' => 'weixinmob'))
-            || $url[0] == $this->generateUrl('login_bind_callback', array('type' => 'weixinweb'))
-            || $url[0] == $this->generateUrl('login_bind_callback', array('type' => 'qq'))
-            || $url[0] == $this->generateUrl('login_bind_callback', array('type' => 'weibo'))
-            || $url[0] == $this->generateUrl('login_bind_callback', array('type' => 'renren'))
-            || $url[0] == $this->generateUrl('login_bind_choose', array('type' => 'qq'))
-            || $url[0] == $this->generateUrl('login_bind_choose', array('type' => 'weibo'))
-            || $url[0] == $this->generateUrl('login_bind_choose', array('type' => 'renren'))
-        ) {
-            $targetPath = $this->generateUrl('homepage');
+        if ($url[0] == $this->generateUrl('password_reset_update', [], UrlGeneratorInterface::ABSOLUTE_URL)) {
+            $targetPath = $this->generateUrl('homepage', [], UrlGeneratorInterface::ABSOLUTE_URL);
         }
 
         return $targetPath;
@@ -164,26 +127,18 @@ class KernelResponseListener extends AbstractSecurityDisabledListener
         return $isFillUserInfo;
     }
 
-    protected function getServiceKernel()
-    {
-        return ServiceKernel::instance();
-    }
-
     protected function getSettingService()
     {
-        return ServiceKernel::instance()->createService('System:SettingService');
+        return $this->getBiz()->service('System:SettingService');
     }
 
     protected function getUserService()
     {
-        return ServiceKernel::instance()->createService('User:UserService');
+        return $this->getBiz()->service('User:UserService');
     }
 
-    /**
-     * @return UserActiveService
-     */
-    private function getUserActiveLogService()
+    protected function getBiz()
     {
-        return ServiceKernel::instance()->createService('User:UserActiveService');
+        return $this->container->get('biz');
     }
 }

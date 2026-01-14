@@ -10,9 +10,13 @@ interface MaterialService
 
     public function batchCreateMaterials($materials);
 
+    public function batchUpdateMaterials($materials);
+
+    public function batchDeleteMaterials(array $materials);
+
     public function updateMaterial($id, $fields, $argument);
 
-    public function deleteMaterial($courseSetId, $materialId);
+    public function deleteMaterial($courseSetId, $materialId, $argument = '');
 
     public function deleteMaterialsByLessonId($lessonId, $courseType = 'course');
 
@@ -59,4 +63,12 @@ interface MaterialService
     public function findUsedCourseSetMaterials($fileIds, $courseSetId);
 
     public function findFullFilesAndSort($materials);
+
+    public function findMaterialsByIds($ids);
+
+    public function searchMaterialCountGroupByCourseSetId($conditions, $start, $limit);
+
+    public function countDistinctCourseSet($conditions);
+
+    public function countCourseSetGroupByFileId($conditions);
 }

@@ -2,10 +2,10 @@
 
 namespace AppBundle\Controller\My;
 
+use AppBundle\Common\Paginator;
 use AppBundle\Controller\BaseController;
 use Biz\OpenCourse\Service\OpenCourseService;
 use Symfony\Component\HttpFoundation\Request;
-use AppBundle\Common\Paginator;
 
 class OpenCourseController extends BaseController
 {
@@ -13,11 +13,12 @@ class OpenCourseController extends BaseController
     {
         $user = $this->getCurrentUser();
 
+        $tab = $request->query->get('tab', 'publish');
         if (!$user->isTeacher()) {
             return $this->createMessageResponse('error', '您不是教师，不能查看此页面! ');
         }
 
-        $conditions = $this->_createSearchConditions($filter);
+        $conditions = $this->_createSearchConditions($filter, $tab);
 
         $paginator = new Paginator(
             $request,
@@ -27,43 +28,44 @@ class OpenCourseController extends BaseController
 
         $openCourses = $this->getOpenCourseService()->searchCourses(
             $conditions,
-            array('createdTime' => 'DESC'),
+            ['createdTime' => 'DESC'],
             $paginator->getOffsetCount(),
             $paginator->getPerPageCount()
         );
 
-        return $this->render('my/teaching/open-course.html.twig', array(
+        return $this->render('my/teaching/open-course.html.twig', [
             'courses' => $openCourses,
             'paginator' => $paginator,
             'filter' => $filter,
-        ));
+            'tab' => $tab,
+        ]);
     }
 
-    private function _createSearchConditions($filter)
+    private function _createSearchConditions($filter, $tab)
     {
         $user = $this->getCurrentUser();
 
-        $conditions = array(
+        $status = ['publish' => 'published', 'unPublish' => 'draft', 'closed' => 'closed'];
+        $conditions = [
             'type' => $filter,
-        );
+            'status' => $status[$tab],
+        ];
 
         if ($user->isAdmin()) {
             $conditions['userId'] = $user['id'];
-        } else {
-            $conditions['courseIds'] = array(-1);
-            $members = $this->getOpenCourseService()->searchMembers(
-                array('userId' => $user['id'], 'role' => 'teacher'),
-                array('createdTime' => 'ASC'),
-                0,
-                999
-            );
-
-            if ($members) {
-                foreach ($members as $key => $member) {
-                    $conditions['courseIds'][] = $member['courseId'];
-                }
-            }
+            $openCourses = $this->getOpenCourseService()->searchCourses($conditions, [], 0, PHP_INT_MAX, ['id']);
+            $conditions['courseIds'] = array_column($openCourses, 'id');
+            unset($conditions['userId']);
         }
+        $members = $this->getOpenCourseService()->searchMembers(
+            ['userId' => $user['id'], 'role' => 'teacher'],
+            [],
+            0,
+            PHP_INT_MAX,
+            ['courseId']
+        );
+        $conditions['courseIds'] = $conditions['courseIds'] ?? [];
+        $conditions['courseIds'] = array_merge($conditions['courseIds'], array_column($members, 'courseId')) ?: [-1];
 
         return $conditions;
     }

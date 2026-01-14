@@ -24,6 +24,14 @@ interface GroupService
 
     public function openGroup($id);
 
+    public function deleteGroup($id);
+
+    public function deleteGroupsByUserId($userId);
+
+    public function recommendGroup($id, $number);
+
+    public function cancelRecommendGroup($id);
+
     public function changeGroupImg($id, $field, $data);
 
     public function joinGroup($user, $id);
@@ -53,4 +61,6 @@ interface GroupService
     public function waveGroup($id, $field, $diff);
 
     public function waveMember($groupId, $userId, $field, $diff);
+
+    public function validateWaveField($waveData, $field, $diff);
 }

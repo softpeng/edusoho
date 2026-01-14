@@ -1,0 +1,65 @@
+{% extends 'admin-v2/layout.html.twig' %}
+
+{% set menu = 'admin_v2_sms_secondary_verification_setting' %}
+{% do script(['app/js/admin-v2/security/sms-secondary-verification/index.js'])  %}
+
+{% block main %}
+{{ web_macro.flash_messages() }}
+
+<form id='sms-secondary-verification-form' class="form-horizontal" method="post" novalidate>
+  <fieldset>
+    <div class="form-group">
+      <div class="col-md-3 control-label">
+        <label>{{ 'admin.sms_secondary_verification.export_setting'|trans }}</label>
+      </div>
+      <div class="controls col-md-8 radios">
+        <label>
+          <input type="radio" name="sms_secondary_verification_export"
+                 value="1" {% if setting.sms_secondary_verification_export %} checked {% endif %}> {{ 'admin.sms_secondary_verification.open_radio'|trans }}
+        </label>
+        <label>
+          <input type="radio" name="sms_secondary_verification_export"
+                 value="0" {% if not setting.sms_secondary_verification_export %} checked {% endif %}>{{ 'admin.sms_secondary_verification.close_radio'|trans }}
+        </label>
+      </div>
+      <div class="help-block col-md-8 col-md-offset-3">
+        <span>{{ 'admin.sms_secondary_verification.export_setting.tips'|trans }}</span>
+        <div id="export-warning" style="color: #d9534f; margin-top: 8px;">
+          <strong>{{ 'admin.sms_secondary_verification.export_warning_title'|trans }}：</strong>{{ 'admin.sms_secondary_verification.export_warning_content'|trans }}
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <div class="col-md-3 control-label">
+        <label>{{ 'admin.sms_secondary_verification.delete_user_setting'|trans }}</label>
+      </div>
+      <div class="controls col-md-8 radios">
+        <label>
+          <input type="radio" name="sms_secondary_verification_delete_user"
+                 value="1" {% if setting.sms_secondary_verification_delete_user %} checked {% endif %}> {{ 'admin.sms_secondary_verification.open_radio'|trans }}
+        </label>
+        <label>
+          <input type="radio" name="sms_secondary_verification_delete_user"
+                 value="0" {% if not setting.sms_secondary_verification_delete_user %} checked {% endif %}>{{ 'admin.sms_secondary_verification.close_radio'|trans }}
+        </label>
+      </div>
+      <div class="help-block col-md-8 col-md-offset-3">
+        <span>{{ 'admin.sms_secondary_verification.delete_user_setting.tips'|trans }}</span>
+      </div>
+    </div>
+
+  </fieldset>
+
+  <div class="form-group">
+    <div class="col-md-3 control-label"></div>
+    <div class="controls col-md-8">
+      <button type="submit" class="btn btn-primary">{{ 'form.btn.submit'|trans }}</button>
+    </div>
+  </div>
+
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token('site') }}">
+
+</form>
+
+{% endblock %}

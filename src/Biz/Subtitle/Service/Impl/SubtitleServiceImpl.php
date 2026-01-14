@@ -3,13 +3,26 @@
 namespace Biz\Subtitle\Service\Impl;
 
 use Biz\BaseService;
+use Biz\Common\CommonException;
 use Biz\File\Service\UploadFileService;
+use Biz\File\UploadFileException;
 use Biz\Subtitle\Dao\SubtitleDao;
 use AppBundle\Common\ArrayToolkit;
 use Biz\Subtitle\Service\SubtitleService;
+use Biz\Subtitle\SubtitleException;
 
 class SubtitleServiceImpl extends BaseService implements SubtitleService
 {
+    public function searchSubtitles($conditions, $orderBy, $start, $limit)
+    {
+        return $this->getSubtitleDao()->search($conditions, $orderBy, $start, $limit);
+    }
+
+    public function findSubtitlesByMediaIds($mediaIds)
+    {
+        return $this->searchSubtitles(array('mediaIds' => $mediaIds), array(), 0, \PHP_INT_MAX);
+    }
+
     public function findSubtitlesByMediaId($mediaId, $ssl = false)
     {
         $subtitles = $this->getSubtitleDao()->findSubtitlesByMediaId($mediaId);
@@ -28,8 +41,8 @@ class SubtitleServiceImpl extends BaseService implements SubtitleService
         $subtitle = $this->getSubtitleDao()->get($id);
         $fileId = $subtitle['subtitleId'];
         $file = $this->getUploadFileService()->getFile($fileId);
-        if (empty($file) || $file['type'] != 'subtitle') {
-            throw $this->createNotFoundException("subtitleUploadFile{#$fileId} not found");
+        if (empty($file) || 'subtitle' != $file['type']) {
+            $this->createNewException(UploadFileException::NOTFOUND_FILE());
         }
 
         $downloadFile = $this->getUploadFileService()->getDownloadMetas($fileId);
@@ -42,14 +55,14 @@ class SubtitleServiceImpl extends BaseService implements SubtitleService
     public function addSubtitle($subtitle)
     {
         if (empty($subtitle)) {
-            throw $this->createInvalidArgumentException('create failed');
+            $this->createNewException(CommonException::ERROR_PARAMETER());
         }
 
         //提供的服务只允许最多添加4个字幕
         $existSubtitles = $this->findSubtitlesByMediaId($subtitle['mediaId']);
 
         if (count($existSubtitles) >= 4) {
-            throw $this->createServiceException('at most four subtitles to be allowed');
+            $this->createNewException(SubtitleException::COUNT_LIMIT());
         }
 
         $subtitle = $this->filterSubtitleFields($subtitle);
@@ -65,13 +78,33 @@ class SubtitleServiceImpl extends BaseService implements SubtitleService
     {
         $subtitle = $this->getSubtitle($id);
         if (empty($subtitle)) {
-            throw $this->createNotFoundException('subtitle{#id} not found');
+            $this->createNewException(SubtitleException::NOTFOUND_SUBTITLE());
         }
 
         $this->getSubtitleDao()->delete($id);
         $this->getUploadFileService()->deleteFile($subtitle['subtitleId']);
 
         return true;
+    }
+
+    public function setSubtitlesUrls($lesson, $ssl = false)
+    {
+        if (!empty($lesson['mediaId'])) {
+            $subtitles = $this->findSubtitlesByMediaId($lesson['mediaId'], $ssl);
+
+            $subtitlesUrls = array();
+            foreach ($subtitles as $subtitle) {
+                if ('success' == $subtitle['convertStatus']) {
+                    $subtitlesUrls[] = $subtitle['url'];
+                }
+            }
+
+            if (!empty($subtitlesUrls)) {
+                $lesson['subtitlesUrls'] = $subtitlesUrls;
+            }
+        }
+
+        return $lesson;
     }
 
     protected function fillMetas($subtitles, $ssl = false)
@@ -81,7 +114,7 @@ class SubtitleServiceImpl extends BaseService implements SubtitleService
         $fileIds = ArrayToolkit::column($subtitles, 'subtitleId');
         $files = $this->getUploadFileService()->findFilesByIds($fileIds, true, array('resType' => 'sub'));
         foreach ($files as $file) {
-            if (!($file['type'] == 'subtitle' || $file['targetType'] == 'subtitle')) {
+            if (!('subtitle' == $file['type'] || 'subtitle' == $file['targetType'])) {
                 continue;
             }
             $downloadFile = $this->getUploadFileService()->getDownloadMetas($file['id'], $ssl);
@@ -95,7 +128,7 @@ class SubtitleServiceImpl extends BaseService implements SubtitleService
     protected function filterSubtitleFields($fields)
     {
         if (!ArrayToolkit::requireds($fields, array('name', 'subtitleId', 'mediaId'))) {
-            throw $this->createInvalidArgumentException('parameter invalid');
+            $this->createNewException(CommonException::ERROR_PARAMETER_MISSING());
         }
 
         $subtitle = array();

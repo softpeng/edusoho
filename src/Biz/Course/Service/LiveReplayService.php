@@ -2,6 +2,8 @@
 
 namespace Biz\Course\Service;
 
+use Biz\System\Annotation\Log;
+
 /**
  * 直播回放, lessonId 在type为liveOpen情况下是直播公开课的课时ID, type为live情况下是课程的activity的ID.
  *
@@ -13,6 +15,7 @@ interface LiveReplayService
     const REPLAY_GENERATING_STATUS = 'generating';
     const REPLAY_VIDEO_GENERATE_STATUS = 'videoGenerated';
     const REPLAY_GENERATE_STATUS = 'generated';
+    const REPLAY_FAILURE_STATUS = 'failure';
 
     /**
      * @before getCourseLessonReplay
@@ -32,6 +35,8 @@ interface LiveReplayService
      * @return array
      */
     public function findReplayByLessonId($lessonId, $lessonType = 'live');
+
+    public function findReplaysByLessonIds($lessonIds, $lessonType = 'live');
 
     /**
      * @before addCourseLessonReplay
@@ -99,9 +104,27 @@ interface LiveReplayService
 
     public function findReplaysByCourseIdAndLessonId($courseId, $lessonId, $lessonType = 'live');
 
-    public function entryReplay($replayId, $liveId, $liveProvider, $ssl = false);
+    public function entryReplay($replayId, $liveId, $liveProvider, $ssl = false, $isNormalCourse = true);
 
     public function updateReplayShow($showReplayIds, $lessonId);
 
+    /**
+     * @param $liveId
+     * @param $courseId
+     * @param $lessonId
+     * @param $liveProvider
+     * @param $type
+     *
+     * @return mixed
+     * @Log(module="live",action="generate_live_replay",funcName="findReplaysByCourseIdAndLessonId",param="courseId,liveId,type")
+     */
     public function generateReplay($liveId, $courseId, $lessonId, $liveProvider, $type);
+
+    public function recordReplayVideo($replayId, $liveId);
+
+    public function handleReplayGenerateEvent($liveId, $replayDatas);
+
+    public function handleReplayGenerateEventForOpenCourse($liveId, $replayDatas);
+
+    public function getReplayByLessonIdAndReplayIdAndType($lessonId, $replayId, $type);
 }

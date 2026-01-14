@@ -1,16 +1,23 @@
-$("body").on("click", ".es-qrcode", function () {
-  var $this = $(this);
-  if ($this.hasClass('open')) {
-    $this.removeClass('open');
+$('.es-qrcode').on('click', (event) => {
+  const $target = $(event.currentTarget);
+  if ($target.hasClass('open')) {
+    $target.removeClass('open');
   } else {
     $.ajax({
-      type: "post",
-      url: $this.data("url"),
-      dataType: "json",
-      success: function (data) {
-        $this.find(".qrcode-popover img").attr("src", data.img);
-        $this.addClass('open');
+      type: 'post',
+      url: $target.data('url'),
+      dataType: 'json',
+      success: (data) => {
+        $target.find('.qrcode-popover img').attr('src', data.img);
+        $target.addClass('open');
       }
     });
   }
-})
+});
+
+$('.es-wrap').on('click', () => {
+  const $qrcode = $('.es-qrcode');
+  if ($qrcode.hasClass('open')) {
+    $qrcode.removeClass('open');
+  }
+});

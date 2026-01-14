@@ -2,18 +2,16 @@
 
 namespace ApiBundle\Api\Resource\App;
 
+use ApiBundle\Api\Annotation\ApiConf;
 use ApiBundle\Api\ApiRequest;
 use ApiBundle\Api\Resource\AbstractResource;
-use ApiBundle\Api\Resource\Course\Course;
-use Biz\Classroom\Service\ClassroomService;
 use Biz\Course\Service\CourseSetService;
 use Biz\DiscoveryColumn\Service\DiscoveryColumnService;
-use Biz\System\Service\SettingService;
-use ApiBundle\Api\Annotation\ApiConf;
 
 class AppChannel extends AbstractResource
 {
-    CONST DEFAULT_DISPLAY_COUNT = 6;
+    const DEFAULT_DISPLAY_COUNT = 6;
+
     /**
      * @ApiConf(isRequiredAuth=false)
      */
@@ -24,35 +22,35 @@ class AppChannel extends AbstractResource
         if (!$channel) {
             return $this->getDefaultChannel();
         }
+
         return $channel;
     }
 
     private function getDefaultChannel()
     {
-        $conditions = array(
+        $conditions = [
             'status' => 'published',
             'parentId' => 0,
-            'showable' => 1,
-            'type' => 'normal'
-        );
+            'type' => 'normal',
+        ];
         $latestCourseSets = $courseSets = $this->getCourseSetService()->searchCourseSets(
             $conditions,
-            array('createdTime' => 'DESC'),
+            ['createdTime' => 'DESC'],
             0,
             self::DEFAULT_DISPLAY_COUNT
         );
 
-        $defaultChannel = array(
-            array(
+        $defaultChannel = [
+            [
                 'title' => '最新课程',
                 'type' => 'course',
                 'categoryId' => 0,
                 'orderType' => 'new',
                 'showCount' => self::DEFAULT_DISPLAY_COUNT,
                 'data' => $latestCourseSets,
-                'actualCount' => self::DEFAULT_DISPLAY_COUNT
-            )
-        );
+                'actualCount' => self::DEFAULT_DISPLAY_COUNT,
+            ],
+        ];
 
         return $defaultChannel;
     }

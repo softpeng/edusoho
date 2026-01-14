@@ -4,6 +4,8 @@ namespace Biz\System\Service\Impl;
 
 use Biz\BaseService;
 use Biz\System\Service\SettingService;
+use MarketingMallBundle\Biz\Mall\Service\MallService;
+use MarketingMallBundle\Client\MarketingMallClient;
 
 class SettingServiceImpl extends BaseService implements SettingService
 {
@@ -15,15 +17,55 @@ class SettingServiceImpl extends BaseService implements SettingService
     public function set($name, $value)
     {
         $this->getSettingDao()->deleteByName($name);
-        $setting = array(
+        $setting = [
             'name' => $name,
             'value' => serialize($value),
-        );
+        ];
         $this->getSettingDao()->create($setting);
         $this->clearCache();
     }
 
-    public function get($name, $default = array())
+    /**
+     * @param $name
+     * @param null $default
+     *
+     * @return array|mixed|null
+     *                          get single node setting; eg: 'site.name.test' => get('site')['name']['test']
+     */
+    public function node($name, $default = null)
+    {
+        $names = explode('.', $name);
+
+        $name = array_shift($names);
+
+        if (empty($name)) {
+            return $default;
+        }
+
+        $value = $this->get($name);
+
+        if (!isset($value)) {
+            return $default;
+        }
+
+        if (empty($names)) {
+            return $value;
+        }
+
+        $result = $value;
+
+        foreach ($names as $name) {
+            if (!isset($result[$name])) {
+                return $default;
+            }
+
+            $result = $result[$name];
+        }
+
+        return $result;
+    }
+
+    public function get($name, $default = [])
     {
         if (is_null($this->cached)) {
             $this->cached = $this->getCacheService()->get(self::CACHE_NAME);
@@ -62,11 +104,11 @@ class SettingServiceImpl extends BaseService implements SettingService
     public function setByNamespace($namespace, $name, $value)
     {
         $this->getSettingDao()->deleteByNamespaceAndName($namespace, $name);
-        $setting = array(
+        $setting = [
             'namespace' => $namespace,
             'name' => $name,
             'value' => serialize($value),
-        );
+        ];
         $this->getSettingDao()->create($setting);
         $this->clearCache();
     }
@@ -75,6 +117,35 @@ class SettingServiceImpl extends BaseService implements SettingService
     {
         $this->getSettingDao()->deleteByNamespaceAndName($namespace, $name);
         $this->clearCache();
+    }
+
+    public function isReservationOpen()
+    {
+        $setting = $this->get('plugin_reservation', []);
+
+        return !empty($setting['reservation_enabled']) && 1 == $setting['reservation_enabled'];
+    }
+
+    /**
+     * 通知商城云短信配置修改
+     *
+     * @return mixed
+     */
+    public function notifyCloudSmsUpdate(array $params)
+    {
+        if (!$this->getMallService()->isInit()) {
+            return;
+        }
+
+        return (new MarketingMallClient($this->biz))->notifyCloudSmsUpdate($params);
+    }
+
+    /**
+     * @return MallService
+     */
+    protected function getMallService()
+    {
+        return $this->biz->service('Mall:MallService');
     }
 
     protected function clearCache()
@@ -97,7 +168,7 @@ class SettingServiceImpl extends BaseService implements SettingService
     {
         try {
             $user = $this->getCurrentUser()->toArray();
-            if (empty($user['selectedOrgId']) || $user['selectedOrgId'] === 1) {
+            if (empty($user['selectedOrgId']) || 1 === $user['selectedOrgId']) {
                 return 'default';
             }
 

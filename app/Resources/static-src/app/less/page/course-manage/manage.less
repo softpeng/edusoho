@@ -1,18 +1,6 @@
   // 课程管理页面头部
-.upload-height{
+.upload-height {
   line-height: 25px;
-}
-
-.lesson-list-wrapper {
-  &.pbs{
-    padding-bottom: 100px !important;
-  }
-  &.pbm{
-    padding-bottom: 150px !important;
-  }
-  &.pbl{
-    padding-bottom: 200px !important;
-  }
 }
 
 .lesson-list {
@@ -70,6 +58,13 @@
   position: absolute;
   right: 15px;
   padding-right: 35px;
+}
+
+.lesson-manage-section {
+  .lesson-list .item-actions {
+    right: 40px;
+    background-color: transparent;
+  }
 }
 
 .lesson-list .item-actions .btn,
@@ -291,12 +286,20 @@
     margin-bottom: 20px;
   }
   .col-10,
+  .col-15,
+  .col-65,
   .col-80{
     float: left;
     padding: 0 10px;
   }
   .col-10{
     width: 10%;
+  }
+  .col-15{
+    width: 15%;
+  }
+  .col-65{
+    width: 65%;
   }
   .col-80{
     width: 80%;
@@ -306,7 +309,7 @@
   }
   .student-detail{
     padding: 0 7px;
-    margin-bottom: 0;
+    margin-bottom: 1px;
     &.sm li{
       width: 4%;
       margin-bottom: 15px;
@@ -411,7 +414,7 @@
     }
     .chart-container {
       width: 100%;
-      height: 250px;
+      min-height: 250px;
     }
     .nav.nav-tabs {
       border-bottom: 0;

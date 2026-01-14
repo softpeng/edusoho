@@ -1,5 +1,5 @@
-import Emitter from "common/es-event-emitter";
-import screenfull from "screenfull";
+import Emitter from 'common/es-event-emitter';
+import screenfull from 'es-screenfull';
 
 export default class PPT extends Emitter {
   constructor({element, slides, watermark}) {
@@ -15,7 +15,7 @@ export default class PPT extends Emitter {
     };
     this.total = this.slides.length;
     this._page = 0;
-    this.placeholder = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAAANSURBVBhXYzh8+PB/AAffA0nNPuCLAAAAAElFTkSuQmCC";
+    this.placeholder = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAAANSURBVBhXYzh8+PB/AAffA0nNPuCLAAAAAElFTkSuQmCC';
     this._init();
   }
 
@@ -180,7 +180,11 @@ export default class PPT extends Emitter {
   }
 
   _onFullScreen() {
+    const isIOS = !!navigator.userAgent.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/); //ios终端
     if (!screenfull.enabled) {
+      if(isIOS) {
+        $('#task-content-iframe', parent.document).toggleClass('ios-full-screen');
+      }
       return;
     }
     if (screenfull.isFullscreen) {

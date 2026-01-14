@@ -1,14 +1,26 @@
 <div class="es-section open-course-detail clearfix">
   <div class="open-course-detail-main media hidden-sm hidden-xs">
     <div class="media-left">
-      <img class="img-responsive" src="{{ filepath(course.smallPicture|default(''), 'course.png') }}"
+      <img class="img-responsive" src="{{ filepath(course.middlePicture|default(''), 'course.png') }}"
            alt="{{ course.title }}">
     </div>
     <div class="media-body">
       <div class="title">{{ course.title }}</div>
       <div class="metas">
-        <span><i class="es-icon es-icon-removeredeye mrs"></i>{{ course.hitNum }}</span>
-        <span><i class="es-icon es-icon-textsms mrs"></i>{{ course.postNum }}</span>
+        {% if setting('course.show_student_num_enabled', '1') == 1  %}
+          {% if setting('course.show_cover_num_mode') == 'studentNum' %}
+            <span class="num">
+              <i class="es-icon es-icon-people mrs"></i>{{ course.studentNum }}
+            </span>
+          {% elseif setting('course.show_cover_num_mode') == 'hitNum' %}
+            <span><i class="es-icon es-icon-removeredeye mrs"></i>{{ course.hitNum }}</span>
+          {% endif %}
+          </span>
+        {% endif %}
+
+        {% if setting('course.show_student_review_num_enable', '1') == 1 %}
+          <span><i class="es-icon es-icon-textsms mrs"></i>{{ course.postNum }}</span>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -22,7 +34,7 @@
       <span>{{ course.likeNum }}</span>
     </div>
     <div class="operation-list">
-      <div class="operation-img  operation-share es-share top">
+      <div class="operation-img  operation-share es-share top js-es-share">
         <a href="" class="dropdown-toggle" data-toggle="dropdown"><i class="es-icon es-icon-share"></i></a>
         {% include 'common/share-dropdown.html.twig' with { type:'open_course', 'useSeajs': true } %}
       </div>
@@ -31,8 +43,8 @@
     <div class="operation-list  no-border">
       <div class="operation-img operation-collection {% if memberFavorite %}active{% endif %}">
         <a href="javascript:;" class="js-favorite-num"
-           data-cancel-favorite-url="{{ path('open_course_unfavorite',{id:course.id}) }}"
-           data-favorite-url="{{ path('open_course_favorite',{id:course.id}) }}"
+           data-target-type="openCourse"
+           data-target-id="{{ course.id }}"
            data-login-url="{{ path('login_ajax') }}"
            ><i
               class="es-icon es-icon-bookmarkoutline"></i></a>
@@ -44,7 +56,11 @@
         <a class="js-qrcode qrcode-popover top"> 
           <i class="es-icon es-icon-phone1"></i>
           <div class="qrcode-content">
-            <img src="{{ qrcode_data_uri(url('open_course_show', {courseId: course.id})) }}" alt="">
+            {% if lesson|default() %}
+              <img src="{{ qrcode_data_uri(url('open_course_lesson_learn', {courseId: course.id, lessonId: lesson.id})) }}" alt="">
+            {% else %}
+              <img src="{{ qrcode_data_uri(url('open_course_show', {courseId: course.id})) }}" alt="">
+            {% endif %}
             <span class="gray-darker text-center text-sm">{{ 'my.teaching.open_course.infobar.WeChat_QR_code_lerarn_course'|trans|raw }}</span>
           </div>
         </a>
@@ -52,7 +68,7 @@
       {{ 'my.teaching.open_course.infobar.WeChat_QR_code'|trans }}
     </div>
    </div>
-  {% if member.role|default('') == 'teacher' or is_granted('ROLE_ADMIN') %}
+  {% if member.role|default('') == 'teacher' or has_permission('admin_v2_open_course_manage') %}
     <a href="{{ path('open_course_manage',{id:course.id}) }}" class="btn btn-default btn-setting hidden-xs hidden-sm" title="{{'my.teaching.open_course.infobar.course_manage_btn'|trans}}">
       <i class="es-icon es-icon-setting"></i>
     </a>

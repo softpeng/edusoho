@@ -2,12 +2,13 @@
 
 namespace Biz\Activity\Type;
 
+use AppBundle\Common\ArrayToolkit;
+use Biz\Activity\ActivityException;
 use Biz\Activity\Config\Activity;
 use Biz\Activity\Dao\AudioActivityDao;
 use Biz\CloudPlatform\Client\CloudAPIIOException;
+use Biz\Common\CommonException;
 use Biz\File\Service\UploadFileService;
-use Biz\Activity\Service\ActivityService;
-use AppBundle\Common\ArrayToolkit;
 
 class Audio extends Activity
 {
@@ -16,21 +17,29 @@ class Audio extends Activity
      */
     public function create($fields)
     {
-        if (empty($fields['ext'])) {
-            throw $this->createInvalidArgumentException('参数不正确');
+        if (!ArrayToolkit::requireds($fields, ['media'])) {
+            throw CommonException::ERROR_PARAMETER_MISSING();
         }
-        $audio = ArrayToolkit::parts($fields['ext'], array('mediaId'));
+        $media = json_decode($fields['media'], true);
+
+        if (empty($media['id'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+        $media['mediaId'] = $media['id'];
+        $audio = ArrayToolkit::parts($media, ['mediaId']);
+        $audio['hasText'] = isset($fields['hasText']) ? $fields['hasText'] : 0;
         $audioActivity = $this->getAudioActivityDao()->create($audio);
 
         return $audioActivity;
     }
 
-    public function copy($activity, $config = array())
+    public function copy($activity, $config = [])
     {
         $audio = $this->getAudioActivityDao()->get($activity['mediaId']);
-        $newAudio = array(
+        $newAudio = [
             'mediaId' => $audio['mediaId'],
-        );
+            'hasText' => $audio['hasText'],
+        ];
 
         return $this->getAudioActivityDao()->create($newAudio);
     }
@@ -40,6 +49,7 @@ class Audio extends Activity
         $sourceAudio = $this->getAudioActivityDao()->get($sourceActivity['mediaId']);
         $audio = $this->getAudioActivityDao()->get($activity['mediaId']);
         $audio['mediaId'] = $sourceAudio['mediaId'];
+        $audio['hasText'] = $sourceAudio['hasText'];
 
         return $this->getAudioActivityDao()->update($audio['id'], $audio);
     }
@@ -49,15 +59,34 @@ class Audio extends Activity
      */
     public function update($targetId, &$fields, $activity)
     {
-        $audioActivityFields = $fields['ext'];
-
-        $audioActivity = $this->getAudioActivityDao()->get($fields['mediaId']);
-        if (empty($audioActivity)) {
-            throw $this->createNotFoundException('教学活动不存在');
+        if (!ArrayToolkit::requireds($fields, ['media', 'hasText'])) {
+            throw CommonException::ERROR_PARAMETER_MISSING();
         }
-        $audioActivity = $this->getAudioActivityDao()->update($fields['mediaId'], $audioActivityFields);
+        $media = json_decode($fields['media'], true);
+
+        if (empty($media['id'])) {
+            throw CommonException::ERROR_PARAMETER();
+        }
+
+        $audioActivityFields = [
+            'mediaId' => $media['id'],
+            'hasText' => $fields['hasText'],
+        ];
+        $audioActivity = $this->getAudioActivityDao()->get($activity['mediaId']);
+        if (empty($audioActivity)) {
+            throw ActivityException::NOTFOUND_ACTIVITY();
+        }
+        $audioActivity = $this->getAudioActivityDao()->update($activity['mediaId'], $audioActivityFields);
 
         return $audioActivity;
+    }
+
+    public function updateByIds($ids, $fields)
+    {
+        if (empty($ids)) {
+            return;
+        }
+        $this->getAudioActivityDao()->update(['ids' => $ids], $fields);
     }
 
     /**
@@ -65,6 +94,8 @@ class Audio extends Activity
      */
     public function delete($id)
     {
+        $audio = $this->getAudioActivityDao()->get($id);
+        $this->getUploadFileService()->updateUsedCount($audio['mediaId']);
         $this->getAudioActivityDao()->delete($id);
     }
 
@@ -74,24 +105,28 @@ class Audio extends Activity
     public function get($id)
     {
         $audioActivity = $this->getAudioActivityDao()->get($id);
-        $audioActivity['file'] = $this->getUploadFileService()->getFullFile($audioActivity['mediaId']);
+
+        if ($audioActivity) {
+            $audioActivity['file'] = $this->getUploadFileService()->getFullFile($audioActivity['mediaId']);
+        }
 
         return $audioActivity;
     }
 
-    public function find($targetIds)
+    public function find($targetIds, $showCloud = 1)
     {
         $audioActivities = $this->getAudioActivityDao()->findByIds($targetIds);
         $mediaIds = ArrayToolkit::column($audioActivities, 'mediaId');
+        $groupMediaIds = array_chunk($mediaIds, 50);
+        $files = [];
         try {
-            $files = $this->getUploadFileService()->findFilesByIds(
-                $mediaIds,
-                $showCloud = 1
-            );
+            foreach ($groupMediaIds as $mediaIds) {
+                $chuckFiles = $this->getUploadFileService()->findFilesByIds($mediaIds, $showCloud);
+                $files = array_merge($files, $chuckFiles);
+            }
         } catch (CloudAPIIOException $e) {
-            $files = array();
+            $files = [];
         }
-
         if (empty($files)) {
             return $audioActivities;
         }
@@ -106,6 +141,11 @@ class Audio extends Activity
         return $audioActivities;
     }
 
+    public function findWithoutCloudFiles($targetIds)
+    {
+        return $this->getAudioActivityDao()->findByIds($targetIds);
+    }
+
     public function materialSupported()
     {
         return true;
@@ -113,7 +153,7 @@ class Audio extends Activity
 
     protected function registerListeners()
     {
-        return array('watching' => 'Biz\Activity\Listener\VideoActivityWatchListener');
+        return [];
     }
 
     /**
@@ -122,14 +162,6 @@ class Audio extends Activity
     protected function getAudioActivityDao()
     {
         return $this->getBiz()->dao('Activity:AudioActivityDao');
-    }
-
-    /**
-     * @return ActivityService
-     */
-    protected function getActivityService()
-    {
-        return $this->getBiz()->service('Activity:ActivityService');
     }
 
     /**

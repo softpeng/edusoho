@@ -11,6 +11,8 @@ use Pimple\ServiceProviderInterface;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Codeages\Biz\Framework\Dao\CacheStrategy;
+use Codeages\Biz\Framework\Dao\ArrayStorage;
+use Codeages\Biz\Framework\Service\ServiceProxy;
 
 class Biz extends Container
 {
@@ -25,7 +27,13 @@ class Biz extends Container
 
         $biz['debug'] = false;
         $biz['logger'] = null;
+        $biz['interceptors'] = new \ArrayObject();
         $biz['migration.directories'] = new \ArrayObject();
+        $biz['console.commands'] = new \ArrayObject();
+
+        $biz['console.commands'][] = function () {
+            return new \Codeages\Biz\Framework\Command\EnvWriteCommand();
+        };
 
         $biz['autoload.aliases'] = new \ArrayObject(array('' => 'Biz'));
 
@@ -50,9 +58,13 @@ class Biz extends Container
 
         $biz['autoload.object_maker.service'] = function ($biz) {
             return function ($namespace, $name) use ($biz) {
-                $class = "{$namespace}\\Service\\Impl\\{$name}Impl";
+                $className = "{$namespace}\\Service\\Impl\\{$name}Impl";
 
-                return new $class($biz);
+                if (!empty($biz['service_proxy_enabled'])) {
+                    return new ServiceProxy($biz, $className);
+                }
+
+                return new $className($biz);
             };
         };
 
@@ -62,6 +74,10 @@ class Biz extends Container
 
                 return new DaoProxy($biz, new $class($biz), $biz['dao.metadata_reader'], $biz['dao.serializer'], $biz['dao.cache.array_storage']);
             };
+        };
+
+        $biz['array_storage'] = function () {
+            return new ArrayStorage();
         };
 
         $biz['dao.metadata_reader'] = function ($biz) {
@@ -95,6 +111,16 @@ class Biz extends Container
 
         $biz['dao.cache.strategy.row'] = function ($biz) {
             return new CacheStrategy\RowStrategy($biz['dao.cache.redis_wrapper'], $biz['dao.metadata_reader']);
+        };
+
+        $biz['lock.flock.directory'] = null;
+
+        $biz['lock.store'] = function ($biz) {
+            return new \Symfony\Component\Lock\Store\FlockStore($biz['lock.flock.directory']);
+        };
+
+        $biz['lock.factory'] = function ($biz) {
+            return new \Symfony\Component\Lock\Factory($biz['lock.store']);
         };
 
         foreach ($values as $key => $value) {

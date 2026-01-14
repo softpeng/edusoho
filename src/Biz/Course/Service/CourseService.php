@@ -2,7 +2,8 @@
 
 namespace Biz\Course\Service;
 
-use Codeages\Biz\Framework\Service\Exception\AccessDeniedException;
+use Biz\System\Annotation\Log;
+use Biz\User\UserException;
 
 interface CourseService
 {
@@ -12,11 +13,15 @@ interface CourseService
     const FREE_LEARN_MODE = 'freeMode';
     const LOCK_LEARN_MODE = 'lockMode';
 
+    const MAX_EXPIRY_DAY = 7300;
+
     public function getCourse($id);
 
-    public function hasCourseManagerRole($courseId = 0);
+    public function hasCourseManagerRole($courseId = 0, $action = '');
 
     public function findCoursesByIds($ids);
+
+    public function findCoursesByIdsAndCourseSetTitle($ids, $title);
 
     public function findCoursesByCourseSetIds(array $setIds);
 
@@ -26,14 +31,26 @@ interface CourseService
 
     public function findCoursesByCourseSetId($courseSetId);
 
+    public function findCoursesByCategoryIds($categoryIds);
+
     public function getDefaultCourseByCourseSetId($courseSetId);
 
     public function getDefaultCoursesByCourseSetIds($courseSetIds);
+
+    public function setDefaultCourse($courseSetId, $id);
+
+    public function getSeqMinPublishedCourseByCourseSetId($courseSetId);
 
     public function getFirstPublishedCourseByCourseSetId($courseSetId);
 
     public function getFirstCourseByCourseSetId($courseSetId);
 
+    /**
+     * @param $course
+     *
+     * @return mixed
+     * @Log(module="course",action="create_course")
+     */
     public function createCourse($course);
 
     /**
@@ -47,12 +64,36 @@ interface CourseService
 
     public function getChapter($courseId, $chapterId);
 
+    public function getChapterById($chapterId);
+
+    /**
+     * @param $chapter
+     *
+     * @return mixed
+     * @Log(module="course",action="create_chapter")
+     */
     public function createChapter($chapter);
 
     public function updateChapter($courseId, $chapterId, $fields);
 
+    /**
+     * @param $courseId
+     * @param $chapterId
+     *
+     * @return mixed
+     * @Log(module="course",action="delete_chapter")
+     */
+    public function deleteChapter($courseId, $chapterId);
+
     public function findChaptersByCourseId($courseId);
 
+    /**
+     * @param $id
+     * @param $fields
+     *
+     * @return mixed
+     * @Log(module="course",action="update_course",param="id")
+     */
     public function updateCourse($id, $fields);
 
     public function updateCourseMarketing($id, $fields);
@@ -61,11 +102,49 @@ interface CourseService
 
     public function updateCourseStatistics($id, $fields);
 
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="course",action="delete_course")
+     */
     public function deleteCourse($id);
 
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="course",action="close_course",funcName="getCourse")
+     */
     public function closeCourse($id);
 
+    /**
+     * @param $id
+     *
+     * @return mixed
+     * @Log(module="course",action="close_course",funcName="getCourse")
+     */
+    public function unpublishedCourse($id);
+
+    /**
+     * @param $id
+     * @param bool $withTasks
+     *
+     * @return mixed
+     * @Log(module="course",action="publish_course",funcName="getCourse",param="id")
+     */
     public function publishCourse($id, $withTasks = false);
+
+    /**
+     * 判断所给计划，是否在其所属课程内，有多个计划同时默认教学计划未设置标题
+     */
+    public function hasNoTitleForDefaultPlanInMulPlansCourse($id);
+
+    public function hasMulCourses($courseSetId, $isPublish = 0);
+
+    public function isCourseSetCoursesSummaryEmpty($courseSetId);
+
+    public function publishAndSetDefaultCourseType($courseId, $title);
 
     /**
      * @param  $courseId
@@ -74,6 +153,16 @@ interface CourseService
      * @return mixed
      */
     public function findCourseItems($courseId, $limitNum = 0);
+
+    public function searchMultiClassCourseItems($conditions, $sort, $start, $limit);
+
+    /**
+     * @param $courseId
+     * @param array $paging array('direction' => 'up or down', 'offsetSeq' => '0', 'limit' => 10)
+     *
+     * @return mixed
+     */
+    public function findCourseItemsByPaging($courseId, $paging = []);
 
     public function tryManageCourse($courseId, $courseSetId = 0);
 
@@ -91,6 +180,8 @@ interface CourseService
 
     public function findTeachersByCourseId($courseId);
 
+    public function findTeachersByCourseIds($courseIds);
+
     public function countStudentsByCourseId($courseId);
 
     public function getUserRoleInCourse($courseId, $userId);
@@ -103,7 +194,7 @@ interface CourseService
      * @param int  $courseSetId
      * @param bool $onlyPublished
      *
-     * @throws AccessDeniedException
+     * @throws UserException
      *
      * @return mixed
      */
@@ -128,14 +219,16 @@ interface CourseService
 
     public function findUserTeachCourses($conditions, $start, $limit, $onlyPublished = true);
 
+    public function findUserLearnCourseIds($userId);
+
+    public function countUserLearnCourses($userId);
+
     /**
-     * @param array $ids
-     *
      * @return array[]
      */
     public function findPublicCoursesByIds(array $ids);
 
-    public function countUserLearningCourses($userId, $filters = array());
+    public function countUserLearningCourses($userId, $filters = []);
 
     /**
      * filter 支持 type classroomId locked ...
@@ -147,21 +240,35 @@ interface CourseService
      *
      * @return mixed
      */
-    public function findUserLearningCourses($userId, $start, $limit, $filters = array());
+    public function findUserLearningCourses($userId, $start, $limit, $filters = []);
 
-    public function countUserLearnedCourses($userId, $filters = array());
+    public function countUserLearnedCourses($userId, $filters = []);
 
-    public function findUserLearnedCourses($userId, $start, $limit, $filters = array());
+    public function findUserLearnedCourses($userId, $start, $limit, $filters = []);
 
     public function findLearnedCoursesByCourseIdAndUserId($courseId, $userId);
 
-    public function searchCourses($conditions, $sort, $start, $limit);
+    public function searchCourses($conditions, $sort, $start, $limit, $columns = []);
+
+    public function appendSpecsInfo($courses);
+
+    public function appendSpecInfo($course);
+
+    public function searchWithJoinCourseSet($conditions, $sort, $start, $limit, $columns = []);
+
+    public function searchBySort($conditions, $sort, $start, $limit);
+
+    public function searchByStudentNumAndTimeZone($conditions, $start, $limit);
+
+    public function searchByRatingAndTimeZone($conditions, $start, $limit);
+
+    public function searchByRecommendedSeq($conditions, $sort, $offset, $limit);
 
     public function searchCourseCount($conditions);
 
-    public function sortCourseItems($courseId, $ids);
+    public function countWithJoinCourseSet($conditions);
 
-    public function deleteChapter($courseId, $chapterId);
+    public function sortCourseItems($courseId, $ids);
 
     public function analysisCourseDataByTime($startTime, $endTime);
 
@@ -177,17 +284,17 @@ interface CourseService
 
     public function cancelRecommendCourseByCourseSetId($courseSetId);
 
-    public function findUserLearningCourseCountNotInClassroom($userId, $filters = array());
+    public function findUserLearningCourseCountNotInClassroom($userId, $filters = []);
 
-    public function findUserLearningCoursesNotInClassroom($userId, $start, $limit, $filters = array());
+    public function findUserLearningCoursesNotInClassroom($userId, $start, $limit, $filters = []);
 
-    public function findUserLeanedCourseCount($userId, $filters = array());
+    public function findUserLeanedCourseCount($userId, $filters = []);
 
-    public function findUserLearnedCoursesNotInClassroom($userId, $start, $limit, $filters = array());
+    public function findUserLearnedCoursesNotInClassroom($userId, $start, $limit, $filters = []);
 
-    public function findUserLearnCourseCountNotInClassroom($userId, $onlyPublished = true);
+    public function findUserLearnCourseCountNotInClassroom($userId, $onlyPublished = true, $filterReservation = false);
 
-    public function findUserLearnCoursesNotInClassroom($userId, $start, $limit, $onlyPublished = true);
+    public function findUserLearnCoursesNotInClassroom($userId, $start, $limit, $onlyPublished = true, $filterReservation = false);
 
     public function findUserLearnCoursesNotInClassroomWithType($userId, $type, $start, $limit, $onlyPublished = true);
 
@@ -211,8 +318,6 @@ interface CourseService
 
     public function unlockCourse($courseId);
 
-    public function getFavoritedCourseByUserIdAndCourseSetId($userId, $courseSetId);
-
     public function buildCourseExpiryDataFromClassroom($expiryMode, $expiryValue);
 
     public function hitCourse($courseId);
@@ -226,4 +331,72 @@ interface CourseService
      * @return mixed
      */
     public function recountLearningData($courseId, $userId);
+
+    public function tryFreeJoin($courseId);
+
+    public function findLiveCourse($conditions, $userId, $role);
+
+    public function changeHidePublishLesson($courseId, $status);
+
+    public function countCoursesByCourseSetId($courseSetId);
+
+    //排序教学计划
+    public function sortCourse($courseSetId, $ids);
+
+    public function sortByCourses($courses);
+
+    public function countCourseItems($course);
+
+    /**
+     * 如果 约排课已开启，不额外添加查询条件，
+     * 如果 未开启，添加 excludeTypes = 'reservation' 的查询条件
+     *    （如果已经存在 excludeTypes 属性，则额外新增，非替换）
+     */
+    public function appendReservationConditions($conditions);
+
+    public function fillCourseTryLookVideo($courses);
+
+    //修改课程基础信息
+
+    /**
+     * @param $id
+     * @param $fields
+     *
+     * @return mixed
+     * @Log(module="course",action="update_course",funcName="getCourse",param="id")
+     */
+    public function updateBaseInfo($id, $fields);
+
+    /**
+     * 是否能修改基础信息
+     * 管理员可以修改
+     * 课程老师，后台设置可修改营销设置可修改
+     */
+    public function canUpdateCourseBaseInfo($courseId, $courseSetId = 0);
+
+    public function appendHasCertificate(array $courses);
+
+    public function hasCertificate($courseId);
+
+    public function sumTotalIncomeByIds($ids);
+
+    public function findCourseByCourseSetTitleLike($courseSetTitle);
+
+    public function courseItemIdsHandle($courseId, $ids);
+
+    public function getLessonTree($courseIds, $type);
+
+    public function findLessonIds($courseId, $type, $chapterId);
+
+    public function banLearningByCourseSetId($courseSetId);
+
+    public function canLearningByCourseSetId($courseSetId);
+
+    public function banLearningByCourseSetIds($courseSetIds);
+
+    public function canLearningByCourseSetIds($courseSetIds);
+
+    public function getVideoMaxLevel($courseId);
+
+    public function getCourseSetVideoMaxLevel($courseSetId);
 }

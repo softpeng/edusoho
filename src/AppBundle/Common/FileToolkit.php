@@ -2,12 +2,15 @@
 
 namespace AppBundle\Common;
 
+use AppBundle\Common\Exception\FileToolkitException;
+use AppBundle\Common\Exception\InvalidArgumentException;
+use AppBundle\Common\Exception\UnexpectedValueException;
 use Imagine\Image\Box;
 use Imagine\Image\Point;
-use Topxia\Service\Common\ServiceKernel;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpFoundation\File\File;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Topxia\Service\Common\ServiceKernel;
 
 class FileToolkit
 {
@@ -20,19 +23,19 @@ class FileToolkit
 
         $whitelist = array_unique(explode(' ', trim($extensions)));
 
-// Split the filename up by periods. The first part becomes the basename
+        // Split the filename up by periods. The first part becomes the basename
         // the last part the final extension.
         $fileNameParts = explode('.', $fileName);
         $newFilename = array_shift($fileNameParts); // Remove file basename.
         $finalExtension = array_pop($fileNameParts);
 
-// Remove final extension.
+        // Remove final extension.
 
-// Loop through the middle parts of the name and add an underscore to the
+        // Loop through the middle parts of the name and add an underscore to the
 
-// end of each section that could be a file extension but isn't in the list
+        // end of each section that could be a file extension but isn't in the list
 
-// of allowed extensions.
+        // of allowed extensions.
         foreach ($fileNameParts as $fileNamePart) {
             $newFilename .= '.'.$fileNamePart;
             if (!in_array($fileNamePart, $whitelist) && preg_match("/^[a-zA-Z]{2,5}\d?$/", $fileNamePart)) {
@@ -45,7 +48,7 @@ class FileToolkit
         return $fileName;
     }
 
-    public static function validateFileExtension(File $file, $extensions = array())
+    public static function validateFileExtension(File $file, $extensions = null)
     {
         if (empty($extensions)) {
             $extensions = static::getSecureFileExtensions();
@@ -57,7 +60,7 @@ class FileToolkit
             $filename = $file->getFilename();
         }
 
-        $errors = array();
+        $errors = [];
         $regex = '/\.('.preg_replace('/ +/', '|', preg_quote($extensions)).')$/i';
         if (!preg_match($regex, $filename)) {
             $errors[] = '只允许上传以下扩展名的文件：'.$extensions;
@@ -77,7 +80,7 @@ class FileToolkit
     {
         $ext = strtolower(static::getFileExtension($file));
 
-        return $ext == 'ico' ? true : false;
+        return 'ico' == $ext ? true : false;
     }
 
     public static function generateFilename($ext = '')
@@ -96,7 +99,7 @@ class FileToolkit
     {
         $extensions = self::getSecureFileExtensions();
         $extensions = explode(' ', $extensions);
-        $mimeTypes = array();
+        $mimeTypes = [];
         foreach ($extensions as $key => $extension) {
             $mimeTypes[] = self::getMimeTypeByExtension($extension);
         }
@@ -106,7 +109,7 @@ class FileToolkit
 
     public static function getSecureFileExtensions()
     {
-        return 'jpg jpeg gif png txt doc docx xls xlsx pdf ppt pptx pps ods odp mp4 mp3 avi flv wmv wma mov zip rar gz tar 7z swf ico';
+        return 'jpg jpeg gif png txt doc docx xls xlsx pdf ppt pptx pps ods odp mp4 mp3 avi flv wmv wma mov zip rar gz tar 7z swf ico emf';
     }
 
     public static function getImageExtensions()
@@ -116,7 +119,7 @@ class FileToolkit
 
     public static function getMimeTypeByExtension($extension)
     {
-        $mimes = array(
+        $mimes = [
             'ez' => 'application/andrew-inset',
             'aw' => 'application/applixware',
             'atom' => 'application/atom+xml',
@@ -889,7 +892,7 @@ class FileToolkit
             'jpg' => 'image/jpeg',
             'pps' => 'application/vnd.ms-powerpoint',
             'mov' => 'video/quicktime',
-        );
+        ];
 
         return empty($mimes[$extension]) ? null : $mimes[$extension];
     }
@@ -898,20 +901,51 @@ class FileToolkit
     {
         $extension = strtolower($extension);
 
-        if (in_array($extension, array('mp4', 'avi', 'mpg', 'flv', 'f4v', 'wmv', 'mov', 'rmvb', 'mkv', 'm4v'))) {
+        if (in_array($extension, ['vob', 'mp4', 'avi', 'flv', 'f4v', 'wmv', 'mov', 'rmvb', 'mkv', 'mpg', 'm4v', 'webm', 'rm', 'mpeg', 'asf', 'ts', 'mts'])) {
             return 'video';
-        } elseif (in_array($extension, array('mp3', 'wma'))) {
+        } elseif (in_array($extension, ['mp3', 'wma', 'wav'])) {
             return 'audio';
-        } elseif (in_array($extension, array('jpg', 'jpeg', 'png', 'gif', 'bmp'))) {
+        } elseif (in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'bmp'])) {
             return 'image';
-        } elseif (in_array($extension, array('doc', 'docx', 'pdf', 'xls', 'xlsx', 'wps', 'odt'))) {
+        } elseif (in_array($extension, ['doc', 'docx', 'pdf', 'xls', 'xlsx', 'txt'])) {
             return 'document';
-        } elseif (in_array($extension, array('ppt', 'pptx'))) {
+        } elseif (in_array($extension, ['ppt', 'pptx'])) {
             return 'ppt';
-        } elseif (in_array($extension, array('swf'))) {
+        } elseif (in_array($extension, ['swf'])) {
             return 'flash';
-        } elseif (in_array($extension, array('srt'))) {
+        } elseif (in_array($extension, ['srt'])) {
             return 'subtitle';
+        } else {
+            return 'other';
+        }
+    }
+
+    public static function getDownloadTaskTypeByExtension($extension)
+    {
+        $extension = strtolower($extension);
+
+        if (in_array($extension, ['mpeg', 'mpg', 'mpe', 'mlv', 'dat', '2v', 'vob', 'rmvb', 'mov', 'qt', 'asf', 'avi', 'wmv', 'mkv', 'mp4', 'flv'])) {
+            return 'video';
+        } elseif (in_array($extension, ['mp3', 'wma', 'aac', 'cda', 'wav', 'voc', 'cda'])) {
+            return 'audio';
+        } elseif (in_array($extension, ['jpg', 'jpeg', 'png', 'gif'])) {
+            return 'image';
+        } elseif (in_array($extension, ['zip', 'zipx', 'rar', '7z', 'dmg', 'tar'])) {
+            return 'package';
+        } elseif (in_array($extension, ['txt'])) {
+            return 'txt';
+        } elseif (in_array($extension, ['pdf'])) {
+            return 'pdf';
+        } elseif (in_array($extension, ['doc', 'docx'])) {
+            return 'doc';
+        } elseif (in_array($extension, ['xls', 'xlsx'])) {
+            return 'xls';
+        } elseif (in_array($extension, ['ppt', 'pptx'])) {
+            return 'ppt';
+        } elseif (in_array($extension, ['flash'])) {
+            return 'flash';
+        } elseif (in_array($extension, ['link'])) {
+            return 'link';
         } else {
             return 'other';
         }
@@ -920,7 +954,7 @@ class FileToolkit
     public static function formatFileSize($size)
     {
         $currentValue = $currentUnit = null;
-        $unitExps = array('B' => 0, 'KB' => 1, 'MB' => 2, 'GB' => 3);
+        $unitExps = ['B' => 0, 'KB' => 1, 'MB' => 2, 'GB' => 3];
         foreach ($unitExps as $unit => $exp) {
             $divisor = pow(1024, $exp);
             $currentUnit = $unit;
@@ -942,8 +976,8 @@ class FileToolkit
         }
 
         if (preg_match('#^\+?(0x?)?(.*?)([kmg]?)$#', $max, $match)) {
-            $shifts = array('' => 0, 'k' => 10, 'm' => 20, 'g' => 30);
-            $bases = array('' => 10, '0' => 8, '0x' => 16);
+            $shifts = ['' => 0, 'k' => 10, 'm' => 20, 'g' => 30];
+            $bases = ['' => 10, '0' => 8, '0x' => 16];
 
             return intval($match[2], $bases[$match[1]]) << $shifts[$match[3]];
         }
@@ -967,12 +1001,12 @@ class FileToolkit
     public static function remove($filepath)
     {
         if (empty($filepath)) {
-            throw new \RuntimeException('filepath to be deleted is empty');
+            throw new InvalidArgumentException('filepath to be deleted is empty');
         }
 
         $isRemoved = false;
 
-        $prefixArr = array('data/private_files', 'data/udisk', 'web/files');
+        $prefixArr = ['data/private_files', 'data/udisk', 'web/files'];
         foreach ($prefixArr as $prefix) {
             if (strpos($filepath, trim($prefix))) {
                 $fileSystem = new Filesystem();
@@ -987,7 +1021,7 @@ class FileToolkit
 
         if (!$isRemoved) {
             $prefixString = join(' || ', $prefixArr);
-            throw new \RuntimeException("{$filepath} is not allowed to be deleted without prefix {$prefixString}");
+            throw new UnexpectedValueException("{$filepath} is not allowed to be deleted without prefix {$prefixString}");
         }
     }
 
@@ -1015,6 +1049,7 @@ class FileToolkit
 
     public static function cropImages($filePath, $options)
     {
+        $fileSystem = new Filesystem();
         $pathinfo = pathinfo($filePath);
         $filesize = filesize($filePath);
 
@@ -1023,6 +1058,8 @@ class FileToolkit
         $rawImage = $imagine->open($filePath);
 
         $naturalSize = $rawImage->getSize();
+        $naturalWidth = $naturalSize->getWidth();
+        $naturalHeight = $naturalSize->getHeight();
         $rate = $naturalSize->getWidth() / $options['width'];
 
         $options['w'] = $rate * $options['w'];
@@ -1030,13 +1067,17 @@ class FileToolkit
         $options['x'] = $rate * $options['x'];
         $options['y'] = $rate * $options['y'];
 
-        $filePaths = array();
+        $filePaths = [];
         if (!empty($options['imgs']) && count($options['imgs']) > 0) {
             foreach ($options['imgs'] as $key => $value) {
-                if (($options['w'] == $value[0]) && ($options['h'] == $value[1]) && ($filesize < 102400)) {
-                    $filePaths[$key] = $filePath;
+                $savedFilePath = "{$pathinfo['dirname']}/{$pathinfo['filename']}_{$key}.{$pathinfo['extension']}";
+                //原始尺寸等于要求的尺寸 并且 裁切的范围等于原始尺寸，不做裁切
+                $isCopy = ($naturalWidth == $value[0] && $options['w'] == $value[0]) && ($naturalHeight == $value[1] && $options['h'] == $value[1]) && ($filesize < 102400);
+
+                if ($isCopy) {
+                    $filePaths[$key] = $savedFilePath;
+                    $fileSystem->copy($filePath, $savedFilePath);
                 } else {
-                    $savedFilePath = "{$pathinfo['dirname']}/{$pathinfo['filename']}_{$key}.{$pathinfo['extension']}";
                     $image = static::crop($rawImage, $savedFilePath, $options['x'], $options['y'], $options['w'], $options['h'], $value[0], $value[1]);
                     $filePaths[$key] = $savedFilePath;
                 }
@@ -1054,11 +1095,11 @@ class FileToolkit
     {
         $extension = strtolower(substr(strrchr($fullPath, '.'), 1));
 
-        $options = array();
+        $options = [];
 
-        if (in_array($extension, array('jpg', 'jpeg'))) {
+        if (in_array($extension, ['jpg', 'jpeg'])) {
             $options['jpeg_quality'] = $level * 10;
-        } elseif ($extension == 'png') {
+        } elseif ('png' == $extension) {
             $options['png_compression_level'] = $level;
         } else {
             return $fullPath;
@@ -1068,7 +1109,7 @@ class FileToolkit
             $imagine = static::createImagine();
             $image = $imagine->open($fullPath)->save($fullPath, $options);
         } catch (\Exception $e) {
-            throw new \Exception('该文件为非图片格式文件，请重新上传。');
+            throw FileToolkitException::NOT_IMAGE();
         }
     }
 
@@ -1078,44 +1119,29 @@ class FileToolkit
             $imagine = static::createImagine();
             $image = $imagine->open($fullPath);
         } catch (\Exception $e) {
-            throw new \Exception('该文件为非图片格式文件，请重新上传。');
+            throw FileToolkitException::NOT_IMAGE();
         }
 
         $naturalSize = $image->getSize();
         $scaledSize = $naturalSize->widen($width)->heighten($height);
 
-        return array($naturalSize, $scaledSize);
+        return [$naturalSize, $scaledSize];
     }
 
     //将图片旋转正确
     public static function imagerotatecorrect($path)
     {
         try {
-            //只旋转JPEG的图片
-            if (extension_loaded('gd') && extension_loaded('exif') && exif_imagetype($path) == IMAGETYPE_JPEG) {
-                $exif = @exif_read_data($path);
-                if (!empty($exif['Orientation'])) {
-                    $image = imagecreatefromstring(file_get_contents($path));
-                    switch ($exif['Orientation']) {
-                        case 8:
-                            $image = imagerotate($image, 90, 0);
-                            break;
-                        case 3:
-                            $image = imagerotate($image, 180, 0);
-                            break;
-                        case 6:
-                            $image = imagerotate($image, -90, 0);
-                            break;
-                    }
+            $angle = static::getImagerotateAngle($path);
+            if (!empty($angle)) {
+                $image = imagecreatefromstring(file_get_contents($path));
+                $image = imagerotate($image, $angle, 0);
+                imagejpeg($image, $path);
+                imagedestroy($image);
 
-                    imagejpeg($image, $path);
-                    imagedestroy($image);
-
-                    return $path;
-                }
+                return $path;
             }
         } catch (\Exception $e) {
-            //报错了不旋转，保证不影响上传流程
         }
 
         return false;
@@ -1135,8 +1161,14 @@ class FileToolkit
         return ServiceKernel::instance();
     }
 
-    public static function downloadImg($url, $savePath)
+    public static function downloadImg($url, $savePath, $mock = false)
     {
+        if ($mock) {
+            $fileSystem = new Filesystem();
+            $fileSystem->copy($url, $savePath);
+
+            return $savePath;
+        }
         $curl = curl_init($url);
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
         $imageData = curl_exec($curl);
@@ -1146,5 +1178,32 @@ class FileToolkit
         fclose($tp);
 
         return $savePath;
+    }
+
+    private static function getImagerotateAngle($path)
+    {
+        $angle = 0;
+        //只旋转JPEG的图片
+        if (!(extension_loaded('gd') && extension_loaded('exif') && IMAGETYPE_JPEG == exif_imagetype($path))) {
+            return $angle;
+        }
+
+        $exif = @exif_read_data($path);
+        if (empty($exif['Orientation'])) {
+            return $angle;
+        }
+        switch ($exif['Orientation']) {
+            case 8:
+                $angle = 90;
+                break;
+            case 3:
+                $angle = 180;
+                break;
+            case 6:
+                $angle = -90;
+                break;
+        }
+
+        return $angle;
     }
 }

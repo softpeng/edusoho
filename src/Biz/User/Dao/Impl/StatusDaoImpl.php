@@ -3,50 +3,40 @@
 namespace Biz\User\Dao\Impl;
 
 use Biz\User\Dao\StatusDao;
-use Codeages\Biz\Framework\Dao\GeneralDaoImpl;
+use Codeages\Biz\Framework\Dao\AdvancedDaoImpl;
 
-class StatusDaoImpl extends GeneralDaoImpl implements StatusDao
+class StatusDaoImpl extends AdvancedDaoImpl implements StatusDao
 {
     protected $table = 'status';
 
     public function deleteByUserIdAndTypeAndObject($userId, $type, $objectType, $objectId)
     {
-        return $this->db()->delete($this->table, array(
+        return $this->db()->delete($this->table, [
             'userId' => $userId,
             'type' => $type,
             'objectType' => $objectType,
             'objectId' => $objectId,
-        ));
-    }
-
-    public function deleteByCourseIdAndTypeAndObject($courseId, $type, $objectType, $objectId)
-    {
-        return $this->db()->delete($this->table, array(
-            'courseId' => $courseId,
-            'type' => $type,
-            'objectType' => $objectType,
-            'objectId' => $objectId,
-        ));
+        ]);
     }
 
     public function deleteByCourseId($courseId)
     {
-        return $this->db()->delete($this->table(), array('courseId' => $courseId));
+        return $this->db()->delete($this->table(), ['courseId' => $courseId]);
     }
 
     public function findByCourseId($courseId)
     {
-        return $this->findByFields(array('courseId' => $courseId));
+        return $this->findByFields(['courseId' => $courseId]);
     }
 
     public function declares()
     {
-        return array(
-            'serializes' => array(
+        return [
+            'serializes' => [
                 'properties' => 'json',
-            ),
-            'orderbys' => array('createdTime'),
-            'conditions' => array(
+            ],
+            'orderbys' => ['createdTime', 'courseId'],
+            'conditions' => [
                 'courseId = :courseId',
                 'courseId IN ( :courseIds )',
                 'courseId IN ( :classroomCourseIds ) OR classroomId = :classroomId',
@@ -56,7 +46,8 @@ class StatusDaoImpl extends GeneralDaoImpl implements StatusDao
                 'userId = :userId',
                 'userId IN ( :userIds )',
                 'private = :private',
-            ),
-        );
+                'createdTime < :createdTime_LT',
+            ],
+        ];
     }
 }

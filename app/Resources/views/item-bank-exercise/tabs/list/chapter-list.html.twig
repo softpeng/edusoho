@@ -1,0 +1,10 @@
+{% do script(['vue3/js/item-bank-exercise/tabs/list/index.js']) %}
+
+<div id="vue3-item-bank-exercise-list"
+     data-category-tree="{{ categoryTree|json_encode }}"
+     data-records="{{ records|json_encode }}"
+     data-preview-as="{{ previewAs }}"
+     data-member="{{ member|json_encode }}"
+     data-exercise="{{ exercise|json_encode }}"
+     data-module-id="{{ moduleId }}"
+></div>

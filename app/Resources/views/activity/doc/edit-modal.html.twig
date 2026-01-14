@@ -1,6 +1,6 @@
 {% extends 'activity/activity-form-layout.html.twig' %}
 
-{% do script(['//service-cdn.qiqiuyun.net/js-sdk/uploader/sdk-v1.js', 'app/js/activity-manage/doc/index.js']) %}
+{% do script([cloud_sdk_url('uploader'), 'app/js/activity-manage/doc/index.js']) %}
 
 {% block activity_content %}
   <div class="form-group">
@@ -27,9 +27,6 @@
     </div>
     <div class="col-xs-4 form-control-static">
       {{'course.plan_task.activity_manage.doc.watch_time'|trans}}
-      {#<select class="form-control" id="condition-select" name="finishType">
-        <option value="time" {% if doc.finishType|default('click') == 'time' %}selected{% endif %}>观看时长</option>
-      </select>#}
     </div>
   </div>
   <div class="form-group">

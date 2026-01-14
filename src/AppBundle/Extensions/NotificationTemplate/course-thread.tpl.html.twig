@@ -9,7 +9,7 @@
         {% set data = notification.content %}
 
         {% if data.userId|default(false) %}
-          {% set who = macro.link(data.userName, path('user_show', {id:data.userId})) %}
+          {% set who = macro.link(data.userName, user_show_path({id:data.userId})) %}
         {% endif %}
 
         {% if data.type == 'at' %}
@@ -63,7 +63,7 @@
         {% endif %}
 
         <div class="notification-footer">
-          {{ notification.createdTime|date_format }}
+          {{ notification.createdTime|date('site.date_format_H_i_s'|trans) }}
         </div>
       </div>
     </div>

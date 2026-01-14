@@ -14,6 +14,21 @@ class ThreadDaoImpl extends GeneralDaoImpl implements ThreadDao
         return $this->findInField('id', $ids);
     }
 
+    public function findByGroupId($groupId)
+    {
+        return $this->findByFields(['groupId' => $groupId]);
+    }
+
+    public function deleteByGroupId($groupId)
+    {
+        return $this->db()->delete($this->table(), ['groupId' => $groupId]);
+    }
+
+    public function deleteByUserId($userId)
+    {
+        return $this->db()->delete($this->table(), ['userId' => $userId]);
+    }
+
     public function createQueryBuilder($conditions)
     {
         if (isset($conditions['title'])) {
@@ -25,11 +40,11 @@ class ThreadDaoImpl extends GeneralDaoImpl implements ThreadDao
 
     public function declares()
     {
-        return array(
-            'timestamps' => array('createdTime'),
-            'serializes' => array('tagIds' => 'json'),
-            'orderbys' => array('isStick', 'postNum', 'createdTime', 'lastPostTime', 'updatedTime'),
-            'conditions' => array(
+        return [
+            'timestamps' => ['createdTime', 'updatedTime'],
+            'serializes' => ['tagIds' => 'json'],
+            'orderbys' => ['isStick', 'postNum', 'createdTime', 'lastPostTime', 'updatedTime'],
+            'conditions' => [
                 'groupId = :groupId',
                 'createdTime > :createdTime',
                 'updatedTime >= :updatedTime_GE',
@@ -39,7 +54,9 @@ class ThreadDaoImpl extends GeneralDaoImpl implements ThreadDao
                 'userId = :userId',
                 'status = :status',
                 'title like :title',
-            ),
-        );
+                'auditStatus = :auditStatus',
+                'auditStatus != :excludeAuditStatus',
+            ],
+        ];
     }
 }

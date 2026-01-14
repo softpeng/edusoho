@@ -2,13 +2,16 @@
 
 namespace ApiBundle\Api\Resource\CourseSet;
 
-use ApiBundle\Api\ApiRequest;
-use ApiBundle\Api\Exception\ErrorCode;
-use ApiBundle\Api\Resource\AbstractResource;
+use ApiBundle\Api\Annotation\Access;
 use ApiBundle\Api\Annotation\ApiConf;
+use ApiBundle\Api\ApiRequest;
+use ApiBundle\Api\Resource\AbstractResource;
+use AppBundle\Common\ArrayToolkit;
+use Biz\Common\CommonException;
+use Biz\Course\CourseSetException;
 use Biz\Course\Service\CourseService;
 use Biz\Course\Service\CourseSetService;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Biz\Course\Service\MemberService;
 
 class CourseSet extends AbstractResource
 {
@@ -20,10 +23,10 @@ class CourseSet extends AbstractResource
         $courseSet = $this->getCourseSetService()->getCourseSet($courseSetId);
 
         if (empty($courseSet)) {
-            throw new NotFoundHttpException('课程不存在', null, ErrorCode::RESOURCE_NOT_FOUND);
+            throw CourseSetException::NOTFOUND_COURSESET();
         }
 
-        $this->getOCUtil()->single($courseSet, array('creator', 'teacherIds'));
+        $this->getOCUtil()->single($courseSet, ['creator', 'teacherIds']);
 
         $this->appendMaxOriginPriceAndMinOriginPrice($courseSet);
 
@@ -39,6 +42,11 @@ class CourseSet extends AbstractResource
         $conditions['status'] = 'published';
         $conditions['showable'] = 1;
         $conditions['parentId'] = 0;
+        //过滤约排课
+        $conditions['excludeTypes'] = ['reservation'];
+        if (isset($conditions['type']) && 'all' == $conditions['type']) {
+            unset($conditions['type']);
+        }
 
         list($offset, $limit) = $this->getOffsetAndLimit($request);
         $sort = $this->getSort($request);
@@ -50,16 +58,182 @@ class CourseSet extends AbstractResource
                 $conditions,
                 $sort,
                 $offset,
-                $limit
+                $limit,
+                [],
+                true
             );
         }
 
-
-        $this->getOCUtil()->multiple($courseSets, array('creator', 'teacherIds'));
+        $this->getOCUtil()->multiple($courseSets, ['creator', 'teacherIds']);
 
         $total = $this->getCourseSetService()->countCourseSets($conditions);
 
+        $courses = $this->getCourseService()->findCoursesByCourseSetIds(ArrayToolkit::column($courseSets, 'id'));
+        $courses = $this->getCourseService()->fillCourseTryLookVideo($courses);
+        $courseGroup = ArrayToolkit::group($courses, 'courseSetId');
+        foreach ($courseSets as &$courseSet) {
+            foreach ($courseGroup[$courseSet['id']] as $course) {
+                if ('default' == $course['courseType']) {
+                    $courseSet['hidePrice'] = $course['hidePrice'];
+                }
+            }
+        }
+
+        $tryLookVideoCourses = array_filter($courses, function ($course) {
+            return !empty($course['tryLookVideo']);
+        });
+        $courses = ArrayToolkit::index($courses, 'courseSetId');
+        $tryLookVideoCourses = ArrayToolkit::index($tryLookVideoCourses, 'courseSetId');
+
+        array_walk($courseSets, function (&$courseSet) use ($courses, $tryLookVideoCourses) {
+            if (isset($tryLookVideoCourses[$courseSet['id']])) {
+                $courseSet['vipLevelId'] = $tryLookVideoCourses[$courseSet['id']]['vipLevelId'];
+            } else {
+                $courseSet['vipLevelId'] = $courses[$courseSet['id']]['vipLevelId'];
+            }
+        });
+
         return $this->makePagingObject($courseSets, $total, $offset, $limit);
+    }
+
+    /**
+     * @Access(roles="ROLE_ADMIN,ROLE_SUPER_ADMIN,ROLE_EDUCATIONAL_ADMIN")
+     */
+    public function add(ApiRequest $request)
+    {
+        if (!$this->getCourseSetService()->hasCourseSetManageRole()) {
+            throw CourseSetException::FORBIDDEN_CREATE();
+        }
+
+        $data = $request->request->all();
+        if (!ArrayToolkit::requireds($data, ['type', 'title', 'teachers', 'assistants'])) {
+            throw CommonException::ERROR_PARAMETER_MISSING();
+        }
+
+        try {
+            $this->biz['db']->beginTransaction();
+            $courseSet = $this->getCourseSetService()->createCourseSet(['type' => $data['type'], 'title' => $data['title']]);
+            $courseSet = $this->getCourseSetService()->updateCourseSet($courseSet['id'], $this->filterCourseSetData($data));
+            if (!empty($data['images'])) {
+                $this->getCourseSetService()->changeCourseSetCover($courseSet['id'], $data['images']);
+            }
+
+            $data = $this->prepareExpiryMode($data);
+            $course = $this->getCourseService()->updateBaseInfo($courseSet['defaultCourseId'], $this->filterCourseData($data));
+
+            $this->getMemberService()->setCourseTeachers($course['id'], $this->filterCourseMember($data['teachers']));
+            $this->getMemberService()->setCourseAssistants($course['id'], $data['assistants']);
+
+            $this->getCourseSetService()->publishCourseSet($courseSet['id']);
+
+            $this->biz['db']->commit();
+        } catch (\Exception $e) {
+            $this->biz['db']->rollback();
+            throw $e;
+        }
+
+        $courseSet = $this->getCourseSetService()->getCourseSet($courseSet['id']);
+        $courseSet['course'] = $course;
+
+        return $courseSet;
+    }
+
+    public function update(ApiRequest $request, $courseSetId)
+    {
+        $courseSet = $this->getCourseSetService()->tryManageCourseSet($courseSetId);
+
+        $data = $request->request->all();
+
+        if (!ArrayToolkit::requireds($data, ['title', 'teachers', 'assistants'])) {
+            throw CommonException::ERROR_PARAMETER_MISSING();
+        }
+
+        try {
+            $this->biz['db']->beginTransaction();
+            $courseSet = $this->getCourseSetService()->updateCourseSet($courseSet['id'], $this->filterCourseSetData($data));
+            if (!empty($data['images'])) {
+                $this->getCourseSetService()->changeCourseSetCover($courseSet['id'], $data['images']);
+            }
+
+            $data = $this->prepareExpiryMode($data);
+            $course = $this->getCourseService()->updateBaseInfo($courseSet['defaultCourseId'], $this->filterCourseData($data));
+
+            $this->getMemberService()->setCourseTeachers($course['id'], $this->filterCourseMember($data['teachers']));
+            $this->getMemberService()->setCourseAssistants($course['id'], $data['assistants']);
+            $this->biz['db']->commit();
+        } catch (\Exception $e) {
+            $this->biz['db']->rollback();
+            throw $e;
+        }
+
+        return $this->getCourseSetService()->getCourseSet($courseSet['id']);
+    }
+
+    private function filterCourseMember($userIds)
+    {
+        $members = [];
+        foreach ($userIds as $userId) {
+            $members[] = ['id' => $userId, 'isVisible' => 1];
+        }
+
+        return $members;
+    }
+
+    private function filterCourseSetData($data)
+    {
+        $data = array_merge($data, [
+            'serializeMode' => 'none',
+            'categoryId' => 0,
+        ]);
+
+        return ArrayToolkit::parts($data, [
+            'serializeMode',
+            'categoryId',
+            'subtitle',
+            'summary',
+            'title',
+        ]);
+    }
+
+    private function filterCourseData($data)
+    {
+        return ArrayToolkit::parts($data, [
+            'learnMode',
+            'enableFinish',
+            'originPrice',
+            'buyable',
+            'enableBuyExpiryTime',
+            'buyExpiryTime',
+            'expiryStartDate',
+            'expiryEndDate',
+            'expiryMode',
+            'expiryDays',
+            'deadlineType',
+            'maxStudentNum',
+        ]);
+    }
+
+    private function prepareExpiryMode($data)
+    {
+        if (empty($data['expiryMode']) || 'days' != $data['expiryMode']) {
+            unset($data['deadlineType']);
+        }
+        if (!empty($data['deadlineType'])) {
+            if ('end_date' == $data['deadlineType']) {
+                $data['expiryMode'] = 'end_date';
+                if (isset($data['deadline'])) {
+                    $data['expiryEndDate'] = $data['deadline'];
+                }
+
+                return $data;
+            } else {
+                $data['expiryMode'] = 'days';
+
+                return $data;
+            }
+        }
+
+        return $data;
     }
 
     private function getRecommendedSeq($conditions, $sort, $offset, $limit)
@@ -67,7 +241,7 @@ class CourseSet extends AbstractResource
         $conditions['recommended'] = 1;
         $recommendCount = $this->getCourseSetService()->countCourseSets($conditions);
         $recommendAvailable = $recommendCount - $offset;
-        $courseSets = array();
+        $courseSets = [];
 
         if ($recommendAvailable >= $limit) {
             $courseSets = $this->getCourseSetService()->searchCourseSets(
@@ -82,7 +256,7 @@ class CourseSet extends AbstractResource
             $conditions['recommended'] = 0;
             $courseSets = $this->getCourseSetService()->searchCourseSets(
                 $conditions,
-                array('createdTime' => 'DESC'),
+                ['createdTime' => 'DESC'],
                 abs($recommendAvailable),
                 $limit
             );
@@ -98,7 +272,7 @@ class CourseSet extends AbstractResource
             $conditions['recommended'] = 0;
             $coursesTemp = $this->getCourseSetService()->searchCourseSets(
                 $conditions,
-                array('createdTime' => 'DESC'),
+                ['createdTime' => 'DESC'],
                 0,
                 $limit - $recommendAvailable
             );
@@ -115,7 +289,7 @@ class CourseSet extends AbstractResource
         $maxOriginPrice = 0;
         $minOriginPrice = 0;
         foreach ($courses as $course) {
-            if ($course['status'] != 'published') {
+            if ('published' != $course['status']) {
                 continue;
             }
 
@@ -149,6 +323,14 @@ class CourseSet extends AbstractResource
      */
     private function getCourseSetService()
     {
-       return $this->service('Course:CourseSetService');
+        return $this->service('Course:CourseSetService');
+    }
+
+    /**
+     * @return MemberService
+     */
+    private function getMemberService()
+    {
+        return $this->service('Course:MemberService');
     }
 }

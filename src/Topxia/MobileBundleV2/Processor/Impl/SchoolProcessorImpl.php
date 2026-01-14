@@ -185,6 +185,9 @@ class SchoolProcessorImpl extends BaseProcessor implements SchoolProcessor
         $info = $this->getParam('info');
         $type = $this->getParam('type', 'bug');
         $contact = $this->getParam('contact');
+        $domain = $this->getParam('domain');
+        $accessKey = $this->getParam('accessKey');
+        $name = $this->getParam('name');
 
         if (empty($info)) {
             return false;
@@ -193,7 +196,10 @@ class SchoolProcessorImpl extends BaseProcessor implements SchoolProcessor
         $this->log('suggestion', '反馈内容', array(
             'info' => $info,
             'type' => $type,
-            "$contact" => $contact,
+            'contact' => $contact,
+            'domain' => $domain,
+            'accessKey' => $accessKey,
+            'name' => $name,
         ));
 
         return true;
@@ -209,10 +215,16 @@ class SchoolProcessorImpl extends BaseProcessor implements SchoolProcessor
             return $this->createErrorResponse('error', '反馈内容不能为空！');
         }
 
+        $site = $this->getSettingService()->get('site');
+        $storage = $this->getSettingService()->get('storage');
+
         $this->sendRequest('POST', 'http://demo.edusoho.com/mapi_v2/School/suggestionLog', array(
             'info' => $info,
             'type' => $type,
             'contact' => $contact,
+            'domain' => $site['url'],
+            'accessKey' => $storage['cloud_access_key'],
+            'name' => $site['name'],
         ));
 
         return true;
@@ -238,6 +250,17 @@ class SchoolProcessorImpl extends BaseProcessor implements SchoolProcessor
 
         return $this->controller->render('TopxiaMobileBundleV2:Content:index.html.twig', array(
             'content' => $userTerms,
+        ));
+    }
+
+    public function getPrivacyPolicy()
+    {
+        $setting = $this->controller->getSettingService()->get('auth', array());
+
+        $privacyPolicyBody = empty($setting['privacy_policy_body']) ? '' : $setting['privacy_policy_body'];
+
+        return $this->controller->render('TopxiaMobileBundleV2:Content:index.html.twig', array(
+            'content' => $privacyPolicyBody,
         ));
     }
 
@@ -377,6 +400,7 @@ class SchoolProcessorImpl extends BaseProcessor implements SchoolProcessor
         $banner = array();
         $mobile = $this->getSettingService()->get('mobile', array());
         $baseUrl = $this->request->getSchemeAndHttpHost();
+        $ssl = $this->request->isSecure() ? true : false;
 
         if (empty($mobile)) {
             return array();
@@ -416,8 +440,10 @@ class SchoolProcessorImpl extends BaseProcessor implements SchoolProcessor
                         break;
                 }
 
-                if (strpos($bannerIndex, 'http://') !== false || strpos($bannerIndex, 'https://') !== false) {
+                if (false !== strpos($bannerIndex, 'http://') || false !== strpos($bannerIndex, 'https://')) {
                     $uri = $bannerIndex;
+                } elseif (preg_match('/^\/\/\s*/', $bannerIndex)) {
+                    $uri = ($ssl ? 'https:' : 'http:').$bannerIndex;
                 } else {
                     $uri = $baseUrl.'/'.$bannerIndex;
                 }
@@ -447,7 +473,7 @@ class SchoolProcessorImpl extends BaseProcessor implements SchoolProcessor
         //replace <a><img></a>
         $blocks = preg_replace_callback('/<a href=[\'\"](.*?)[\'\"]><img src=[\'\"](.*?)[\'\"][^>]\/><\/a>/', function ($matches) use ($baseUrl, $content) {
             $matcheUrl = $matches[2];
-            if (stripos($matcheUrl, '../') == 0) {
+            if (0 == stripos($matcheUrl, '../')) {
                 $matcheUrl = substr($matcheUrl, 3);
             }
             $url = "${baseUrl}/$matcheUrl";
@@ -487,7 +513,7 @@ class SchoolProcessorImpl extends BaseProcessor implements SchoolProcessor
         }
 
         $token = $this->controller->getUserToken($request);
-        if (empty($token) || $token['type'] != self::TOKEN_TYPE) {
+        if (empty($token) || self::TOKEN_TYPE != $token['type']) {
             $token = null;
         }
 
@@ -566,7 +592,7 @@ class SchoolProcessorImpl extends BaseProcessor implements SchoolProcessor
             curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
         }
 
-        if (strtoupper($method) == 'POST') {
+        if ('POST' == strtoupper($method)) {
             curl_setopt($curl, CURLOPT_POST, 1);
             $params = http_build_query($params);
             curl_setopt($curl, CURLOPT_POSTFIELDS, $params);

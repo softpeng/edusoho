@@ -2,9 +2,12 @@
 
 namespace AppBundle\Controller\Course;
 
+use Biz\Course\CourseException;
+use Biz\Course\CourseSetException;
 use Biz\Course\Service\CourseService;
 use Biz\Course\Service\MemberService;
 use Biz\Course\Service\CourseSetService;
+use Biz\Course\Util\CourseTitleUtils;
 use Biz\Taxonomy\Service\TagService;
 use Symfony\Component\HttpFoundation\Request;
 use AppBundle\Controller\BaseController;
@@ -16,13 +19,13 @@ abstract class CourseBaseController extends BaseController
     {
         $course = $this->getCourseService()->getCourse($id);
         if (empty($course)) {
-            throw $this->createNotFoundException("Course#{$id} Not Found");
+            $this->createNewException(CourseException::NOTFOUND_COURSE());
         }
 
         $courseSet = $this->getCourseSetService()->getCourseSet($course['courseSetId']);
 
         if (empty($courseSet)) {
-            throw $this->createNotFoundException("CourseSet#{$course['courseSetId']} Not Found");
+            $this->createNewException(CourseSetException::NOTFOUND_COURSESET());
         }
 
         return array($courseSet, $course);
@@ -33,7 +36,7 @@ abstract class CourseBaseController extends BaseController
         $course = $this->getCourseService()->getCourse($courseId);
 
         if (empty($course)) {
-            throw $this->createNotFoundException('Course Not Found');
+            $this->createNewException(CourseException::NOTFOUND_COURSE());
         }
 
         $member = $this->getCourseMember($request, $course);
@@ -51,9 +54,7 @@ abstract class CourseBaseController extends BaseController
 
         if (!$user->isLogin()) {
             $response = $this->createMessageResponse('info', '你好像忘了登录哦？', null, 3000, $this->generateUrl('login'));
-        }
-
-        if (!$this->getCourseService()->canTakeCourse($course)) {
+        } elseif (!$this->getCourseService()->canTakeCourse($course)) {
             $response = $this->createMessageResponse(
                 'info',
                 '您还不是课程《'.$courseSet['title'].'》的学员，请先购买或加入学习。',
@@ -62,8 +63,20 @@ abstract class CourseBaseController extends BaseController
                 $this->generateUrl('course_show', array('id' => $courseId))
             );
         }
+        $course = $this->buildCourseTitle($course);
 
         return array($course, $member, $response);
+    }
+
+    protected function buildCourseTitle($course)
+    {
+        if ($this->getCourseService()->hasMulCourses($course['courseSetId'])) {
+            $course['title'] = CourseTitleUtils::getDisplayedTitle($course);
+        } elseif (!empty($course['courseSetTitle'])) {
+            $course['title'] = $course['courseSetTitle'];
+        }
+
+        return $course;
     }
 
     protected function getCourseMember(Request $request, $course)

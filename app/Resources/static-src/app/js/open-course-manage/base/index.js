@@ -1,3 +1,3 @@
 import Base from './base';
 
-new Base();
+new Base($('#course-create-btn'));

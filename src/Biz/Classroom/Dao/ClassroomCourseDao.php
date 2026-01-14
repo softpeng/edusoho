@@ -12,13 +12,19 @@ interface ClassroomCourseDao extends GeneralDaoInterface
 
     public function getByClassroomIdAndCourseId($classroomId, $courseId);
 
+    public function deleteByIds(array $ids);
+
     public function deleteByClassroomId($classroomId);
 
     public function findClassroomIdsByCourseId($courseId);
 
+    public function findClassroomIdsByParentCourseId($parentCourseId);
+
     public function findByClassroomIdAndCourseIds($classroomId, $courseIds);
 
     public function findByClassroomId($classroomId);
+
+    public function findByClassroomIds(array $classroomIds);
 
     public function findByCoursesIds($courseIds);
 
@@ -33,4 +39,6 @@ interface ClassroomCourseDao extends GeneralDaoInterface
     public function findActiveCoursesByClassroomId($classroomId);
 
     public function countCourseTasksByClassroomId($classroomId);
+
+    public function countTaskNumByClassroomIds($classroomIds);
 }

@@ -2,30 +2,39 @@
 
 namespace AppBundle\Controller\Classroom;
 
-use AppBundle\Common\ClassroomToolkit;
-use AppBundle\Common\Paginator;
-use Biz\Sign\Service\SignService;
-use Biz\User\Service\AuthService;
 use AppBundle\Common\ArrayToolkit;
-use Biz\User\Service\TokenService;
-use Biz\Order\Service\OrderService;
-use Biz\User\Service\StatusService;
-use Biz\Taxonomy\Service\TagService;
+use AppBundle\Common\ClassroomToolkit;
+use AppBundle\Common\ExtensionManager;
+use AppBundle\Common\Paginator;
+use AppBundle\Controller\BaseController;
+use Biz\Certificate\Service\CertificateService;
+use Biz\Certificate\Service\RecordService;
+use Biz\Classroom\ClassroomException;
+use Biz\Classroom\Service\ClassroomService;
 use Biz\Course\Service\CourseService;
 use Biz\Course\Service\MemberService;
-use Biz\Course\Service\ThreadService;
-use AppBundle\Common\ExtensionManager;
+use Biz\Goods\Service\GoodsService;
+use Biz\ItemBankExercise\Service\ExerciseService;
+use Biz\Order\OrderException;
+use Biz\Order\Service\OrderService;
+use Biz\Product\Service\ProductService;
+use Biz\Sign\Service\SignService;
 use Biz\System\Service\SettingService;
-use Biz\User\Service\UserFieldService;
-use Biz\Cash\Service\CashOrdersService;
-use AppBundle\Controller\BaseController;
-use Biz\Cash\Service\CashAccountService;
 use Biz\Taxonomy\Service\CategoryService;
-use Biz\Classroom\Service\ClassroomService;
+use Biz\Taxonomy\Service\TagService;
+use Biz\Thread\Service\ThreadService;
+use Biz\User\Service\AuthService;
+use Biz\User\Service\StatusService;
+use Biz\User\Service\TokenService;
+use Biz\User\Service\UserFieldService;
+use Biz\User\UserException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Biz\Classroom\Service\ClassroomOrderService;
-use Biz\Classroom\Service\ClassroomReviewService;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use VipPlugin\Biz\Marketing\Service\VipRightService;
+use VipPlugin\Biz\Marketing\VipRightSupplier\ClassroomVipRightSupplier;
+use VipPlugin\Biz\Vip\Service\LevelService;
+use VipPlugin\Biz\Vip\Service\VipService;
 
 class ClassroomController extends BaseController
 {
@@ -33,28 +42,47 @@ class ClassroomController extends BaseController
     {
         $canManageClassroom = $this->getClassroomService()->canManageClassroom($classroom['id']);
 
-        return $this->render('classroom/dashboard-nav.html.twig', array(
+        $threadSetting = $this->getSettingService()->get('ugc_thread', []);
+        $typeExcludes = [];
+        if (empty($threadSetting['enable_thread'])) {
+            $typeExcludes = array_merge($typeExcludes, ['question', 'discussion']);
+        }
+        if (empty($threadSetting['enable_classroom_question'])) {
+            $typeExcludes = array_merge($typeExcludes, ['question']);
+        }
+        if (empty($threadSetting['enable_classroom_thread'])) {
+            $typeExcludes = array_merge($typeExcludes, ['discussion']);
+        }
+        $classroom['threadNum'] = $this->getThreadService()->searchThreadCount([
+            'targetType' => 'classroom',
+            'targetId' => $classroom['id'],
+            'typeExcludes' => $typeExcludes,
+            'excludeAuditStatus' => 'illegal',
+        ]);
+
+        return $this->render('classroom/dashboard-nav.html.twig', [
             'canManageClassroom' => $canManageClassroom,
             'classroom' => $classroom,
             'nav' => $nav,
             'member' => $member,
-        ));
+            'itemBankBindNum' => $this->getExerciseService()->countExerciseBind(['bindType' => 'classroom', 'bindId' => $classroom['id']]),
+        ]);
     }
 
     public function keywordsAction($classroom)
     {
         $category = $this->getCategoryService()->getCategory($classroom['categoryId']);
-        $parentCategory = array();
+        $parentCategory = [];
 
-        if (!empty($category) && $category['parentId'] != 0) {
+        if (!empty($category) && 0 != $category['parentId']) {
             $parentCategory = $this->getCategoryService()->getCategory($category['parentId']);
         }
 
-        return $this->render('classroom/keywords.html.twig', array(
+        return $this->render('classroom/keywords.html.twig', [
             'category' => $category,
             'parentCategory' => $parentCategory,
             'classroom' => $classroom,
-        ));
+        ]);
     }
 
     public function headerAction($previewAs, $classroomId)
@@ -69,11 +97,16 @@ class ClassroomController extends BaseController
 
         $checkMemberLevelResult = $classroomMemberLevel = null;
 
-        if ($user['id'] && $this->isPluginInstalled('Vip') && $this->setting('vip.enabled')) {
-            $classroomMemberLevel = $classroom['vipLevelId'] > 0 ? $this->getLevelService()->getLevel($classroom['vipLevelId']) : null;
+        if (empty($user['id'])) {
+            $checkMemberLevelResult = 'not_login';
+        }
 
-            if ($classroomMemberLevel) {
-                $checkMemberLevelResult = $this->getVipService()->checkUserInMemberLevel($user['id'], $classroomMemberLevel['id']);
+        if ($this->isPluginInstalled('Vip') && $this->setting('vip.enabled')) {
+            $vipRight = $this->getVipRightService()->getVipRightBySupplierCodeAndUniqueCode(ClassroomVipRightSupplier::CODE, $classroom['id']);
+            $classroomMemberLevel = empty($vipRight) ? null : $this->getLevelService()->getLevel($vipRight['vipLevelId']);
+
+            if ($user['id'] && $classroomMemberLevel) {
+                $checkMemberLevelResult = $this->getVipService()->checkUserVipRight($user['id'], ClassroomVipRightSupplier::CODE, $classroom['id']);
             }
         }
 
@@ -103,10 +136,18 @@ class ClassroomController extends BaseController
         $member = $this->previewAsMember($previewAs, $member, $classroom);
 
         if ($member) {
-            $isclassroomteacher = in_array('teacher', $member['role']) || in_array('headTeacher', $member['role']) ? true : false;
-            $vipChecked = $this->isPluginInstalled('Vip') && $this->setting('vip.enabled') && $member['levelId'] > 0 ? $this->getVipService()->checkUserInMemberLevel($user['id'], $classroom['vipLevelId']) : 'ok';
+            $vipSetting = $this->getSettingService()->get('vip', []);
+            $vipDeadline = false;
+            if ($this->isPluginInstalled('Vip') && !empty($vipSetting['enabled']) && 'vip_join' == $member['joinedChannel'] && in_array('student', $member['role'])) {
+                $vipMember = $this->getVipService()->getMemberByUserId($member['userId']);
+                $vipRight = $this->getVipRightService()->getVipRightBySupplierCodeAndUniqueCode('classroom', $classroomId);
+                if (!empty($vipMember) && !empty($vipRight)) {
+                    $vipDeadline = true;
+                    $member['deadline'] = ($vipMember['deadline'] < $member['deadline']) || empty($member['deadline']) ? $vipMember['deadline'] : $member['deadline'];
+                }
+            }
 
-            return $this->render('classroom/classroom-join-header.html.twig', array(
+            return $this->render('classroom/classroom-join-header.html.twig', [
                 'classroom' => $classroom,
                 'courses' => $courses,
                 'lessonNum' => $lessonNum,
@@ -118,12 +159,11 @@ class ClassroomController extends BaseController
                 'coursesNum' => $coursesNum,
                 'canFreeJoin' => $canFreeJoin,
                 'breadcrumbs' => $breadcrumbs,
-                'isclassroomteacher' => $isclassroomteacher,
-                'vipChecked' => $vipChecked,
-            ));
+                'vipDeadline' => $vipDeadline,
+            ]);
         }
 
-        return $this->render('classroom/classroom-header.html.twig', array(
+        return $this->render('classroom/classroom-header.html.twig', [
             'classroom' => $classroom,
             'courses' => $courses,
             'checkMemberLevelResult' => $checkMemberLevelResult,
@@ -132,7 +172,7 @@ class ClassroomController extends BaseController
             'member' => $member,
             'canFreeJoin' => $canFreeJoin,
             'breadcrumbs' => $breadcrumbs,
-        ));
+        ]);
     }
 
     /*
@@ -145,7 +185,7 @@ class ClassroomController extends BaseController
         $previewAs = '';
 
         if (empty($classroom)) {
-            throw $this->createNotFoundException();
+            $this->createNewException(ClassroomException::NOTFOUND_CLASSROOM());
         }
 
         $user = $this->getCurrentUser();
@@ -160,38 +200,33 @@ class ClassroomController extends BaseController
 
         $member = $this->previewAsMember($previewAs, $member, $classroom);
 
-        if ($member && $member['locked'] == '0') {
-            if (in_array('student', $member['role'])) {
-                return $this->redirect($this->generateUrl('classroom_courses', array(
-                    'classroomId' => $id,
-                )));
-            } else {
-                return $this->redirect($this->generateUrl('classroom_threads', array(
-                    'classroomId' => $id,
-                )));
-            }
+        if ($member && '0' == $member['locked']) {
+            return $this->redirect($this->generateUrl('classroom_courses', [
+                'classroomId' => $id,
+            ]));
         }
 
-        return $this->redirect($this->generateUrl('classroom_introductions', array(
-            'id' => $id,
-        )));
+        $product = $this->getProductService()->getProductByTargetIdAndType($classroom['id'], 'classroom');
+        $goods = $this->getGoodsService()->getGoodsByProductId($product['id']);
+
+        return $this->redirect($this->generateUrl('goods_show', ['id' => $goods['id']]));
     }
 
     private function previewAsMember($previewAs, $member, $classroom)
     {
         $user = $this->getCurrentUser();
 
-        if (in_array($previewAs, array('guest', 'auditor', 'member'))) {
-            if ($previewAs == 'guest') {
+        if (in_array($previewAs, ['guest', 'auditor', 'member'])) {
+            if ('guest' == $previewAs) {
                 return;
             }
 
-            $deadline = ClassroomToolkit::buildMemberDeadline(array(
+            $deadline = ClassroomToolkit::buildMemberDeadline([
                 'expiryMode' => $classroom['expiryMode'],
                 'expiryValue' => $classroom['expiryValue'],
-            ));
+            ]);
 
-            $member = array(
+            $member = [
                 'id' => 0,
                 'classroomId' => $classroom['id'],
                 'userId' => $user['id'],
@@ -200,52 +235,32 @@ class ClassroomController extends BaseController
                 'noteNum' => 0,
                 'threadNum' => 0,
                 'remark' => '',
-                'role' => array('auditor'),
+                'role' => ['auditor'],
                 'locked' => 0,
                 'createdTime' => 0,
                 'deadline' => $deadline,
-            );
+            ];
 
-            if ($previewAs == 'member') {
-                $member['role'] = array('member');
+            if ('member' == $previewAs) {
+                $member['role'] = ['member'];
             }
         }
 
         return $member;
     }
 
+    /**
+     * @param $id
+     *
+     * @return \Symfony\Component\HttpFoundation\RedirectResponse
+     *                                                            商品介绍跳转到商品页
+     */
     public function introductionAction($id)
     {
-        $classroom = $this->getClassroomService()->getClassroom($id);
-        $introduction = $classroom['about'];
-        $user = $this->getCurrentUser();
-        $member = $user['id'] ? $this->getClassroomService()->getClassroomMember($classroom['id'], $user['id']) : null;
+        $product = $this->getProductService()->getProductByTargetIdAndType($id, 'classroom');
+        $goods = $this->getGoodsService()->getGoodsByProductId($product['id']);
 
-        if (!$this->getClassroomService()->canLookClassroom($classroom['id'])) {
-            return $this->createMessageResponse('info', "非常抱歉，您无权限访问该{$classroom['title']}，如有需要请联系客服", '', 3, $this->generateUrl('homepage'));
-        }
-
-        if (!$classroom) {
-            $classroomDescription = array();
-        } else {
-            $classroomDescription = $classroom['about'];
-            $classroomDescription = strip_tags($classroomDescription, '');
-            $classroomDescription = preg_replace('/ /', '', $classroomDescription);
-        }
-
-        $layout = 'classroom/layout.html.twig';
-
-        if ($member && !$member['locked']) {
-            $layout = 'classroom/join-layout.html.twig';
-        }
-
-        return $this->render('classroom/introduction.html.twig', array(
-            'introduction' => $introduction,
-            'layout' => $layout,
-            'classroom' => $classroom,
-            'member' => $member,
-            'classroomDescription' => $classroomDescription,
-        ));
+        return $this->redirect($this->generateUrl('goods_show', ['id' => $goods['id']]));
     }
 
     public function teachersBlockAction($classroom)
@@ -269,7 +284,7 @@ class ClassroomController extends BaseController
             $teachersCount = count($users);
         }
 
-        return $this->render('classroom/teachers-block.html.twig', array(
+        return $this->render('classroom/teachers-block.html.twig', [
             'classroom' => $classroom,
             'users' => $users,
             'profiles' => $profiles,
@@ -277,7 +292,7 @@ class ClassroomController extends BaseController
             'headTeacherprofiles' => $headTeacherprofiles,
             'teachersCount' => $teachersCount,
             'isFollowed' => $isFollowed,
-        ));
+        ]);
     }
 
     public function roleAction($previewAs, $classroomId)
@@ -291,10 +306,11 @@ class ClassroomController extends BaseController
         $checkMemberLevelResult = $classroomMemberLevel = null;
 
         if ($this->setting('vip.enabled') && $user['id']) {
-            $classroomMemberLevel = $classroom['vipLevelId'] > 0 ? $this->getLevelService()->getLevel($classroom['vipLevelId']) : null;
+            $vipRight = $this->getVipRightService()->getVipRightBySupplierCodeAndUniqueCode(ClassroomVipRightSupplier::CODE, $classroom['id']);
+            $classroomMemberLevel = !empty($vipRight) ? $this->getLevelService()->getLevel($vipRight['vipLevelId']) : null;
 
             if ($classroomMemberLevel) {
-                $checkMemberLevelResult = $this->getVipService()->checkUserInMemberLevel($user['id'], $classroomMemberLevel['id']);
+                $checkMemberLevelResult = $this->getVipService()->checkUserVipRight($user['id'], ClassroomVipRightSupplier::CODE, $classroom['id']);
             }
         }
 
@@ -318,8 +334,8 @@ class ClassroomController extends BaseController
             $price += $course['price'];
         }
 
-        if ($member && $member['locked'] == '0') {
-            return $this->render('classroom/role.html.twig', array(
+        if ($member && '0' == $member['locked']) {
+            return $this->render('classroom/role.html.twig', [
                 'classroom' => $classroom,
                 'courses' => $courses,
                 'coinPrice' => $coinPrice,
@@ -327,7 +343,7 @@ class ClassroomController extends BaseController
                 'member' => $member,
                 'checkMemberLevelResult' => $checkMemberLevelResult,
                 'classroomMemberLevel' => $classroomMemberLevel,
-            ));
+            ]);
         }
 
         return new Response();
@@ -338,12 +354,12 @@ class ClassroomController extends BaseController
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException('不允许未登录访问');
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
-        $this->getClassroomService()->exitClassroom($classroomId, $user['id']);
+        $this->getClassroomService()->removeStudent($classroomId, $user['id']);
 
-        return $this->redirect($this->generateUrl('classroom_introductions', array('id' => $classroomId)));
+        return $this->redirect($this->generateUrl('classroom_introductions', ['id' => $classroomId]));
     }
 
     public function latestMembersBlockAction($classroom, $count = 20)
@@ -351,18 +367,17 @@ class ClassroomController extends BaseController
         $students = $this->getClassroomService()->findClassroomStudents($classroom['id'], 0, $count);
         $users = $this->getUserService()->findUsersByIds(ArrayToolkit::column($students, 'userId'));
 
-        return $this->render('classroom/latest-members-block.html.twig', array(
+        return $this->render('classroom/latest-members-block.html.twig', [
             'students' => $students,
             'users' => $users,
-        ));
+        ]);
     }
 
     public function classroomStatusBlockAction($classroom, $count = 10)
     {
-        $conditions['onlyClassroomId'] = $classroom['id'];
         $learns = $this->getStatusService()->searchStatuses(
-            $conditions,
-            array('createdTime' => 'DESC'),
+            ['onlyClassroomId' => $classroom['id']],
+            ['createdTime' => 'DESC'],
             0,
             $count
         );
@@ -374,15 +389,18 @@ class ClassroomController extends BaseController
             $manager = ExtensionManager::instance();
 
             foreach ($learns as $key => $learn) {
-                $learns[$key]['user'] = $owners[$learn['userId']];
+                $learns[$key]['user'] = $this->getUserService()->hideUserNickname($owners[$learn['userId']]);
                 $learns[$key]['message'] = $manager->renderStatus($learn, 'simple');
+                if ('closed' == $classroom['status']) {
+                    $learns[$key]['message'] = str_replace('link-dark', 'link-dark js-handleLearnContentOnMessage', $learns[$key]['message']);
+                }
                 unset($learn);
             }
         }
 
-        return $this->render('status/status-block.html.twig', array(
+        return $this->render('status/status-block.html.twig', [
             'learns' => $learns,
-        ));
+        ]);
     }
 
     public function signPageAction($classroomId)
@@ -393,7 +411,7 @@ class ClassroomController extends BaseController
 
         $isSignedToday = $this->getSignService()->isSignedToday($user['id'], 'classroom_sign', $classroom['id']);
 
-        $week = array('日', '一', '二', '三', '四', '五', '六');
+        $week = ['日', '一', '二', '三', '四', '五', '六'];
 
         $userSignStatistics = $this->getSignService()->getSignUserStatistics($user['id'], 'classroom_sign', $classroom['id']);
 
@@ -402,24 +420,24 @@ class ClassroomController extends BaseController
         $signDay = $this->getSignService()->findSignRecordsByPeriod($user['id'], 'classroom_sign', $classroom['id'], date('Y-m', time()), date('Y-m-d', time() + 3600));
         $notSign = $day - count($signDay);
 
-        return $this->render('classroom/sign.html.twig', array(
+        return $this->render('classroom/sign.html.twig', [
             'classroom' => $classroom,
             'isSignedToday' => $isSignedToday,
             'userSignStatistics' => $userSignStatistics,
             'notSign' => $notSign,
-            'week' => $week[date('w', time())], ));
+            'week' => $week[date('w', time())], ]);
     }
 
     public function signAction($classroomId)
     {
         $user = $this->getCurrentUser();
-        $userSignStatistics = array();
+        $userSignStatistics = [];
 
         $this->checkClassroomStatus($classroomId);
 
         $member = $this->getClassroomService()->getClassroomMember($classroomId, $user['id']);
 
-        if ($this->getClassroomService()->canTakeClassroom($classroomId) || (isset($member) && array_intersect(array('auditor'), $member['role']))) {
+        if ($this->getClassroomService()->canTakeClassroom($classroomId) || (isset($member) && array_intersect(['auditor'], $member['role']))) {
             $this->getSignService()->userSign($user['id'], 'classroom_sign', $classroomId);
 
             $userSignStatistics = $this->getSignService()->getSignUserStatistics($user['id'], 'classroom_sign', $classroomId);
@@ -437,15 +455,15 @@ class ClassroomController extends BaseController
         $endDay = $request->query->get('endDay');
 
         $userSigns = $this->getSignService()->findSignRecordsByPeriod($userId, 'classroom_sign', $classroomId, $startDay, $endDay);
-        $result = array();
-        $result['records'] = array();
+        $result = [];
+        $result['records'] = [];
 
         if ($userSigns) {
             foreach ($userSigns as $userSign) {
-                $result['records'][] = array(
+                $result['records'][] = [
                     'day' => date('d', $userSign['createdTime']),
                     'time' => date('H-i', $userSign['createdTime']),
-                    'rank' => $userSign['rank'], );
+                    'rank' => $userSign['_rank'], ];
             }
         }
 
@@ -462,51 +480,67 @@ class ClassroomController extends BaseController
     public function becomeStudentAction($id)
     {
         if (!$this->setting('vip.enabled')) {
-            throw $this->createAccessDeniedException();
+            $this->createNewException(ClassroomException::FORBIDDEN_BECOME_STUDENT());
         }
 
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException();
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         if ($this->getClassroomService()->isClassroomOverDue($id)) {
-            throw $this->createAccessDeniedException('班级已过期');
+            $this->createNewException(ClassroomException::EXPIRED_CLASSROOM());
         }
 
-        $this->getClassroomService()->becomeStudent($id, $user['id'], array('becomeUseMember' => true));
+        $this->getClassroomService()->becomeStudent($id, $user['id'], ['becomeUseMember' => true]);
 
-        return $this->redirect($this->generateUrl('classroom_show', array('id' => $id)));
+        return $this->redirect($this->generateUrl('classroom_show', ['id' => $id]));
     }
 
-    public function exitAction($id)
+    public function exitAction(request $request, $id)
     {
         $user = $this->getCurrentUser();
 
         $member = $this->getClassroomService()->getClassroomMember($id, $user['id']);
 
         if (empty($member)) {
-            throw $this->createAccessDeniedException('您不是班级的学员。');
+            $this->createNewException(ClassroomException::NOTFOUND_MEMBER());
         }
 
         if (!$this->getClassroomService()->canTakeClassroom($id, true)) {
-            throw $this->createAccessDeniedException('您不是班级的学员。');
+            $this->createNewException(ClassroomException::FORBIDDEN_TAKE_CLASSROOM());
         }
 
-        if (!empty($member['orderId'])) {
-            throw $this->createAccessDeniedException('有关联的订单，不能直接退出学习。');
+        $reason = $request->request->get('reason');
+        $this->getClassroomService()->removeStudent(
+            $id,
+            $user['id'],
+            ['reason' => $reason['note'], 'reason_type' => 'exit']
+        );
+
+        return $this->redirect($this->generateUrl('classroom_show', ['id' => $id]));
+    }
+
+    public function exitForNoReasonAction(request $request, $id)
+    {
+        $user = $this->getCurrentUser();
+
+        $member = $this->getClassroomService()->getClassroomMember($id, $user['id']);
+
+        if (empty($member)) {
+            $this->createNewException(ClassroomException::NOTFOUND_MEMBER());
         }
 
-        $order = $this->getOrderService()->getOrder($member['orderId']);
-
-        if ($order['targetType'] == 'groupSell') {
-            throw $this->createAccessDeniedException('组合购买课程不能退出。');
+        if (!$this->getClassroomService()->canTakeClassroom($id, true)) {
+            $this->createNewException(ClassroomException::FORBIDDEN_TAKE_CLASSROOM());
         }
 
-        $this->getClassroomService()->exitClassroom($id, $user['id']);
+        $this->getClassroomService()->removeStudent(
+            $id,
+            $user['id']);
 
-        return $this->redirect($this->generateUrl('classroom_show', array('id' => $id)));
+        return $this->redirect($this->generateUrl('classroom_show', ['id' => $id]));
     }
 
     public function becomeAuditorAction($id)
@@ -520,7 +554,7 @@ class ClassroomController extends BaseController
         $classroom = $this->getClassroomService()->getClassroom($id);
 
         if (empty($classroom)) {
-            throw $this->createNotFoundException();
+            $this->createNewException(ClassroomException::NOTFOUND_CLASSROOM());
         }
 
         if (!$classroom['buyable']) {
@@ -542,7 +576,7 @@ class ClassroomController extends BaseController
         $this->getClassroomService()->becomeAuditor($id, $user['id']);
 
         response:
-        return $this->redirect($this->generateUrl('classroom_show', array('id' => $id)));
+        return $this->redirect($this->generateUrl('classroom_show', ['id' => $id]));
     }
 
     public function canviewAction($classroomId)
@@ -550,7 +584,7 @@ class ClassroomController extends BaseController
         $user = $this->getCurrentUser();
 
         if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException();
+            $this->createNewException(UserException::UN_LOGIN());
         }
 
         $result = $this->getClassroomService()->canLookClassroom($classroomId);
@@ -562,81 +596,30 @@ class ClassroomController extends BaseController
     {
         $classroomIds = $this->getClassroomService()->findClassroomIdsByCourseId($courseId);
 
-        $classroom = empty($classroomIds) || count($classroomIds) == 0 ? null : $this->getClassroomService()->getClassroom($classroomIds[0]);
+        $classroom = empty($classroomIds) || 0 == count($classroomIds) ? null : $this->getClassroomService()->getClassroom($classroomIds[0]);
 
-        return $this->render('classroom/classroom-block.html.twig', array(
+        return $this->render('classroom/classroom-block.html.twig', [
             'classroom' => $classroom,
-        ));
-    }
-
-    public function buyAction(Request $request, $id)
-    {
-        $classroom = $this->getClassroomService()->getClassroom($id);
-
-        $user = $this->getCurrentUser();
-
-        if (!$user->isLogin()) {
-            throw $this->createAccessDeniedException();
-        }
-
-        $previewAs = $request->query->get('previewAs');
-
-        $member = $this->getClassroomService()->getClassroomMember($classroom['id'], $user['id']);
-        $member = $this->previewAsMember($previewAs, $member, $classroom);
-
-        $courseSetting = $this->getSettingService()->get('course', array());
-
-        $userInfo = $this->getUserService()->getUserProfile($user['id']);
-        $userInfo['approvalStatus'] = $user['approvalStatus'];
-
-        $account = $this->getCashAccountService()->getAccountByUserId($user['id'], true);
-
-        if (empty($account)) {
-            $this->getCashAccountService()->createAccount($user['id']);
-        }
-
-        if (isset($account['cash'])) {
-            $account['cash'] = intval($account['cash']);
-        }
-
-        $amount = $this->getOrderService()->analysisAmount(array('userId' => $user['id'], 'status' => 'paid'));
-        $amount += $this->getCashOrdersService()->analysisAmount(array('userId' => $user['id'], 'status' => 'paid'));
-
-        $userFields = $this->getUserFieldService()->getEnabledFieldsOrderBySeq();
-
-        return $this->render('classroom/buy-modal.html.twig', array(
-            'classroom' => $classroom,
-            'payments' => $this->getEnabledPayments(),
-            'user' => $userInfo,
-            'noVerifiedMobile' => (strlen($user['verifiedMobile']) == 0),
-            'verifiedMobile' => (strlen($user['verifiedMobile']) > 0) ? $user['verifiedMobile'] : '',
-            'courseSetting' => $courseSetting,
-            'member' => $member,
-            'userFields' => $userFields,
-            'account' => $account,
-            'amount' => $amount,
-        ));
+        ]);
     }
 
     public function qrcodeAction(Request $request, $id)
     {
         $user = $this->getCurrentUser();
-        $host = $request->getSchemeAndHttpHost();
 
-        $token = $this->getTokenService()->makeToken('qrcode', array(
+        $token = $this->getTokenService()->makeToken('qrcode', [
             'userId' => $user['id'],
-            'data' => array(
-                'url' => $this->generateUrl('classroom_show', array('id' => $id), true),
-                'appUrl' => "{$host}/mapi_v2/mobile/main#/classroom/{$id}",
-            ),
+            'data' => [
+                'url' => $this->generateUrl('classroom_show', ['id' => $id], UrlGeneratorInterface::ABSOLUTE_URL),
+            ],
             'times' => 1,
             'duration' => 3600,
-        ));
-        $url = $this->generateUrl('common_parse_qrcode', array('token' => $token['token']), true);
+        ]);
+        $url = $this->generateUrl('common_parse_qrcode', ['token' => $token['token']], UrlGeneratorInterface::ABSOLUTE_URL);
 
-        $response = array(
-            'img' => $this->generateUrl('common_qrcode', array('text' => $url), true),
-        );
+        $response = [
+            'img' => $this->generateUrl('common_qrcode', ['text' => $url], UrlGeneratorInterface::ABSOLUTE_URL),
+        ];
 
         return $this->createJsonResponse($response);
     }
@@ -649,16 +632,12 @@ class ClassroomController extends BaseController
             return false;
         }
 
-        $courseIds = ArrayToolkit::column($courses, 'parentId');
-//        $courses       = $this->getCourseService()->findCoursesByIds($courseIds);
-        $courseMembers = $this->getCourseMemberService()->findCoursesByStudentIdAndCourseIds($user['id'], $courseIds);
+        list($courses) = $this->getClassroomService()->findUserPaidCoursesInClassroom($user['id'], $classroom['id']);
 
-        $isJoinedCourseIds = ArrayToolkit::column($courseMembers, 'courseId');
-        $courses = $this->getCourseService()->findCoursesByIds($isJoinedCourseIds);
         $priceType = 'RMB';
 
         $coinSetting = $this->getSettingService()->get('coin');
-        $coinEnable = isset($coinSetting['coin_enabled']) && $coinSetting['coin_enabled'] == 1;
+        $coinEnable = isset($coinSetting['coin_enabled']) && 1 == $coinSetting['coin_enabled'];
 
         if ($coinEnable && !empty($coinSetting) && array_key_exists('price_type', $coinSetting)) {
             $priceType = $coinSetting['price_type'];
@@ -666,11 +645,11 @@ class ClassroomController extends BaseController
 
         $totalPrice = $classroom['price'];
 
-        if ($priceType == 'Coin') {
+        if ('Coin' == $priceType) {
             $totalPrice = $totalPrice * $coinSetting['cash_rate'];
         }
 
-//        $classroomSetting = $this->getSettingService()->get("classroom");
+        //        $classroomSetting = $this->getSettingService()->get("classroom");
 
         if ($this->getCoursesTotalPrice($courses, $priceType) >= (float) $totalPrice) {
             return true;
@@ -686,9 +665,9 @@ class ClassroomController extends BaseController
         $cashRate = $this->getCashRate();
 
         foreach ($courses as $key => $course) {
-            if ($priceType == 'RMB') {
+            if ('RMB' == $priceType) {
                 $coursesTotalPrice += $course['originPrice'];
-            } elseif ($priceType == 'Coin') {
+            } elseif ('Coin' == $priceType) {
                 $coursesTotalPrice += $course['originPrice'] * $cashRate;
             }
         }
@@ -701,11 +680,15 @@ class ClassroomController extends BaseController
         $classroom = $this->getClassroomService()->getClassroom($classroomId);
 
         if (!$classroom) {
-            throw $this->createNotFoundException();
+            $this->createNewException(ClassroomException::NOTFOUND_CLASSROOM());
         }
 
-        if ($classroom['status'] != 'published') {
-            throw $this->createNotFoundException();
+        if ('closed' == $classroom['status']) {
+            $this->createNewException(ClassroomException::CLOSED_CLASSROOM());
+        }
+
+        if ('published' != $classroom['status']) {
+            $this->createNewException(ClassroomException::UNPUBLISHED_CLASSROOM());
         }
     }
 
@@ -717,8 +700,8 @@ class ClassroomController extends BaseController
             return $this->createMessageResponse('error', '您不是老师，不能查看此页面！');
         }
 
-        $teacherClassrooms = $this->getClassroomService()->searchMembers(array('role' => 'teacher', 'userId' => $user['id']), array('createdTime' => 'desc'), 0, PHP_INT_MAX);
-        $headTeacherClassrooms = $this->getClassroomService()->searchMembers(array('role' => 'headTeacher', 'userId' => $user['id']), array('createdTime' => 'desc'), 0, PHP_INT_MAX);
+        $teacherClassrooms = $this->getClassroomService()->searchMembers(['role' => 'teacher', 'userId' => $user['id']], ['createdTime' => 'desc'], 0, PHP_INT_MAX);
+        $headTeacherClassrooms = $this->getClassroomService()->searchMembers(['role' => 'headTeacher', 'userId' => $user['id']], ['createdTime' => 'desc'], 0, PHP_INT_MAX);
 
         $classrooms = array_merge($teacherClassrooms, $headTeacherClassrooms);
 
@@ -727,18 +710,18 @@ class ClassroomController extends BaseController
         $classrooms = $this->getClassroomService()->findClassroomsByIds($classroomIds);
 
         if (empty($classrooms)) {
-            return $this->render('classroom/my-teaching-threads.html.twig', array(
+            return $this->render('classroom/my-teaching-threads.html.twig', [
                 'type' => $type,
                 'threadType' => 'classroom',
-                'threads' => array(),
-            ));
+                'threads' => [],
+            ]);
         }
 
-        $conditions = array(
+        $conditions = [
             'targetIds' => $classroomIds,
             'targetType' => 'classroom',
             'type' => $type,
-        );
+        ];
 
         $paginator = new Paginator(
             $request,
@@ -754,20 +737,20 @@ class ClassroomController extends BaseController
 
         $users = $this->getUserService()->findUsersByIds(ArrayToolkit::column($threads, 'lastPostUserId'));
 
-        return $this->render('classroom/my-teaching-threads.html.twig', array(
+        return $this->render('classroom/my-teaching-threads.html.twig', [
             'paginator' => $paginator,
             'threads' => $threads,
             'users' => $users,
             'classrooms' => $classrooms,
             'type' => $type,
             'threadType' => 'classroom',
-        ));
+        ]);
     }
 
     protected function getCashRate()
     {
         $coinSetting = $this->getSettingService()->get('coin');
-        $coinEnable = isset($coinSetting['coin_enabled']) && $coinSetting['coin_enabled'] == 1;
+        $coinEnable = isset($coinSetting['coin_enabled']) && 1 == $coinSetting['coin_enabled'];
         $cashRate = $coinEnable && isset($coinSetting['cash_rate']) ? $coinSetting['cash_rate'] : 1;
 
         return $cashRate;
@@ -778,46 +761,86 @@ class ClassroomController extends BaseController
         $order = $this->getOrderService()->getOrderBySn($sn);
 
         if (empty($order)) {
-            throw $this->createNotFoundException('订单不存在!');
+            $this->createNewException(OrderException::NOTFOUND_ORDER());
         }
 
         $classroom = $this->getClassroomService()->getClassroom($order['targetId']);
 
         if (empty($classroom)) {
-            throw $this->createNotFoundException('找不到要购买的班级!');
+            $this->createNewException(ClassroomException::NOTFOUND_CLASSROOM());
         }
 
-        return $this->render('classroom/classroom-order.html.twig', array('order' => $order, 'classroom' => $classroom));
+        return $this->render('classroom/classroom-order.html.twig', ['order' => $order, 'classroom' => $classroom]);
     }
 
-    protected function getEnabledPayments()
+    public function certificatesAction(Request $request, $classroomId)
     {
-        $enableds = array();
-
-        $setting = $this->setting('payment', array());
-
-        if (empty($setting['enabled'])) {
-            return $enableds;
+        $classroom = $this->getClassroomService()->getClassroom($classroomId);
+        if (empty($classroom)) {
+            $this->createNewException(ClassroomException::NOTFOUND_CLASSROOM());
         }
 
-        $payment = $this->get('codeages_plugin.dict_twig_extension')->getDict('payment');
-        $payNames = array_keys($payment);
-        foreach ($payNames as $payName) {
-            if (!empty($setting[$payName.'_enabled'])) {
-                $enableds[$payName] = array(
-                    'type' => empty($setting[$payName.'_type']) ? '' : $setting[$payName.'_type'],
-                );
-            }
-        }
+        $certificates = $this->getCertificateService()->search(
+            ['targetType' => 'classroom', 'status' => 'published', 'targetId' => $classroom['id']],
+            ['createdTime' => 'DESC'],
+            0,
+            PHP_INT_MAX
+        );
 
-        return $enableds;
+        $user = $this->getCurrentUser();
+        $obtainedCertificates = $this->getCertificateRecordService()->search(
+            ['targetType' => 'classroom', 'statuses' => ['valid', 'expired'], 'userId' => $user['id']],
+            [],
+            0,
+            PHP_INT_MAX
+        );
+
+        return $this->render('classroom/certificates/list.html.twig', [
+            'certificates' => $certificates,
+            'obtained' => ArrayToolkit::index($obtainedCertificates, 'certificateId'),
+            'classroom' => $classroom,
+            'member' => $user['id'] ? $this->getClassroomService()->getClassroomMember($classroom['id'], $user['id']) : null,
+        ]);
     }
 
-    public function memberIdsAction($id)
+    public function memberAccessAction(Request $request, $classroomId, $memberId)
     {
-        $ids = $this->getClassroomService()->findMemberUserIdsByClassroomId($id);
+        $user = $this->getCurrentUser();
+        $memberAccessCode = $this->getVipService()->checkUserVipRight($user['id'], 'classroom', $classroomId);
+        $vipRight = $this->getVipRightService()->getVipRightBySupplierCodeAndUniqueCode('classroom', $classroomId);
+        $vipRightLevel = $this->getLevelService()->getLevel($vipRight['vipLevelId']);
 
-        return $this->createJsonResponse($ids);
+        return $this->render('classroom/member-access-modal.html.twig',
+            [
+                'code' => $memberAccessCode,
+                'userLevel' => $vipRightLevel,
+                'vipRightLevel' => empty($vipRight) ? [] : $this->getLevelService()->getLevel($vipRight['vipLevelId']),
+                'classroom' => $this->getClassroomService()->getClassroom($classroomId),
+            ]);
+    }
+
+    /**
+     * @return VipRightService
+     */
+    protected function getVipRightService()
+    {
+        return $this->createService('VipPlugin:Marketing:VipRightService');
+    }
+
+    /**
+     * @return RecordService
+     */
+    protected function getCertificateRecordService()
+    {
+        return $this->createService('Certificate:RecordService');
+    }
+
+    /**
+     * @return CertificateService
+     */
+    protected function getCertificateService()
+    {
+        return $this->createService('Certificate:CertificateService');
     }
 
     /**
@@ -877,22 +900,6 @@ class ClassroomController extends BaseController
     }
 
     /**
-     * @return ClassroomOrderService
-     */
-    protected function getClassroomOrderService()
-    {
-        return $this->createService('Classroom:ClassroomOrderService');
-    }
-
-    /**
-     * @return ClassroomReviewService
-     */
-    protected function getClassroomReviewService()
-    {
-        return $this->createService('Classroom:ClassroomReviewService');
-    }
-
-    /**
      * @return StatusService
      */
     protected function getStatusService()
@@ -914,22 +921,6 @@ class ClassroomController extends BaseController
     protected function getTokenService()
     {
         return $this->createService('User:TokenService');
-    }
-
-    /**
-     * @return CashAccountService
-     */
-    protected function getCashAccountService()
-    {
-        return $this->createService('Cash:CashAccountService');
-    }
-
-    /**
-     * @return CashOrdersService
-     */
-    protected function getCashOrdersService()
-    {
-        return $this->createService('Cash:CashOrdersService');
     }
 
     /**
@@ -970,5 +961,29 @@ class ClassroomController extends BaseController
     protected function getCourseMemberService()
     {
         return $this->createService('Course:MemberService');
+    }
+
+    /**
+     * @return ProductService
+     */
+    protected function getProductService()
+    {
+        return $this->createService('Product:ProductService');
+    }
+
+    /**
+     * @return GoodsService
+     */
+    protected function getGoodsService()
+    {
+        return $this->createService('Goods:GoodsService');
+    }
+
+    /**
+     * @return ExerciseService
+     */
+    protected function getExerciseService()
+    {
+        return $this->createService('ItemBankExercise:ExerciseService');
     }
 }

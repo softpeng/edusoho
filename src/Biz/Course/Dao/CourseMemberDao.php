@@ -2,13 +2,13 @@
 
 namespace Biz\Course\Dao;
 
-use Codeages\Biz\Framework\Dao\GeneralDaoInterface;
+use Codeages\Biz\Framework\Dao\AdvancedDaoInterface;
 
 /**
  * Interface CourseMemberDao
  * TODO course2.0 所有的api 需要重构，很多的api可以合并，还有名字不规范.
  */
-interface CourseMemberDao extends GeneralDaoInterface
+interface CourseMemberDao extends AdvancedDaoInterface
 {
     const TABLE_NAME = 'course_member';
 
@@ -30,6 +30,10 @@ interface CourseMemberDao extends GeneralDaoInterface
 
     public function findLearnedMembers($conditions, $start, $limit);
 
+    public function countUserLearnCourses($userId);
+
+    public function findUserLearnCourseIds($userId);
+
     public function findByIds($ids);
 
     public function findLearnedByCourseIdAndUserId($courseId, $userId);
@@ -45,6 +49,8 @@ interface CourseMemberDao extends GeneralDaoInterface
      * @return mixed
      */
     public function findByCourseIds($courseIds);
+
+    public function findLastLearnTimeRecordStudents($userIds);
 
     /**
      * @before findMembersByUserIdAndRole
@@ -68,33 +74,46 @@ interface CourseMemberDao extends GeneralDaoInterface
     public function findByConditionsGroupByUserId($conditions, $orderBy, $offset, $limit);
 
     /**
-     * @before findMembersByUserIdAndRole
-     *
-     * @param  $userId
-     * @param  $role
-     * @param  $start
-     * @param  $limit
+     * @param $userId
+     * @param $role
+     * @param $start
+     * @param $limit
      * @param bool $onlyPublished
+     * @param bool $filterReservation
      *
      * @return mixed
      */
-    public function findMembersNotInClassroomByUserIdAndRole($userId, $role, $start, $limit, $onlyPublished = true);
+    public function findMembersNotInClassroomByUserIdAndRole($userId, $role, $start, $limit, $onlyPublished = true, $filterReservation = false);
 
     public function findByCourseIdAndRole($courseId, $role);
 
     public function findByCourseSetIdAndRole($courseSetId, $role);
 
+    public function findByCourseSetIdAndRoles($courseSetId, $roles);
+
     public function findByUserIdAndJoinType($userId, $joinedType);
+
+    public function findByMultiClassIdAndRole($multiClassId, $role);
 
     public function searchMemberIds($conditions, $orderBys, $start, $limit);
 
     public function updateMembers($conditions, $updateFields);
+
+    public function changeMembersDeadlineByCourseId($courseId, $day);
+
+    public function changeMembersDeadlineByClassroomId($classroomId, $day);
 
     public function deleteByCourseIdAndRole($courseId, $role);
 
     public function deleteByCourseId($courseId);
 
     public function findByUserIdAndCourseIds($userId, $courseIds);
+
+    public function findByUserIdAndClassroomId($userId, $classroomId);
+
+    public function findByUserIdsAndClassroomId($userIds, $classroomId);
+
+    public function findByUserIdsAndRole($userIds, $role);
 
     public function findByCourseId($courseId);
 
@@ -110,13 +129,13 @@ interface CourseMemberDao extends GeneralDaoInterface
 
     public function countMemberNotInClassroomByUserIdAndCourseTypeAndIsLearned($userId, $role, $type, $isLearned);
 
-    public function countMemberNotInClassroomByUserIdAndRoleAndIsLearned($userId, $role, $isLearned);
+    public function countMemberNotInClassroomByUserIdAndRoleAndIsLearned($userId, $role, $isLearned, $filterReservation = false);
 
     public function countMemberNotInClassroomByUserIdAndRole($userId, $role, $onlyPublished = true);
 
     public function findMembersNotInClassroomByUserIdAndCourseTypeAndIsLearned($userId, $role, $type, $isLearned, $start, $limit);
 
-    public function findMembersNotInClassroomByUserIdAndRoleAndIsLearned($userId, $role, $isLearned, $start, $limit);
+    public function findMembersNotInClassroomByUserIdAndRoleAndIsLearned($userId, $role, $isLearned, $start, $limit, $filterReservation = false);
 
     public function countMemberByUserIdAndCourseTypeAndIsLearned($userId, $role, $type, $isLearned);
 
@@ -129,4 +148,22 @@ interface CourseMemberDao extends GeneralDaoInterface
     public function updateByClassroomId($classroomId, array $fields);
 
     public function searchMemberCountsByConditionsGroupByCreatedTimeWithFormat($conditions, $format = '%Y-%m-%d');
+
+    public function isFieldExist($filedName);
+
+    public function getMultiClassMembers($courseId, $multiClassId, $role);
+
+    public function findByMultiClassIdsAndRole($multiClassIds, $role);
+
+    public function findByUserIdAndRoles($userId, $roles);
+
+    public function getByMultiClassIdAndUserId($multiClassId, $userId);
+
+    public function deleteByMultiClassAndRole($multiClassId, $role);
+
+    public function findMultiClassIdsByUserId($userId);
+
+    public function countGroupByCourseId($conditions);
+
+    public function findUserIdsByCourseIdAndRoles($courseId, $roles);
 }

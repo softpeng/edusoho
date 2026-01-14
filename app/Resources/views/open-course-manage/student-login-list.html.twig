@@ -11,7 +11,7 @@
         {{ select_options({0:'my.teaching.open_course.student_setting.all_student'|trans, 1: 'my.teaching.open_course.student_setting.setting_remind_student'|trans }, app.request.get('isNotified')) }}
       </select>&nbsp;&nbsp;
     {% endif %}
-    <button class="btn btn-primary">{{ 'form.btn.search'|trans }}</button>
+    <button class="cd-btn cd-btn-primary">{{ 'form.btn.search'|trans }}</button>
   </div>
   <div class="clearfix"></div>
 </form>
@@ -34,7 +34,7 @@
       <tr id="student-{{ user.id }}-tr">
         <td class="media" style="vertical-align: middle;">
           {{ web_macro.user_avatar(user, 'pull-left', 'avatar-sm') }}
-          <a class="link-primary" target="_blank" href="{{ path('user_show', {id:user.id}) }}">{{ user.nickname }}</a>
+          <a class="link-primary" target="_blank" href="{{ user_show_path({id:user.id}) }}">{{ user.nickname }}</a>
           <div class="color-gray text-sm">{{'my.teaching.open_course.student_setting.join_time'|trans}}{{ student.createdTime|date('Y-n-d H:i') }}</div>
         </td>
 
@@ -42,17 +42,17 @@
           {{ student.lastEnterTime|date('Y-m-d H:i:s') }}
         </td>
 
-        <td style="vertical-align: middle;">{{ student.mobile }}</td>
+        <td style="vertical-align: middle;">{% if student.mobile|default() %}{% include 'user-mobile-mask.html.twig' with { mobile: student.mobile } %}{% endif %}</td>
 
         {% if course.type == 'liveOpen' and setting('cloud_sms.sms_enabled') and (setting('cloud_sms.sms_live_play_one_day') == 'on' or setting('cloud_sms.sms_live_play_one_hour') == 'on') %}
           <td style="vertical-align: middle;">
             {% if student.isNotified %}{{'my.teaching.open_course.student_setting.whether_remind.yes'|trans}}{% else %}{{'my.teaching.open_course.student_setting.whether_remind.no'|trans}}{% endif %}
           </td>
         {% endif %}
-        
+
         <td style="vertical-align: middle;">
           <div class="btn-group">
-            {% if app.user.id != user.id %}
+            {% if app.user.id != user.id and can_send_message(user.id) %}
               <button class="btn btn-default btn-sm" data-toggle="modal" data-target="#modal" data-url="{{path('message_create', {toId:user.id})}}">{{'my.teaching.open_course.student_setting.send_message_btn'|trans}}</button>
             {% endif %}
             {% if app.user.isAdmin() %}

@@ -2,16 +2,28 @@
 
 namespace AppBundle\Controller;
 
-use Biz\User\CurrentUser;
 use AppBundle\Common\ArrayToolkit;
+use AppBundle\Common\Exception\AbstractException;
+use AppBundle\Common\Exception\ResourceNotFoundException;
+use AppBundle\Common\JWTAuth;
+use Biz\Common\CommonException;
+use Biz\QiQiuYun\Service\QiQiuYunSdkProxyService;
+use Biz\System\Service\SettingService;
+use Biz\User\CurrentUser;
+use Biz\User\Support\PasswordValidator;
+use Biz\User\Support\RoleHelper;
+use Codeages\Biz\Framework\Service\Exception\AccessDeniedException;
+use Firebase\JWT\JWT;
+use Symfony\Bundle\FrameworkBundle\Controller\Controller;
+use Symfony\Component\Form\Extension\Core\Type\FormType;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Security\Http\SecurityEvents;
-use AppBundle\Common\Exception\ResourceNotFoundException;
-use Symfony\Bundle\FrameworkBundle\Controller\Controller;
-use Symfony\Component\Security\Http\Event\InteractiveLoginEvent;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
+use Symfony\Component\Security\Http\Event\InteractiveLoginEvent;
+use Symfony\Component\Security\Http\SecurityEvents;
 
 class BaseController extends Controller
 {
@@ -41,9 +53,6 @@ class BaseController extends Controller
     /**
      * switch current user.
      *
-     * @param Request     $request
-     * @param CurrentUser $user
-     *
      * @return CurrentUser
      */
     protected function switchUser(Request $request, CurrentUser $user)
@@ -58,18 +67,105 @@ class BaseController extends Controller
 
         $this->get('event_dispatcher')->dispatch(SecurityEvents::INTERACTIVE_LOGIN, new InteractiveLoginEvent($request, $token));
 
-       // $this->getLogService()->info('user', 'user_switch_success', '用户切换登录成功');
+        // $this->getLogService()->info('user', 'user_switch_success', '用户切换登录成功');
 
         return $user;
     }
 
-    protected function authenticateUser(array $user)
+    protected function prepareLimitedTime($limitedTime = 0)
+    {
+        $limitedTime = ltrim($limitedTime, 0);
+        if (empty($limitedTime)) {
+            return 0;
+        }
+
+        return $limitedTime;
+    }
+
+    /**
+     * 设置用户登录
+     *
+     * @param array $user
+     * @return CurrentUser
+     */
+    protected function authenticateUser(array $user): CurrentUser
     {
         $user['currentIp'] = $this->container->get('request_stack')->getCurrentRequest()->getClientIp();
         $currentUser = new CurrentUser();
         $currentUser->fromArray($user);
 
-        return $this->switchUser($this->get('request_stack')->getCurrentRequest(), $currentUser);
+        $currentUser = $this->switchUser($this->get('request_stack')->getCurrentRequest(), $currentUser);
+
+        $this->checkLoginPasswordUpgraded($currentUser, $this->get('request_stack')->getCurrentRequest());
+
+        return $currentUser;
+    }
+
+    protected function checkLoginPasswordUpgraded(CurrentUser $currentUser, Request $request)
+    {
+        if (!$currentUser->isLogin()) {
+            return;
+        }
+
+        if (RoleHelper::isStudent($currentUser['roles'])) {
+            $loginBindSetting = $this->getBiz()->service('System:SettingService')->get('login_bind');
+            if (!($loginBindSetting['student_weak_password_check'] ?? 0)) {
+                return;
+            }
+            if (PasswordValidator::isValidLevel($currentUser['passwordUpgraded'])) {
+                return ;
+            }
+        } else {
+            if (PasswordValidator::isStrongLevel($currentUser['passwordUpgraded'])) {
+                return ;
+            }
+        }
+        $request->getSession()->set('needUpgradePassword', 1);
+    }
+
+    protected function authByToken(Request $request)
+    {
+        $authorization = $request->headers->get('Authorization');
+        if (!empty($authorization) && (false !== strpos($authorization, 'Bearer '))) {
+            $token = str_replace('Bearer ', '', $authorization);
+        } else {
+            $token = $request->query->get('token');
+        }
+        if (empty($token)) {
+            return;
+        }
+        $storage = $this->setting('storage', []);
+        try {
+            $payload = JWT::decode($token, [$storage['cloud_access_key'] => $storage['cloud_secret_key']], ['HS256']);
+        } catch (\RuntimeException $e) {
+            return;
+        }
+        $user = $this->getUserService()->getUser($payload->sub);
+        if (empty($user)) {
+            return;
+        }
+        $currentUser = new CurrentUser();
+        $currentUser->fromArray($user);
+        $biz = $this->getBiz();
+        $biz['user'] = $currentUser;
+    }
+
+    protected function fillUserStatus($conditions)
+    {
+        if (isset($conditions['userStatus'])) {
+            if ('locked' == $conditions['userStatus']) {
+                $conditions['locked'] = '1';
+            }
+
+            if ('unlock' == $conditions['userStatus']) {
+                $conditions['locked'] = '0';
+            }
+            unset($conditions['userStatus']);
+
+            return $conditions;
+        }
+
+        return $conditions;
     }
 
     protected function fillOrgCode($conditions)
@@ -97,7 +193,7 @@ class BaseController extends Controller
      */
     protected function isWxClient()
     {
-        return $this->isMobileClient() && strpos($_SERVER['HTTP_USER_AGENT'], 'MicroMessenger') !== false;
+        return $this->isMobileClient() && false !== strpos($_SERVER['HTTP_USER_AGENT'], 'MicroMessenger');
     }
 
     /**
@@ -115,17 +211,19 @@ class BaseController extends Controller
         //如果via信息含有wap则一定是移动设备,部分服务商会屏蔽该信息
         if (isset($_SERVER['HTTP_VIA'])) {
             //找不到为flase,否则为true
-            return stristr($_SERVER['HTTP_VIA'], 'wap') ? true : false;
+            if (stristr($_SERVER['HTTP_VIA'], 'wap')) {
+                return true;
+            };
         }
 
         //判断手机发送的客户端标志,兼容性有待提高
         if (isset($_SERVER['HTTP_USER_AGENT'])) {
-            $clientkeywords = array(
+            $clientkeywords = [
                 'nokia', 'sony', 'ericsson', 'mot', 'samsung', 'htc', 'sgh', 'lg', 'sharp',
                 'sie-', 'philips', 'panasonic', 'alcatel', 'lenovo', 'iphone', 'ipod', 'blackberry', 'meizu',
                 'android', 'netfront', 'symbian', 'ucweb', 'windowsce', 'palm', 'operamini', 'operamobi',
                 'openwave', 'nexusone', 'cldc', 'midp', 'wap', 'mobile',
-            );
+            ];
 
             // 从HTTP_USER_AGENT中查找手机浏览器的关键字
             if (preg_match('/('.implode('|', $clientkeywords).')/i', strtolower($_SERVER['HTTP_USER_AGENT']))) {
@@ -137,8 +235,8 @@ class BaseController extends Controller
         if (isset($_SERVER['HTTP_ACCEPT'])) {
             // 如果只支持wml并且不支持html那一定是移动设备
             // 如果支持wml和html但是wml在html之前则是移动设备
-            if ((strpos($_SERVER['HTTP_ACCEPT'], 'vnd.wap.wml') !== false)
-                && (strpos($_SERVER['HTTP_ACCEPT'], 'text/html') === false
+            if ((false !== strpos($_SERVER['HTTP_ACCEPT'], 'vnd.wap.wml'))
+                && (false === strpos($_SERVER['HTTP_ACCEPT'], 'text/html')
                     || (strpos($_SERVER['HTTP_ACCEPT'], 'vnd.wap.wml') < strpos($_SERVER['HTTP_ACCEPT'], 'text/html'))
                 )) {
                 return true;
@@ -156,7 +254,7 @@ class BaseController extends Controller
         return $htmlHelper->purify($html, $trusted);
     }
 
-    protected function trans($id, array $parameters = array(), $domain = null, $locale = null)
+    protected function trans($id, array $parameters = [], $domain = null, $locale = null)
     {
         return $this->container->get('translator')->trans($id, $parameters, $domain, $locale);
     }
@@ -164,6 +262,19 @@ class BaseController extends Controller
     protected function isPluginInstalled($pluginName)
     {
         return $this->get('kernel')->getPluginConfigurationManager()->isPluginInstalled($pluginName);
+    }
+
+    public function getPluginVersion($pluginName)
+    {
+        $plugins = $this->get('kernel')->getPluginConfigurationManager()->getInstalledPlugins();
+
+        foreach ($plugins as $plugin) {
+            if (strtolower($plugin['code']) == strtolower($pluginName)) {
+                return $plugin['version'];
+            }
+        }
+
+        return null;
     }
 
     protected function getTargetPath(Request $request)
@@ -176,37 +287,33 @@ class BaseController extends Controller
             $targetPath = $request->headers->get('Referer');
         }
 
-        if (strpos($targetPath, '/register') !== false) {
+        if (false !== strpos($targetPath, '/register')) {
             return $this->generateUrl('homepage');
         }
 
-        if ($targetPath == $this->generateUrl('login', array(), true)) {
+        if ($targetPath == $this->generateUrl('login', [], UrlGeneratorInterface::ABSOLUTE_URL)) {
             return $this->generateUrl('homepage');
         }
 
         $url = explode('?', $targetPath);
 
-        if ($url[0] == $this->generateUrl('partner_logout', array(), true)) {
-            return $this->generateUrl('homepage');
-        }
-
-        if ($url[0] == $this->generateUrl('password_reset_update', array(), true)) {
-            $targetPath = $this->generateUrl('homepage', array(), true);
+        if ($url[0] == $this->generateUrl('password_reset_update', [], UrlGeneratorInterface::ABSOLUTE_URL)) {
+            $targetPath = $this->generateUrl('homepage', [], UrlGeneratorInterface::ABSOLUTE_URL);
         }
 
         if (strpos($url[0], $request->getPathInfo()) > -1) {
-            $targetPath = $this->generateUrl('homepage', array(), true);
+            $targetPath = $this->generateUrl('homepage', [], UrlGeneratorInterface::ABSOLUTE_URL);
         }
 
-        if (strpos($url[0], 'callback') !== false
-            || strpos($url[0], '/login/bind') !== false
-            || strpos($url[0], 'crontab') !== false
+        if (false !== strpos($url[0], 'callback')
+            || false !== strpos($url[0], '/login/bind')
+            || false !== strpos($url[0], 'crontab')
         ) {
-            $targetPath = $this->generateUrl('homepage', array(), true);
+            $targetPath = $this->generateUrl('homepage', [], UrlGeneratorInterface::ABSOLUTE_URL);
         }
 
         if (empty($targetPath)) {
-            $targetPath = $this->generateUrl('homepage', array(), true);
+            $targetPath = $this->generateUrl('homepage', [], UrlGeneratorInterface::ABSOLUTE_URL);
         }
 
         return $this->filterRedirectUrl($targetPath);
@@ -217,26 +324,40 @@ class BaseController extends Controller
         $this->get('session')->getFlashBag()->add($level, $message);
     }
 
+    protected function setFlashException(HttpExceptionInterface $exception)
+    {
+        $this->setFlashMessage(
+            'currentThrowedException',
+            [
+                'code' => $exception->getCode(),
+                'message' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+                'statusCode' => $exception->getStatusCode(),
+            ]
+        );
+    }
+
     protected function agentInWhiteList($userAgent)
     {
-        $whiteList = array('iPhone', 'iPad', 'Android', 'HTC');
+        // com.tencent.mm.app.Application 是安卓端小程序在播放视频时的UA，无法找到为什么UA是这样的具体原因，为了容错
+        $whiteList = ['iPhone', 'iPad', 'Android', 'HTC', 'com.tencent.mm.app.Application'];
 
         return ArrayToolkit::some($whiteList, function ($agent) use ($userAgent) {
             return strpos($userAgent, $agent) > -1;
         });
     }
 
-    protected function createNamedFormBuilder($name, $data = null, array $options = array())
+    protected function createNamedFormBuilder($name, $data = null, array $options = [])
     {
-        return $this->container->get('form.factory')->createNamedBuilder($name, 'form', $data, $options);
+        return $this->container->get('form.factory')->createNamedBuilder($name, FormType::class, $data, $options);
     }
 
-    protected function createJsonResponse($data = null, $status = 200, $headers = array())
+    protected function createJsonResponse($data = null, $status = 200, $headers = [])
     {
         return new JsonResponse($data, $status, $headers);
     }
 
-    protected function createJsonpResponse($data = null, $callback = 'callback', $status = 200, $headers = array())
+    protected function createJsonpResponse($data = null, $callback = 'callback', $status = 200, $headers = [])
     {
         $response = $this->createJsonResponse($data, $status, $headers);
 
@@ -246,7 +367,7 @@ class BaseController extends Controller
     //@todo 此方法是为了和旧的调用兼容，考虑清理掉
     protected function createErrorResponse($request, $name, $message)
     {
-        $error = array('error' => array('name' => $name, 'message' => $message));
+        $error = ['error' => ['name' => $name, 'message' => $message]];
 
         return new JsonResponse($error, '200');
     }
@@ -276,22 +397,36 @@ class BaseController extends Controller
      */
     protected function createMessageResponse($type, $message, $title = '', $duration = 0, $goto = null)
     {
-        if (!in_array($type, array('info', 'warning', 'error'))) {
-            throw new \RuntimeException('type error');
+        if (!in_array($type, ['info', 'warning', 'error'])) {
+            $this->createNewException(CommonException::ERROR_PARAMETER());
         }
 
-        return $this->render('default/message.html.twig', array(
+        return $this->render('default/message.html.twig', [
             'type' => $type,
             'message' => $message,
             'title' => $title,
             'duration' => $duration,
             'goto' => $this->filterRedirectUrl($goto),
-        ));
+        ]);
     }
 
     protected function createResourceNotFoundException($resourceType, $resourceId, $message = '')
     {
         return new ResourceNotFoundException($resourceType, $resourceId, $message);
+    }
+
+    public function createAccessDeniedException($message = 'Access Denied', \Exception $previous = null)
+    {
+        return new AccessDeniedException($message, 403, $previous);
+    }
+
+    protected function createNewException($e)
+    {
+        if ($e instanceof AbstractException) {
+            throw $e;
+        }
+
+        throw new \Exception();
     }
 
     /**
@@ -311,6 +446,26 @@ class BaseController extends Controller
         return $this->redirect($url, $status);
     }
 
+    public function render($view, array $parameters = [], Response $response = null)
+    {
+        $biz = $this->getBiz();
+        foreach ($biz['render_view_resolvers'] as $resolver) {
+            $view = $resolver->generateRenderView($view, $parameters);
+        }
+
+        return parent::render($view, $parameters, $response);
+    }
+
+    public function renderView($view, array $parameters = [])
+    {
+        $biz = $this->getBiz();
+        foreach ($biz['render_view_resolvers'] as $resolver) {
+            $view = $resolver->generateRenderView($view, $parameters);
+        }
+
+        return parent::renderView($view, $parameters);
+    }
+
     /**
      * 过滤URL.
      *
@@ -322,17 +477,78 @@ class BaseController extends Controller
      */
     public function filterRedirectUrl($url)
     {
-        $host = $this->get('request')->getHost();
-        $safeHosts = array($host);
+        $host = $this->get('request_stack')->getCurrentRequest()->getHost();
+        $safeHosts = [$host];
 
         $parsedUrl = parse_url($url);
-        $isUnsafeHost = isset($parsedUrl['host']) && !in_array($parsedUrl['host'], $safeHosts);
 
-        if (empty($url) || $isUnsafeHost) {
-            $url = $this->generateUrl('homepage', array(), true);
+        if (false == $parsedUrl) {
+            return $this->generateUrl('homepage', [], UrlGeneratorInterface::ABSOLUTE_URL);
         }
 
-        return $url;
+        if (!empty($parsedUrl['host'])) {
+            $url = $this->unParseUrl($parsedUrl);
+        } elseif ('/' != $url[0]) {
+            $url = $this->generateUrl('homepage', [], UrlGeneratorInterface::ABSOLUTE_URL);
+        }
+
+        $isUnsafeHost = isset($parsedUrl['host']) && !in_array($parsedUrl['host'], $safeHosts);
+        $isInvalidScheme = isset($parsedUrl['scheme']) && !in_array($parsedUrl['scheme'], ['http', 'https']);
+
+        if (empty($url) || $isUnsafeHost || $isInvalidScheme) {
+            $url = $this->generateUrl('homepage', [], UrlGeneratorInterface::ABSOLUTE_URL);
+        }
+
+        return strip_tags($url);
+    }
+
+    protected function unParseUrl($parsedUrl)
+    {
+        $scheme = isset($parsedUrl['scheme']) ? $parsedUrl['scheme'].'://' : '//';
+        $host = $parsedUrl['host'] ?? '';
+        $port = isset($parsedUrl['port']) ? ':'.$parsedUrl['port'] : '';
+        $path = $parsedUrl['path'] ?? '';
+        $query = isset($parsedUrl['query']) ? '?'.$parsedUrl['query'] : '';
+        $fragment = isset($parsedUrl['fragment']) ? '#'.$parsedUrl['fragment'] : '';
+
+        return "$scheme$host$port$path$query$fragment";
+    }
+
+    /**
+     * 验证验证码token
+     *
+     * @return [type] [description]
+     */
+    protected function checkDragCaptchaToken(Request $request, $token)
+    {
+        $enableAntiBrushCaptcha = $this->getBiz()->service('System:SettingService')->node('ugc_content_audit.enable_anti_brush_captcha');
+        if (empty($enableAntiBrushCaptcha)) {
+            return true;
+        }
+        $session = $request->getSession();
+        $dragTokens = empty($session->get('dragTokens')) ? [] : $session->get('dragTokens');
+        if (in_array($token, $dragTokens)) {
+            array_splice($dragTokens, array_search($token, $dragTokens), 1);
+            $session->set('dragTokens', $dragTokens);
+
+            return true;
+        }
+
+        return false;
+    }
+
+    protected function createSuccessJsonResponse($data = [])
+    {
+        $data = array_merge(['success' => 1], $data);
+
+        return $this->createJsonResponse($data);
+    }
+
+    protected function createFailJsonResponse($data = [])
+    {
+        $data = array_merge(['success' => 0], $data);
+
+        return $this->createJsonResponse($data);
     }
 
     protected function getWebExtension()
@@ -366,5 +582,43 @@ class BaseController extends Controller
     protected function getLogService()
     {
         return $this->getBiz()->service('System:LogService');
+    }
+
+    /**
+     * @return QiQiuYunSdkProxyService
+     */
+    protected function getQiQiuYunSdkProxyService()
+    {
+        return $this->createService('QiQiuYun:QiQiuYunSdkProxyService');
+    }
+
+    protected function pushEventTracking($action, $data = null)
+    {
+        return $this->getQiQiuYunSdkProxyService()->pushEventTracking($action, $data);
+    }
+
+    protected function getJWTAuth()
+    {
+        $setting = $this->setting('storage', []);
+        $accessKey = !empty($setting['cloud_access_key']) ? $setting['cloud_access_key'] : '';
+        $secretKey = !empty($setting['cloud_secret_key']) ? $setting['cloud_secret_key'] : '';
+        $key = md5($accessKey.$secretKey);
+
+        return new JWTAuth($key);
+    }
+
+    protected function getHttpHost()
+    {
+        return $this->getSchema()."://{$_SERVER['HTTP_HOST']}";
+    }
+
+    protected function getSchema()
+    {
+        $https = empty($_SERVER['HTTPS']) ? '' : $_SERVER['HTTPS'];
+        if (!empty($https) && 'off' !== strtolower($https)) {
+            return 'https';
+        }
+
+        return 'http';
     }
 }

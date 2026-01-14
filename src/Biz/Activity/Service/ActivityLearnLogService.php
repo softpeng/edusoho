@@ -8,9 +8,10 @@ interface ActivityLearnLogService
 
     public function getMyRecentFinishLogByActivityId($activityId);
 
+    /**
+     * @deprecated
+     */
     public function calcLearnProcessByCourseIdAndUserId($courseId, $userId);
 
     public function deleteLearnLogsByActivityId($activityId);
-
-    public function getLastestLearnLogByActivityIdAndUserId($activityId, $userId);
 }

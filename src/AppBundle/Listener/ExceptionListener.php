@@ -3,17 +3,18 @@
 namespace AppBundle\Listener;
 
 use AppBundle\Common\ExceptionPrintingToolkit;
+use Biz\User\UserException;
 use Codeages\Biz\Framework\Service\Exception\AccessDeniedException;
 use Codeages\Biz\Framework\Service\Exception\NotFoundException;
+use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
-use Topxia\Service\Common\ServiceKernel;
-use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class ExceptionListener
 {
@@ -26,51 +27,61 @@ class ExceptionListener
 
     public function onKernelException(GetResponseForExceptionEvent $event)
     {
-        $problem = $this->container->get('Topxia.RepairProblem', ContainerInterface::NULL_ON_INVALID_REFERENCE);
         $exception = $event->getException();
         $statusCode = $this->getStatusCode($exception);
 
+        $user = $this->getUser();
         $request = $event->getRequest();
         if (!$request->isXmlHttpRequest()) {
             $this->setTargetPath($request);
             $exception = $this->convertException($exception);
-            $statusCode = $this->getStatusCode($exception);
-            $user = $this->getUser();
-            if ($statusCode === Response::HTTP_FORBIDDEN && empty($user)) {
-                $response = new RedirectResponse($this->container->get('router')->generate('login'));
+            if (Response::HTTP_FORBIDDEN === $statusCode && empty($user)) {
+                $response = new RedirectResponse($this->generateUrl('login'));
+                $event->setResponse($response);
+            } elseif (false !== strpos(get_parent_class($exception), 'AbstractException')) {
+                // 出现异常跳回原页面
+                $targetUrl = $request->server->get('HTTP_REFERER', '/login');
+                if (($this->generateUrl('login', [], UrlGeneratorInterface::ABSOLUTE_URL) == $targetUrl) || !empty($user)) {
+                    $targetUrl = $this->generateUrl('homepage');
+                }
+                $response = new RedirectResponse($targetUrl);
+                $flashBag = $request->getSession()->getFlashBag();
+                $flashBag->add(
+                    'currentThrowedException',
+                    [
+                        'code' => $exception->getCode(),
+                        'message' => $exception->getMessage(),
+                        'trace' => $exception->getTraceAsString(),
+                        'statusCode' => $exception->getStatusCode(),
+                    ]
+                );
                 $event->setResponse($response);
             }
+
             $event->setException($exception);
 
             return;
         }
 
-        if ($problem && !empty($problem['content'])) {
-            ob_start();
-            eval($problem['content']);
-            $result = ob_get_contents();
-            ob_end_clean();
-            $event->setResponse(new JsonResponse(array('result' => $result)));
+        $error = [
+            'message' => $this->trans($exception->getMessage()),
+            'code' => $exception->getCode(),
+        ];
 
-            return;
-        }
-
-        $error = array('name' => 'Error', 'message' => $exception->getMessage());
-
-        if ($this->container->get('kernel')->isDebug()) {
+        $debug = $this->container->get('kernel')->isDebug();
+        if ($debug) {
             $error['trace'] = ExceptionPrintingToolkit::printTraceAsArray($exception);
         }
-
-        if ($statusCode === 403) {
-            $user = $this->getUser($event);
-            if ($user) {
-                $error = array('name' => 'AccessDenied', 'message' => $this->getServiceKernel()->trans('访问被拒绝！'));
+        //兼容老代码
+        if (403 === $statusCode) {
+            if (empty($user)) {
+                $error['code'] = UserException::UN_LOGIN;
             } else {
-                $error = array('name' => 'Unlogin', 'message' => $this->getServiceKernel()->trans('当前操作，需要登录！'));
+                $error['message'] = $this->trans('exception.common_forbidden');
             }
         }
 
-        $response = new JsonResponse(array('error' => $error), $statusCode);
+        $response = new JsonResponse(['error' => $error], $statusCode);
         $event->setResponse($response);
     }
 
@@ -124,8 +135,13 @@ class ExceptionListener
         return Response::HTTP_INTERNAL_SERVER_ERROR;
     }
 
-    protected function getServiceKernel()
+    protected function trans($id, array $parameters = [])
     {
-        return ServiceKernel::instance();
+        return $this->container->get('translator')->trans($id, $parameters);
+    }
+
+    protected function generateUrl($route, $parameters = [], $referenceType = UrlGeneratorInterface::ABSOLUTE_PATH)
+    {
+        return $this->container->get('router')->generate($route, $parameters, $referenceType);
     }
 }

@@ -1,17 +1,40 @@
 {% import "macro.html.twig" as web_macro %}
-<li id="post-{{ post.id }}" data-user-id="{{ author.id }}" class="thread-post thread-subpost media user-id-{{author.id}} {% if less|default(false) and loop.index > 5 %}hide{% endif %}"
-  data-author-name="{{ author.nickname }}">
+{% if post.targetType == 'article' %}
+  {% set reportType = 'article_review' %}
+{% elseif post.targetType == 'openCourse' %}
+  {% set reportType = 'open_course_review' %}
+{% elseif post.targetType == 'classroom' %}
+  {% set thread = get_classroom_thread(post.threadId) %}
+  {% if thread.type == 'discussion' %}
+    {% set reportType = 'classroom_thread_reply' %}
+  {% elseif thread.type == 'question' %}
+    {% set reportType = 'classroom_question_reply' %}
+  {% elseif thread.type == 'event' %}
+    {% set reportType = 'classroom_event_reply' %}
+  {% else %}
+    {% set reportType = '' %}
+  {% endif %}
+{% else %}
+  {% set reportType = post.targetType %}
+{% endif %}
+<li id="post-{{ post.id }}" data-user-id="{{ author.id }}" class="thread-post thread-subpost media main_hover_item user-id-{{author.id}} {% if less|default(false) and loop.index > 5 %}hide{% endif %}"
+  data-author-name="{% if not author.destroyed|default(0) %}{{ author.nickname }}{% else %}{{ 'user.user_had_destroyed'|trans }}{% endif %}">
   <div class="media-left">
     {{ web_macro.user_avatar(author, 'user-avatar', 'avatar-sm', true) }}
   </div>
   <div class="media-body">
     <div class="metas">
       {% include 'thread/post-manage-menu.html.twig' %}
-      <a href="{{ path('user_show', {id:author.id}) }}">{{ author.nickname }}</a>
+      {% if not author.destroyed|default(0) %}
+        {% set isOpenInfo = data('StudentOpenInfo', {'userId': author.id}) %}
+        <a {% if isOpenInfo == 1 %}href="{{ user_show_path({id:author.id}) }}"{% endif %}>{{ author.nickname }}</a>
+      {% else %}
+        {{ 'user.user_had_destroyed'|trans }}
+      {% endif %}
       <span class="bullet">•</span>
       <span class="color-gray">{{post.createdTime|smart_time}} </span>
     </div>
-    <div class="editor-text">{{ post.content|at(post.ats)|raw }}</div>
+    <div class="editor-text">{{ post.content|at(post.ats)|cdn|raw }}{% if app.user.isLogin()|default(false) and app.user.id != post.userId and is_reported(reportType, post.id) %}<span style="color:red;">({{ '已举报'|trans }})</span>{% endif %}<span id="{{ 'js-thread-after-' ~ post.id }}" style="color:red;"></span></div>
     {% include 'thread/post-interaction.html.twig' %}
   </div>
 </li>

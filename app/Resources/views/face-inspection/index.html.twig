@@ -1,0 +1,29 @@
+{% extends 'layout.html.twig' %}
+
+{% block content %}
+  {% if error|default() %}
+    <div style="text-align: center; line-height: 400px;font-size: 20px;"> {{ error }}</div>
+  {% else %}
+    <script id="escloud-inspection-sdk-script" src="https://edtech.edusoho.net/exam-supervisor/exam-supervisor-sdk.js"></script>
+    {% do script(['app/js/face-inspection/index.js']) %}
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="inspection-collect-box">
+          <div class="inspection-collect-row">
+            <h4>考生头像采集</h4>
+          </div>
+          <div class="inspection-collect-row js-upload-url" style="margin-bottom: 20px;" id="inspection-collect-video" data-upload-url="{{path('facein_capture_upload',{code:code|default()})}}">
+
+          </div>
+          <div class="inspection-collect-row inspection-collect-actions js-btn-group" id="inspection-collect-actions">
+            <a class="btn btn-success" href="{% if goto|default(null) %}{{ goto }}{% else %}{{path('homepage')}}{% endif %}" id="inspection-collect-finish-btn" style="display: none;">完成采集</a>
+          </div>
+        </div>
+
+        <input type="hidden" name="token" value="{{ token }}">
+      </div>
+    </div>
+  {% endif %}
+
+
+{% endblock %}

@@ -1,0 +1,82 @@
+<div class="course-item">
+  {% if courseSet.course is defined %}
+    {% set course = courseSet.course %}
+  {% else %}
+    {% set course = data('PublishedCourseByCourseSet',{ courseSetId: courseSet.id } ) %}
+  {% endif %}
+  {% set videoMaxLevel = get_video_max_level(course.id) %}
+  <div class="course-img">
+    <a href="{{ path('course_show', {id: courseSet.defaultCourseId}) }}" target="_blank" style="position: relative;">
+      {% if course.hidePrice != '1' and courseSet.discountId > 0 %}
+        {% if courseSet.discount == 0 %}
+          <!-- 限免 -->
+          <span class="{% if app.request.getLocale() == 'en' %}tag-discount-en{% else %}tag-discount{% endif %} free"></span>
+        {% else %}
+          <!-- 折扣 -->
+          <span class="{% if app.request.getLocale() == 'en' %}tag-discount-en{% else %}tag-discount{% endif %}"></span>
+        {% endif %}
+      {% endif %}
+      {% if courseSet.course.tryLookVideo|default(false) or courseSet.type|default() == 'reservation' or courseSet.type|default() == 'live' or courseSet.serializeMode != 'none'  %}
+        <div class="{% if courseSet.type|default() == 'reservation' or courseSet.type|default() == 'live' or courseSet.serializeMode == 'serialized' or courseSet.serializeMode == 'finished' %}course-tag{% endif %} clearfix">
+          <span class="pull-right">
+            <span>{% if courseSet.type|default() == 'reservation' %}
+              <span class="course-tag__dot"></span>{{ 'my.teaching.course_set.reservation'|trans }}
+            {% elseif courseSet.type|default() == 'live' %}
+                <span class="course-tag__dot"></span>{{ 'search.live_courses'|trans }}
+            {% else %}
+                {% if courseSet.serializeMode == 'serialized' %}
+                  <span class="course-tag__dot"></span>{{ 'course.status.serialized'|trans }}
+              {% elseif courseSet.serializeMode == 'finished' %}
+                  <span class="course-tag__dot"></span>{{ 'course.status.finished'|trans }}
+                {% endif %}
+            {% endif %}</span>
+          </span>
+        </div>
+      {% endif %}
+      {% if courseSet.course.tryLookVideo|default(false) %}
+        <div style="position: absolute; top: 0; right: 0; border-radius: 0 4px 0 8px; color: #FFF; font-size: 12px; font-weight: 500; line-height: 20px; padding: 2px 8px; background: rgba(0, 0, 0, 0.40);"><i class="es-icon es-icon-video color-white" style="font-size: 12px; margin-right: 4px;"></i>{{'site.badge.try_watch'|trans}}</div>
+      {% endif %}
+      {% if  course.hidePrice != '1' and is_plugin_installed('Vip') and setting('vip.enabled') and course.vipLevelId|default(0) > 0 %}
+        <div style="position: absolute; z-index: 10; left: 0; bottom: 0; color: #FFF; font-size: 12px; font-weight: 500; line-height: 20px; padding: 2px 8px; border-radius: 0 12px 0 0; background: rgba(0, 0, 0, 0.80);">{{ 'site.badge.membership_free'|trans }}</div>
+      {% else %}
+        {% if videoMaxLevel == '2k' %}
+          <div style="position: absolute; z-index: 10; left: 0; bottom: 0; color: #FFF; font-size: 12px; font-weight: 500; line-height: 20px; padding: 2px 8px; border-radius: 0 12px 0 0; background: rgba(0, 0, 0, 0.80);">{{'site.badge.2k'|trans}}</div>
+        {% endif %}
+        {% if videoMaxLevel == '4k' %}
+          <div style="position: absolute; z-index: 10; left: 0; bottom: 0; color: #492F0B; font-size: 12px; font-weight: 500; line-height: 20px; padding: 2px 8px; border-radius: 0 12px 0 0; background: linear-gradient(270deg, #F7D27B -33.33%, #FCEABE 100%);">{{'site.badge.4k'|trans}}</div>
+        {% endif %}
+      {% endif %}
+      {{ lazy_img(filepath(course_set_cover(courseSet, 'large'), 'courseSet.png'), 'img-responsive', courseSet.title|raw) }}
+    </a>
+  </div>
+  <div class="course-info">
+    <div class="title">
+      {% if can_obtain_certificates(courseSet.id, 'courseSet') %}
+        <a class="certificate-tag" tabindex="0" role="button" data-container="body" data-toggle="popover" data-trigger="hover" data-placement="top" data-html="true" title="{{ 'explore.classroom.certificate_tag'|trans }}" data-content="{{ 'course.catalogue.certificate_obtain'|trans }}">{{ 'explore.classroom.certificate_tag_short'|trans }}</a>
+      {% endif %}
+      <a class="link-darker" href="{{ path('course_show', {id: courseSet.defaultCourseId}) }}" target="_blank" title="{{ courseSet.title|raw }}">
+        {{ courseSet.title|raw }}
+      </a>
+    </div>
+    <div class="metas clearfix">
+      {% if setting('course.show_student_num_enabled', '1') == 1  %}
+          {% if setting('course.show_cover_num_mode') == 'studentNum' %}
+            <span class="num">
+              <i class="es-icon es-icon-people"></i>{{ courseSet.studentNum }}
+            </span>
+          {% elseif setting('course.show_cover_num_mode') == 'hitNum' %}
+            <span><i class="es-icon es-icon-view"></i>{{ courseSet.hitNum }}</span>
+          {% endif %}
+        </span>
+      {% endif %}
+      {% if setting('goods_setting.show_review', '1') == 1 %}
+        <span class="comment">
+          {% if setting('course.show_student_review_num_enable', '1') == 1 %}<i class="es-icon es-icon-textsms"></i>{{ courseSet.ratingNum }}{% endif %}
+        </span>
+      {% endif %}
+
+      {% include 'course/widgets/course-set-price.html.twig' with {shows: 'price'} %}
+
+    </div>
+  </div>
+</div>

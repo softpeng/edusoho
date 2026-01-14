@@ -4,10 +4,13 @@ namespace ApiBundle\Api\Resource\Course;
 
 use ApiBundle\Api\Annotation\ApiConf;
 use ApiBundle\Api\ApiRequest;
-use ApiBundle\Api\Exception\ErrorCode;
 use ApiBundle\Api\Resource\AbstractResource;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Biz\Common\CommonException;
+use Biz\Course\CourseException;
 
+/**
+ * Class CourseReview
+ */
 class CourseReview extends AbstractResource
 {
     /**
@@ -18,28 +21,45 @@ class CourseReview extends AbstractResource
         $course = $this->service('Course:CourseService')->getCourse($courseId);
 
         if (!$course) {
-            throw new NotFoundHttpException('教学计划不存在', null, ErrorCode::RESOURCE_NOT_FOUND);
+            throw CourseException::NOTFOUND_COURSE();
         }
 
-        $conditions = array(
-            'courseId' => $courseId,
-            'private' => 0
-        );
+        return $this->invokeResource(new ApiRequest(
+            '/api/review',
+            'GET',
+            [
+                'targetType' => 'course',
+                'targetId' => $courseId,
+                'offset' => $request->query->get('offset', static::DEFAULT_PAGING_OFFSET),
+                'limit' => $request->query->get('limit', static::DEFAULT_PAGING_LIMIT),
+                'orderBys' => ['updatedTime' => 'DESC'],
+            ]
+        ));
+    }
 
-        $offset = $request->query->get('offset', static::DEFAULT_PAGING_OFFSET);
-        $limit = $request->query->get('limit', static::DEFAULT_PAGING_LIMIT);
-        $reviews = $this->service('Course:ReviewService')->searchReviews(
-            $conditions,
-            array('updatedTime' => 'DESC'),
-            $offset,
-            $limit
-        );
+    public function add(ApiRequest $request, $courseId)
+    {
+        $rating = $request->request->get('rating');
+        $content = $request->request->get('content');
 
-        $this->getOCUtil()->multiple($reviews, array('userId'));
-        $this->getOCUtil()->multiple($reviews, array('courseId'), 'course');
+        if (empty($rating) || empty($content)) {
+            throw CommonException::ERROR_PARAMETER_MISSING();
+        }
 
-        $total = $this->service('Course:ReviewService')->searchReviewsCount($conditions);
-
-        return $this->makePagingObject($reviews, $total, $offset, $limit);
+        return $this->invokeResource(new ApiRequest(
+            '/api/reviews',
+            'POST',
+            [],
+            [
+                'targetType' => 'course',
+                'targetId' => $courseId,
+                'userId' => $this->getCurrentUser()->getId(),
+                'rating' => $request->request->get('rating'),
+                'content' => $request->request->get('content'),
+                '_dragCaptchaToken' => $request->request->get('_dragCaptchaToken'),
+            ],
+            [],
+            $request->getHttpRequest()
+        ));
     }
 }

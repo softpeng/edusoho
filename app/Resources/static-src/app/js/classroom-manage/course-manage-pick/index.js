@@ -6,9 +6,9 @@ $('#sure').on('click', function () {
   $('#sure').button('submiting').addClass('disabled');
 
   $.ajax({
-    type: "post",
+    type: 'post',
     url: $('#sure').data('url'),
-    data: "ids=" + ids,
+    data: 'ids=' + ids,
     async: false,
     success: function (data) {
 
@@ -22,11 +22,12 @@ $('#sure').on('click', function () {
 
 $('#search').on('click', function () {
 
-  if ($('[name=key]').val() != "") {
+  if ($('[name=key]').val() != '') {
 
     $.post($(this).data('url'), $('.form-search').serialize(), function (data) {
 
       $('.courses-list').html(data);
+      recheckSelectedCourse();
     });
   }
 
@@ -37,6 +38,8 @@ $('.courses-list').on('click', '.pagination li', function () {
   if (typeof (url) !== 'undefined') {
     $.post(url, $('.form-search').serialize(), function (data) {
       $('.courses-list').html(data);
+
+      recheckSelectedCourse();
     });
   }
 });
@@ -57,27 +60,30 @@ $('#enterSearch').keydown(function (event) {
 $('#all-courses').on('click', function () {
 
   $.post($(this).data('url'), $('.form-search').serialize(), function (data) {
-    $('#modal').html(data);
+    $('.js-enter-search').val('');
+    $('.courses-list').html(data);
+
+    recheckSelectedCourse();
   });
 
 });
 
-$('.js-course-select').on('change', function () {
+$('.courses-list').on('change', '.js-course-select', function () {
   var id = $(this).val();
-  var sid = $(this).attr('id').split("-")[2];
+  var sid = $(this).attr('id').split('-')[2];
   for (var i = 0; i < ids.length; i++) {
-    var idArr = ids[i].split(":");
+    var idArr = ids[i].split(':');
     if (idArr[0] == sid) {
-      ids[i] = sid + ":" + id;
+      ids[i] = sid + ':' + id;
       break;
     }
   }
-  
+
   var price = $(this).find(':selected').data('price');
   $('.js-price-' + sid).html(price);
 });
 
-$('.courses-list').on('click', ".course-item-cbx", function () {
+$('.courses-list').on('click', '.course-item-cbx', function () {
 
   var $course = $(this).parent();
   var sid = $course.data('id');//courseSet.id
@@ -92,7 +98,7 @@ $('.courses-list').on('click', ".course-item-cbx", function () {
 
     ids = $.grep(ids, function (val, key) {
 
-      if (val != sid + ":" + id)
+      if (val != sid + ':' + id)
         return true;
     }, false);
   } else {
@@ -103,3 +109,14 @@ $('.courses-list').on('click', ".course-item-cbx", function () {
     ids.push(sid + ':' + id);
   }
 });
+
+function recheckSelectedCourse() {
+  for (var i = 0; i < ids.length; i++) {
+    var idArr = ids[i].split(':');
+    var sid = idArr[0];
+    var id = idArr[1];
+    $('[name=course-' + sid + ']').attr('checked', 'checked');
+    $('[data-id=' + sid + ']').addClass('select');
+    $('#course-select-' + sid).val(id);
+  }
+}

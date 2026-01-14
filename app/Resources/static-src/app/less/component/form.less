@@ -16,6 +16,11 @@ textarea {
   margin-bottom: 0;
 }
 
+.width-100 {
+  width: 100px !important;
+  display: inline-block;
+}
+
 .width-150 {
   width: 150px !important;
   display: inline-block;
@@ -23,6 +28,11 @@ textarea {
 
 .width-200 {
   width: 200px;
+  display: inline-block;
+}
+
+.width-400 {
+  width: 400px;
   display: inline-block;
 }
 
@@ -52,10 +62,6 @@ textarea {
 .checkboxs label {
   font-weight: normal;
   padding: 0 20px 0 0px;
-}
-
-.control-label span.required {
-  color: @brand-warning;
 }
 
 .form-control {
@@ -92,11 +98,6 @@ textarea {
   }
 }
 
-
-.form-control-150 {
-  width: 150px;
-}
-
 .has-error.form-group {
   margin-bottom: @form-group-margin-bottom - @form-error-message-height;
   @media (max-width: @screen-xs-max) {
@@ -129,9 +130,8 @@ textarea {
 }
 
 .form-error-message {
-  height: @form-error-message-height ;
+  min-height: @form-error-message-height ;
   line-height: @form-error-message-height ;
-  margin-bottom: 0;
   color: @brand-danger;
 }
 
@@ -139,9 +139,9 @@ textarea {
   position: relative;
   &:before {
     content: "*";
-    color: @brand-warning;
+    color: @brand-danger;
     position: absolute;
-    top: 4px;
+    top: 0px;
     left: -10px;
   }
 }

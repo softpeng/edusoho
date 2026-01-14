@@ -1,5 +1,5 @@
 define(function(require, exports, module) {
-    
+
    var Notify = require('common/bootstrap-notify');
     var Validator = require('bootstrap.validator');
     var Uploader = require('upload');
@@ -11,7 +11,7 @@ define(function(require, exports, module) {
     require('es-ckeditor');
 
 exports.run = function() {
-    
+
         $("#article-property-tips").popover({
             html: true,
             trigger: 'hover',//'hover','click'
@@ -21,6 +21,16 @@ exports.run = function() {
 
         var $form = $("#coin-settings-form"),
             $modal = $form.children('.coin_content');
+        var validator0 = new Validator({
+          element: '#coin-settings-form',
+          autoSubmit: true
+        });
+
+        validator0.addItem({
+          element: '[name="coin_name"]',
+          required: true,
+          rule:'maxlength{max:6}'
+        });
 
         var validator = _initValidator($form, $modal);
         var $editor = _initEditorFields($form, validator);
@@ -32,7 +42,7 @@ exports.run = function() {
             data: {'_csrf_token': $('meta[name=csrf-token]').attr('content') },
             accept: 'image/*',
             error: function(file) {
-                Notify.danger(Translator.trans('图片格式或大小不正确，上传图片失败，请检查后重试！'))
+                Notify.danger(Translator.trans('admin.coin.picture_upload_fail_hint'))
             },
             success: function(response) {
                 response = $.parseJSON(response);
@@ -46,12 +56,12 @@ exports.run = function() {
                 $form.find('[name=coin_picture_20_20]').val(response.path_20_20);
                 $form.find('[name=coin_picture_10_10]').val(response.path_10_10);
                 $("#coin-picture-remove").show();
-                Notify.success(Translator.trans('上传虚拟币图片成功！'));
+                Notify.success(Translator.trans('admin.coin.picture_upload_success_hint'));
             }
         });
 
         $("#coin-picture-remove").on('click', function(){
-            if (!confirm(Translator.trans('确认要删除吗？'))) return false;
+            if (!confirm(Translator.trans('admin.coin.picture_delete_hint'))) return false;
             var $btn = $(this);
             $.post($btn.data('url'), function(){
                 $("#coin-picture-largeSize").html('');
@@ -64,15 +74,11 @@ exports.run = function() {
                 $form.find('[name=coin_picture_20_20]').val('');
                 $form.find('[name=coin_picture_10_10]').val('');
                 $btn.hide();
-                Notify.success(Translator.trans('删除虚拟币图片成功！'));
+                Notify.success(Translator.trans('admin.coin.picture_delete_success_hint'));
             }).error(function(){
-                Notify.danger(Translator.trans('删除虚拟币图片失败！'));
+                Notify.danger(Translator.trans('admin.coin.picture_delete_fail_hint'));
             });
         });
-
-
-
-
 
 
     function _initValidator($form, $modal)
@@ -99,6 +105,12 @@ exports.run = function() {
             element: '#coin-settings-form'
         });
 
+        validator.addItem({
+          element: '[name="coin_name"]',
+          required: true,
+          rule:'maxlength{max:6}'
+        });
+
         $(document).ready(function(){
             var validator_someone = function(i){
                 var min = "[name=coin_consume_range_min_"+i+"]";
@@ -113,12 +125,12 @@ exports.run = function() {
                     element: pst,
                     required: true,
                     rule: 'integer'
-                }); 
+                });
             };
-            
+
             var reflash_validation = function(number){
                 for (var i = 1; i <= number; i++) {
-                    validator_someone(i);               
+                    validator_someone(i);
                 };
 
             };
@@ -129,11 +141,11 @@ exports.run = function() {
                 var min = "[name=coin_consume_range_min_"+i+"]";
                 var pst = "[name=coin_present_"+i+"]";
                 validator.removeItem(min);
-                validator.removeItem(pst);              
+                validator.removeItem(pst);
                 $(this).parent().parent().parent('.range').remove();
                 var range_number = parseInt($('#range_number').html())-1;
                 $('#range_number').html(range_number);
-                global_number_reserved.push(i);             
+                global_number_reserved.push(i);
             };
 
             var range_number = parseInt($('#range_number').html());
@@ -154,5 +166,5 @@ exports.run = function() {
                 $('.delete_range'+range_number_or_reserved_pop).click(reflash_after_delete_range);
             });
         });
-    };  
+    };
 });

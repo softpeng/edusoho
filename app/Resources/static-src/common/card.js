@@ -1,8 +1,6 @@
-import { isMobileDevice } from 'common/utils';
-
 if (!navigator.userAgent.match(/(iPhone|iPod|Android|ios|iPad)/i)) {
   bindCardEvent('.js-card-content');
-  $(".js-user-card").on("mouseenter", function () {
+  $(document).on('mouseenter','.js-user-card', function () {
 
     var _this = $(this);
     var userId = _this.data('userId');
@@ -34,42 +32,44 @@ if (!navigator.userAgent.match(/(iPhone|iPod|Android|ios|iPad)/i)) {
             container: 'body',
             animation: true
           });
-          _this.popover("show");
+          _this.popover('show');
 
           _this.data('popover', true);
 
-          $(".popover").on("mouseleave", function () {
+          $('.popover').on('mouseleave', function () {
             _this.popover('hide');
           });
         }, 200);
       }
 
       if ($('#user-card-' + userId).length == 0 || !_this.data('popover')) {
-
-        function beforeSend() {
-
-          _this.popover({
-            trigger: 'manual',
-            placement: 'auto top',
-            html: 'true',
-            content: function () {
-              return loadingHtml;
-            },
-            template: '<div class="popover es-card"><div class="arrow"></div><div class="popover-content"></div></div>',
-            container: 'body',
-            animation: true
-          });
-
-          // _this.popover("show");
-
-        };
-
         $.ajax({
-          type: "GET",
+          type: 'GET',
           url: _this.data('cardUrl'),
-          dataType: "html",
-          beforeSend: beforeSend,
-          success: callback
+          dataType: 'html',
+          beforeSend: function(){
+            _this.popover({
+              trigger: 'manual',
+              placement: 'auto top',
+              html: 'true',
+              content: function () {
+                return loadingHtml;
+              },
+              template: '<div class="popover es-card"><div class="arrow"></div><div class="popover-content"></div></div>',
+              container: 'body',
+              animation: true
+            });
+            // _this.popover("show");
+          },
+          success: function (res) {
+            var studentCard = $(".card-" + userId);
+            if (res !== 'false') {
+              if (studentCard.length > 0) {
+                studentCard.attr('href',"/user/" + userId);
+              }
+              callback(res)
+            }
+          }
         });
       } else {
         var html = $('#user-card-' + userId).clone();
@@ -84,15 +84,15 @@ if (!navigator.userAgent.match(/(iPhone|iPod|Android|ios|iPad)/i)) {
 
     _this.data('timerId', timer);
 
-  }).on("mouseleave", function () {
+  }).on('mouseleave','.js-user-card', function () {
 
     var _this = $(this);
 
     setTimeout(function () {
 
-      if (!$(".popover:hover").length) {
+      if (!$('.popover:hover').length) {
 
-        _this.popover("hide");
+        _this.popover('hide');
 
       }
 
@@ -103,11 +103,11 @@ if (!navigator.userAgent.match(/(iPhone|iPod|Android|ios|iPad)/i)) {
   });
 }
 
-function bindCardEvent(selector) {
-  $('body').on('click', '.js-card-content .follow-btn', function () {
+function bindCardEvent() {
+  $('html').on('click', '.js-card-content .follow-btn', function () {
     var $btn = $(this);
     var loggedin = $btn.data('loggedin');
-    if (loggedin == "1") {
+    if (loggedin == '1') {
       showUnfollowBtn($btn);
     }
     $.post($btn.data('url'));
@@ -115,13 +115,13 @@ function bindCardEvent(selector) {
     var $btn = $(this);
     showFollowBtn($btn);
     $.post($btn.data('url'));
-  })
+  });
 }
 
 function bindMsgBtn($card, self) {
   $card.on('click', '.direct-message-btn', function () {
     $(self).popover('hide');
-  })
+  });
 }
 
 function showFollowBtn($btn) {

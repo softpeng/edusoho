@@ -4,6 +4,7 @@ namespace AppBundle\Component\Export\Course;
 
 use AppBundle\Common\ArrayToolkit;
 use AppBundle\Component\Export\Exporter;
+use Biz\Task\Service\TaskResultService;
 
 class OverviewNormalTaskDetailExporter extends Exporter
 {
@@ -23,25 +24,40 @@ class OverviewNormalTaskDetailExporter extends Exporter
 
     public function getCount()
     {
-        return $this->getCourseMemberService()->countMembers($this->conditions);
+        return $this->getTaskResultService()->countTaskResults($this->conditions);
     }
 
     public function getTitles()
     {
-        return array(
+        $task = $this->getTaskService()->getTask($this->parameter['courseTaskId']);
+        //需要重构
+        if ('video' === $task['type']) {
+            return [
+                'task.learn_data_detail.nickname',
+                'task.learn_data_detail.join_time',
+                'task.learn_data_detail.finished_time',
+                'task.learn_data_detail.stay_total_time',
+                'task.learn_data_detail.video_total_time',
+                'task.learn_data_detail.stay_de_weight_time',
+                'task.learn_data_detail.video_de_weight_time',
+            ];
+        }
+
+        return [
             'task.learn_data_detail.nickname',
-            'task.learn_data_detail.createdTime',
-            'task.learn_data_detail.finishedTime',
-            'task.learn_data_detail.learnTime',
-            'task.learn_data_detail.video_and_audio_learnTime',
-        );
+            'task.learn_data_detail.join_time',
+            'task.learn_data_detail.finished_time',
+            'task.learn_data_detail.learn_total_time',
+            'task.learn_data_detail.learn_deWeight_time',
+        ];
     }
 
     public function getContent($start, $limit)
     {
+        $task = $this->getTaskService()->getTask($this->parameter['courseTaskId']);
         $taskResults = $this->getTaskResultService()->searchTaskResults(
             $this->conditions,
-            array('createdTime' => 'ASC'),
+            ['createdTime' => 'ASC'],
             $start,
             $limit
         );
@@ -49,18 +65,23 @@ class OverviewNormalTaskDetailExporter extends Exporter
         $userIds = ArrayToolkit::column($taskResults, 'userId');
         $users = $this->getUserService()->findUsersByIds($userIds);
 
-        $datas = array();
+        $datas = [];
 
         foreach ($taskResults as $taskResult) {
             $user = $users[$taskResult['userId']];
 
-            $data = array();
-            $data[] = $user['nickname'];
+            $data = [];
+            $data[] = is_numeric($user['nickname']) ? $user['nickname']."\t" : $user['nickname'];
             $data[] = date('Y-m-d H:i:s', $taskResult['createdTime']);
             $data[] = empty($taskResult['finishedTime']) ? '-' : date('Y-m-d H:i:s', $taskResult['finishedTime']);
             $data[] = empty($taskResult['time']) ? '-' : round(($taskResult['time'] / 60), 1);
-            $data[] = empty($taskResult['watchTime']) ? '-' : round(($taskResult['watchTime'] / 60), 1);
-
+            if ('video' === $task['type']) {
+                $data[] = empty($taskResult['watchTime']) ? '-' : round(($taskResult['watchTime'] / 60), 1);
+            }
+            $data[] = empty($taskResult['pureStayTime']) ? '-' : round(($taskResult['pureStayTime'] / 60), 1);
+            if ('video' === $task['type']) {
+                $data[] = empty($taskResult['pureWatchTime']) ? '-' : round(($taskResult['pureWatchTime'] / 60), 1);
+            }
             $datas[] = $data;
         }
 
@@ -77,7 +98,7 @@ class OverviewNormalTaskDetailExporter extends Exporter
 
     public function buildCondition($conditions)
     {
-        return ArrayToolkit::parts($conditions, array('courseTaskId'));
+        return ArrayToolkit::parts($conditions, ['courseTaskId']);
     }
 
     protected function getReportService()

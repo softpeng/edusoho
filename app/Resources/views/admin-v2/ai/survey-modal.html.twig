@@ -1,0 +1,12 @@
+{% extends 'bootstrap-modal-layout.html.twig' %}
+
+{% set modal_class = 'cd-modal-dialog ai-survey-modal' %}
+
+{% do script(['app/js/admin-v2/ai/survey/index.js']) %}
+
+ {% block body %}
+   <button type="button" class="close" data-dismiss="modal" aria-hidden="true">
+     <i class="cd-icon cd-icon-close"></i>
+   </button>
+   <img src="{{ asset('static-dist/app/img/admin-v2/ai-companion-study.png') }}" alt="">
+ {% endblock %}

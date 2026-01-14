@@ -2,12 +2,15 @@
 
 namespace Biz\Group\Service\Impl;
 
+use AppBundle\Common\ArrayToolkit;
 use Biz\BaseService;
+use Biz\Common\CommonException;
 use Biz\Content\Service\FileService;
 use Biz\Group\Dao\GroupDao;
 use Biz\Group\Dao\MemberDao;
-use AppBundle\Common\ArrayToolkit;
+use Biz\Group\GroupException;
 use Biz\Group\Service\GroupService;
+use Biz\Group\Service\ThreadService;
 use Codeages\Biz\Framework\Event\Event;
 
 class GroupServiceImpl extends BaseService implements GroupService
@@ -58,7 +61,7 @@ class GroupServiceImpl extends BaseService implements GroupService
     public function addGroup($user, $group)
     {
         if (!isset($group['title']) || empty($group['title'])) {
-            throw $this->createInvalidArgumentException('Title Required');
+            $this->createNewException(GroupException::TITLE_REQUIRED());
         }
         $title = trim($group['title']);
 
@@ -69,12 +72,12 @@ class GroupServiceImpl extends BaseService implements GroupService
         $group['memberNum'] = 1;
         $group['createdTime'] = time();
         $group = $this->getGroupDao()->create($group);
-        $member = array(
+        $member = [
             'groupId' => $group['id'],
             'userId' => $user['id'],
             'createdTime' => time(),
             'role' => 'owner',
-        );
+        ];
         $this->getGroupMemberDao()->create($member);
 
         return $group;
@@ -82,12 +85,12 @@ class GroupServiceImpl extends BaseService implements GroupService
 
     public function addOwner($groupId, $userId)
     {
-        $member = array(
+        $member = [
             'groupId' => $groupId,
             'userId' => $userId,
             'createdTime' => time(),
             'role' => 'owner',
-        );
+        ];
 
         $member = $this->getGroupMemberDao()->create($member);
 
@@ -98,27 +101,74 @@ class GroupServiceImpl extends BaseService implements GroupService
 
     public function openGroup($id)
     {
-        return $this->updateGroup($id, array(
+        $group = $this->updateGroup($id, [
             'status' => 'open',
-        ));
+        ]);
+
+        $this->dispatchEvent('group.open', $group);
+
+        return $group;
+    }
+
+    public function deleteGroup($id)
+    {
+        $group = $this->getGroup($id);
+        if ('close' != $group['status']) {
+            $this->createNewException(GroupException::DELETE_GROUP_REQUIRE_CLOSE());
+        }
+        $this->beginTransaction();
+        try {
+            $this->getGroupThreadService()->deleteThreadsByGroupId($id);
+            $this->getGroupMemberDao()->deleteByGroupId($id);
+            $this->getGroupDao()->delete($id);
+            $this->commit();
+        } catch (\Exception $exception) {
+            $this->rollback();
+        }
+    }
+
+    public function recommendGroup($id, $number)
+    {
+        if (!is_numeric($number)) {
+            $this->createNewException(CommonException::ERROR_PARAMETER());
+        }
+
+        return $this->updateGroup($id, [
+            'recommended' => 1,
+            'recommendedSeq' => (int) $number,
+            'recommendedTime' => time(),
+        ]);
+    }
+
+    public function cancelRecommendGroup($id)
+    {
+        return $this->updateGroup($id, [
+            'recommended' => 0,
+            'recommendedSeq' => 0,
+            'recommendedTime' => 0,
+        ]);
     }
 
     public function closeGroup($id)
     {
-        return $this->updateGroup($id, array(
+        $group = $this->updateGroup($id, [
             'status' => 'close',
-        ));
+        ]);
+
+        $this->dispatchEvent('group.close', $group);
+
+        return $group;
     }
 
     public function changeGroupImg($id, $field, $data)
     {
-        if (!in_array($field, array('logo', 'backgroundLogo'))) {
-            throw $this->createInvalidArgumentException('Invalid Field :'.$field);
+        if (!in_array($field, ['logo', 'backgroundLogo'])) {
+            $this->createNewException(CommonException::ERROR_PARAMETER());
         }
 
         $group = $this->getGroup($id);
         if (empty($group)) {
-            throw $this->createNotFoundException('Group Not Found');
+            $this->createNewException(GroupException::NOTFOUND_GROUP());
         }
 
         $fileIds = ArrayToolkit::column($data, 'id');
@@ -128,13 +178,13 @@ class GroupServiceImpl extends BaseService implements GroupService
 
         $fileIds = ArrayToolkit::index($data, 'type');
 
-        $fields = array(
+        $fields = [
             $field => $files[$fileIds[$field]['id']]['uri'],
-        );
+        ];
 
-        $oldAvatars = array(
+        $oldAvatars = [
             $field => $group[$field] ? $group[$field] : null,
-        );
+        ];
         $fileService = $this->getFileService();
         array_map(function ($oldAvatar) use ($fileService) {
             if (!empty($oldAvatar)) {
@@ -149,18 +199,18 @@ class GroupServiceImpl extends BaseService implements GroupService
     {
         $group = $this->getGroup($groupId);
         if (empty($group)) {
-            throw $this->createNotFoundException('Group Not Found');
+            $this->createNewException(GroupException::NOTFOUND_GROUP());
         }
 
         if ($this->isMember($groupId, $user['id'])) {
-            throw $this->createAccessDeniedException('You\'re in group');
+            $this->createNewException(GroupException::DUPLICATE_JOIN());
         }
 
-        $member = array(
+        $member = [
             'groupId' => $groupId,
             'userId' => $user['id'],
             'createdTime' => time(),
-        );
+        ];
         $member = $this->getGroupMemberDao()->create($member);
 
         $this->reCountGroupMember($groupId);
@@ -174,13 +224,13 @@ class GroupServiceImpl extends BaseService implements GroupService
     {
         $group = $this->getGroup($groupId);
         if (empty($group)) {
-            throw $this->createNotFoundException('Group Not Found');
+            $this->createNewException(GroupException::NOTFOUND_GROUP());
         }
 
         $member = $this->getGroupMemberDao()->getByGroupIdAndUserId($groupId, $user['id']);
 
         if (empty($member)) {
-            throw $this->createNotFoundException("Member#{$user['id']} Not in Group");
+            $this->createNewException(GroupException::NOTFOUND_MEMBER());
         }
 
         $this->getGroupMemberDao()->delete($member['id']);
@@ -199,7 +249,7 @@ class GroupServiceImpl extends BaseService implements GroupService
             return $this->getGroupDao()->findByIds($ids);
         }
 
-        return array();
+        return [];
     }
 
     public function findGroupByTitle($title)
@@ -225,7 +275,7 @@ class GroupServiceImpl extends BaseService implements GroupService
     {
         $member = $this->getGroupMemberDao()->getByGroupIdAndUserId($groupId, $userId);
 
-        return $member['role'] == 'admin' ? true : false;
+        return $member && 'admin' === $member['role'] ? true : false;
     }
 
     public function isMember($groupId, $userId)
@@ -237,7 +287,7 @@ class GroupServiceImpl extends BaseService implements GroupService
 
     public function getMembersCountByGroupId($id)
     {
-        return $this->getGroupMemberDao()->count(array('groupId' => $id));
+        return $this->getGroupMemberDao()->count(['groupId' => $id]);
     }
 
     public function getMemberByGroupIdAndUserId($groupid, $userId)
@@ -247,13 +297,24 @@ class GroupServiceImpl extends BaseService implements GroupService
 
     protected function reCountGroupMember($groupId)
     {
-        $groupMemberNum = $this->getGroupMemberDao()->count(array('groupId' => $groupId));
-        $this->getGroupDao()->update($groupId, array('memberNum' => $groupMemberNum));
+        $groupMemberNum = $this->getGroupMemberDao()->count(['groupId' => $groupId]);
+        $this->getGroupDao()->update($groupId, ['memberNum' => $groupMemberNum]);
+    }
+
+    public function validateWaveField($waveData, $field, $diff)
+    {
+        if (isset($waveData[$field])) {
+            return ($diff + $waveData[$field]) > 0 ? $diff : -$waveData[$field];
+        }
     }
 
     public function waveGroup($id, $field, $diff)
     {
-        return $this->getGroupDao()->wave(array($id), array($field => $diff));
+        $group = $this->getGroupDao()->get($id);
+
+        $diff = $this->validateWaveField($group, $field, $diff);
+
+        return $this->getGroupDao()->wave([$id], [$field => $diff]);
     }
 
     public function waveMember($groupId, $userId, $field, $diff)
@@ -261,7 +322,9 @@ class GroupServiceImpl extends BaseService implements GroupService
         $member = $this->getGroupMemberDao()->getByGroupIdAndUserId($groupId, $userId);
 
         if ($member) {
-            return $this->getGroupMemberDao()->wave(array($member['id']), array($field => $diff));
+            $diff = $this->validateWaveField($member, $field, $diff);
+
+            return $this->getGroupMemberDao()->wave([$member['id']], [$field => $diff]);
         }
     }
 
@@ -274,9 +337,14 @@ class GroupServiceImpl extends BaseService implements GroupService
         $this->reCountGroupMember($groupId);
     }
 
+    public function deleteGroupsByUserId($userId)
+    {
+        return $this->getGroupDao()->deleteByUserId($userId);
+    }
+
     protected function prepareGroupConditions($conditions)
     {
-        if (isset($conditions['ownerName']) && $conditions['ownerName'] !== '') {
+        if (isset($conditions['ownerName']) && '' !== $conditions['ownerName']) {
             $owner = $this->getUserService()->getUserByNickname($conditions['ownerName']);
 
             if (!empty($owner)) {
@@ -286,7 +354,7 @@ class GroupServiceImpl extends BaseService implements GroupService
             }
         }
         if (isset($conditions['status'])) {
-            if ($conditions['status'] == '') {
+            if ('' == $conditions['status']) {
                 unset($conditions['status']);
             }
         }
@@ -308,6 +376,14 @@ class GroupServiceImpl extends BaseService implements GroupService
     protected function getGroupDao()
     {
         return $this->createDao('Group:GroupDao');
+    }
+
+    /**
+     * @return ThreadService
+     */
+    protected function getGroupThreadService()
+    {
+        return $this->createService('Group:ThreadService');
     }
 
     /**

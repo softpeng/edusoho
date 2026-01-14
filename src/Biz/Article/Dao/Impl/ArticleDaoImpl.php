@@ -3,8 +3,8 @@
 namespace Biz\Article\Dao\Impl;
 
 use Biz\Article\Dao\ArticleDao;
+use Biz\Common\CommonException;
 use Codeages\Biz\Framework\Dao\GeneralDaoImpl;
-use Codeages\Biz\Framework\Service\Exception\InvalidArgumentException;
 
 class ArticleDaoImpl extends GeneralDaoImpl implements ArticleDao
 {
@@ -14,14 +14,14 @@ class ArticleDaoImpl extends GeneralDaoImpl implements ArticleDao
     {
         $sql = "SELECT * FROM {$this->table} WHERE `categoryId` = ? AND createdTime < ? ORDER BY `createdTime` DESC LIMIT 1";
 
-        return $this->db()->fetchAssoc($sql, array($categoryId, $createdTime)) ?: array();
+        return $this->db()->fetchAssoc($sql, [$categoryId, $createdTime]) ?: [];
     }
 
     public function getNext($categoryId, $createdTime)
     {
         $sql = "SELECT * FROM {$this->table} WHERE  `categoryId` = ? AND createdTime > ? ORDER BY `createdTime` ASC LIMIT 1";
 
-        return $this->db()->fetchAssoc($sql, array($categoryId, $createdTime)) ?: array();
+        return $this->db()->fetchAssoc($sql, [$categoryId, $createdTime]) ?: [];
     }
 
     public function findByIds(array $ids)
@@ -33,16 +33,27 @@ class ArticleDaoImpl extends GeneralDaoImpl implements ArticleDao
     {
         $sql = "SELECT * FROM {$this->table};";
 
-        return $this->db()->fetchAll($sql, array()) ?: array();
+        return $this->db()->fetchAll($sql, []) ?: [];
+    }
+
+    public function findByLikeTitle($title)
+    {
+        if (empty($title)) {
+            return [];
+        }
+
+        $sql = "SELECT * FROM {$this->table} WHERE `title` LIKE ?; ";
+
+        return $this->db()->fetchAll($sql, ['%'.$title.'%']);
     }
 
     public function searchByCategoryIds(array $categoryIds, $start, $limit)
     {
         return $this->search(
-            array(
+            [
                 'categoryIds' => $categoryIds,
-            ),
-            array('createdTime' => 'DESC'),
+            ],
+            ['createdTime' => 'DESC'],
             $start,
             $limit
         );
@@ -51,23 +62,23 @@ class ArticleDaoImpl extends GeneralDaoImpl implements ArticleDao
     public function countByCategoryIds(array $categoryIds)
     {
         if (empty($categoryIds)) {
-            throw new InvalidArgumentException(sprintf('参数不允许为空数组'));
+            throw CommonException::ERROR_PARAMETER();
         }
 
-        return $this->count(array('categoryIds' => $categoryIds));
+        return $this->count(['categoryIds' => $categoryIds]);
     }
 
     public function waveArticle($id, $field, $diff)
     {
-        $fields = array('hits', 'upsNum', 'postNum');
+        $fields = ['hits', 'upsNum', 'postNum'];
 
         if (!in_array($field, $fields)) {
             throw new \InvalidArgumentException(sprintf('%s字段不允许增减，只有%s才被允许增减', $field, implode(',', $fields)));
         }
 
-        return $this->wave(array($id), array(
+        return $this->wave([$id], [
             $field => $diff,
-        ));
+        ]);
     }
 
     protected function createQueryBuilder($conditions)
@@ -105,19 +116,21 @@ class ArticleDaoImpl extends GeneralDaoImpl implements ArticleDao
 
     public function declares()
     {
-        return array(
-            'orderbys' => array(
+        return [
+            'orderbys' => [
                 'createdTime',
                 'publishedTime',
                 'sticky',
                 'hits',
                 'updatedTime',
-            ),
-            'serializes' => array(
+                'featured',
+                'promoted',
+            ],
+            'serializes' => [
                 'tagIds' => 'delimiter',
-            ),
-            'timestamps' => array('createdTime', 'updatedTime'),
-            'conditions' => array(
+            ],
+            'timestamps' => ['createdTime', 'updatedTime'],
+            'conditions' => [
                 'status = :status',
                 'id IN (:articleIds)',
                 'categoryId = :categoryId',
@@ -133,10 +146,7 @@ class ArticleDaoImpl extends GeneralDaoImpl implements ArticleDao
                 'id = :articleId',
                 'thumb != :thumbNotEqual',
                 'orgCode = :orgCode',
-            ),
-            'serializes' => array(
-                'tagIds' => 'delimiter',
-            ),
-        );
+            ],
+        ];
     }
 }

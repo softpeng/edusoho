@@ -1,0 +1,60 @@
+{% extends 'item-bank-exercise-manage/exercise-set/layout.html.twig' %}
+
+{% block title %}{{'item_bank_exercise.testpaper_practice'|trans}} - {{ exercise.title }} - {{ parent() }}{% endblock %}
+{% do script(['app/js/item-bank-exercise/assessment/index.js', 'app/js/item-bank-exercise/assessment/add/index.js']) %}
+{% do css(['app/css/main-ant.css']) %}
+{% set course_side_nav = 'assessment' %}
+{% block main_heading_class %}course-main-header{% endblock %}
+
+{% block main %}
+  <div class="cd-main">
+    <input type="hidden" value="{{ exercise.id }}" id="exerciseId">
+    <input type="hidden" value="{{ moduleId }}" id="moduleId">
+    <input type="hidden" value="{{ questionBank.itemBankId }}" id="itemBankId">
+    <div class="cd-main__body">
+      <div class="task-list-header clearfix">
+        <label class="switch-title">{{ 'item_bank_exercise.testpaper_practice.open'|trans }}</label>
+        <label class="cd-switch {% if exercise.assessmentEnable == 1 %}checked{% endif %}" style="vertical-align: -4px;">
+          <input id="switch" type="radio" value="{{ exercise.assessmentEnable }}" data-url="{{ path('item_bank_exercise_manage_assessment_exercise_open', {exerciseId: exercise.id}) }}" checked>
+        </label>
+        <input type="hidden" value="{{ path('item_bank_exercise_manage_can_module_open',{exerciseId:exercise.id, type:'assessment'}) }}" id="canOpen">
+        <span class="text-14 ml20" style="color: #adadad; line-height: 1;">
+          {{ 'item_bank_exercise.testpaper_practice.tip'|trans }}
+        </span>
+      </div>
+      {% if exercise.assessmentEnable == 1 %}
+        <div class="js-all-container">
+          <div class="exercise-container">
+            <ul class="exercise-nav exercise-nav-tabs mb0 col-sm-9">
+              {% for module in modules %}
+                <li class="text-center {% if moduleId == module.id %}active{% endif %}">
+                  {% if moduleId == module.id %}
+                    {{ module.title }}
+                    <a href="#modal" data-toggle="modal" class="js-edit-module cd-link-minor" data-url="{{ path('item_bank_exercise_manage_assessment_module_edit', {exerciseId: exercise.id, moduleId: module.id}) }}"><i class="cd-icon cd-icon-edit edit-icon"></i></a>
+                  {% else %}
+                    <a href="{{ path('item_bank_exercise_manage_assessment', {exerciseId: exercise.id, moduleId: module.id}) }}">{{ module.title }}</a>
+                  {% endif %}
+                </li>
+              {% endfor %}
+              <li class="text-center {% if count(modules) >= 5 %}hidden{% endif %}">
+                <a href="#modal" data-toggle="modal" data-url="{{ path('item_bank_exercise_manage_assessment_module_create', {exerciseId: exercise.id}) }}"><i class="cd-icon cd-icon-add"></i>{{ 'item_bank_exercise.assessment_exercise.add_new_module'|trans }}</a>
+              </li>
+            </ul>
+            <div class="pull-right">
+              <input type="hidden" id="add-test-paper-drawer-visible" value="{{ false }}">
+              <div id="addTestPaper"></div>
+            </div>
+          </div>
+          <div class="js-assessment-container">
+            <div id="assessment-list"></div>
+          </div>
+        </div>
+      {% else %}
+        <div class="empty task-empty js-task-empty">
+          <i class="es-icon es-icon-book task-empty-icon"></i>
+          {{ 'item_bank_exercise.assessment_exercise.empty'|trans }}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}
